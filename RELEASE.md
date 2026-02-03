@@ -100,7 +100,7 @@ For consistency, it's recommended to use the `v` prefix format (e.g., `v2.0.1`) 
 
 The existing release `1.0` can be fixed by:
 
-1. Creating a new tag `v2.0.1` (which matches the current package.json version)
+1. Creating a new tag matching the version in package.json (currently `v2.0.1`)
 2. Letting the workflow build and attach the executables
 3. Optionally deleting the old `1.0` tag and release if no longer needed
 

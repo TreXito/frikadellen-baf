@@ -42,3 +42,11 @@ interface FlipWhitelistedData {
     finder: string
     price: string
 }
+
+interface BazaarFlipRecommendation {
+    itemName: string
+    amount: number
+    pricePerUnit: number
+    isBuyOrder: boolean
+    totalPrice?: number
+}

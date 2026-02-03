@@ -14,6 +14,8 @@ import { sendWebhookInitialized } from './webhookHandler'
 import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
+import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
+import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -27,7 +29,21 @@ if (!ingameName) {
     updatePersistentConfigProperty('INGAME_NAME', ingameName)
 }
 
+// Prompt for auction house flips setting if not set
+if (getConfigProperty('ENABLE_AH_FLIPS') === undefined) {
+    let enableAHFlips = prompt('Enable auction house flips (true/false)? ').toLowerCase()
+    updatePersistentConfigProperty('ENABLE_AH_FLIPS', enableAHFlips === 'true' || enableAHFlips === 't' || enableAHFlips === 'yes' || enableAHFlips === 'y')
+}
+
+// Prompt for bazaar flips setting if not set
+if (getConfigProperty('ENABLE_BAZAAR_FLIPS') === undefined) {
+    let enableBazaarFlips = prompt('Enable bazaar flips (true/false)? ').toLowerCase()
+    updatePersistentConfigProperty('ENABLE_BAZAAR_FLIPS', enableBazaarFlips === 'true' || enableBazaarFlips === 't' || enableBazaarFlips === 'yes' || enableBazaarFlips === 'y')
+}
+
 log(`Starting BAF v${version} for ${ingameName}`, 'info')
+log(`AH Flips: ${getConfigProperty('ENABLE_AH_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
+log(`Bazaar Flips: ${getConfigProperty('ENABLE_BAZAAR_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
 const bot: MyBot = createBot({
     username: ingameName,
     auth: 'microsoft',
@@ -122,6 +138,17 @@ async function onWebsocketMessage(msg) {
                 if (!isCoflChat) {
                     log(message, 'debug')
                 }
+                
+                // Check if this is an AH flip incoming message and pause if needed
+                checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
+                
+                // Check if this is a bazaar flip recommendation
+                const bazaarFlip = parseBazaarFlipMessage(da.text)
+                if (bazaarFlip) {
+                    log('Detected bazaar flip recommendation', 'info')
+                    handleBazaarFlipRecommendation(bot, bazaarFlip)
+                }
+                
                 if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
                     printMcChatToConsole(da.text)
                 }
@@ -132,6 +159,17 @@ async function onWebsocketMessage(msg) {
             if (!isCoflChat) {
                 log(message, 'debug')
             }
+            
+            // Check if this is an AH flip incoming message and pause if needed
+            checkAndPauseForAHFlip(data.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
+            
+            // Check if this is a bazaar flip recommendation
+            const bazaarFlip = parseBazaarFlipMessage(data.text)
+            if (bazaarFlip) {
+                log('Detected bazaar flip recommendation', 'info')
+                handleBazaarFlipRecommendation(bot, bazaarFlip)
+            }
+            
             if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
                 printMcChatToConsole((data as TextMessageData).text)
             }
@@ -177,6 +215,30 @@ async function onWebsocketMessage(msg) {
             log(message, 'debug')
             data.chatRegex = new RegExp(data.chatRegex)
             bot.privacySettings = data
+            break
+        case 'bazaarFlip':
+            log(message, 'debug')
+            handleBazaarFlipRecommendation(bot, data)
+            break
+        case 'getbazaarflips':
+            log(message, 'debug')
+            // Handle response from /cofl getbazaarflips command
+            // Data could be a single recommendation or an array of recommendations
+            if (Array.isArray(data)) {
+                // Handle multiple recommendations
+                for (let recommendation of data) {
+                    const parsed = parseBazaarFlipJson(recommendation)
+                    if (parsed) {
+                        handleBazaarFlipRecommendation(bot, parsed)
+                    }
+                }
+            } else if (data && typeof data === 'object') {
+                // Handle single recommendation
+                const parsed = parseBazaarFlipJson(data)
+                if (parsed) {
+                    handleBazaarFlipRecommendation(bot, parsed)
+                }
+            }
             break
     }
 }

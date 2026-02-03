@@ -4,6 +4,12 @@ import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
+    // Check if AH flips are enabled in config
+    if (!getConfigProperty('ENABLE_AH_FLIPS')) {
+        log('AH flips are disabled in config', 'debug')
+        return
+    }
+
     flip.purchaseAt = new Date(flip.purchaseAt)
 
     if (bot.state) {

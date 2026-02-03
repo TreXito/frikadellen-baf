@@ -78,8 +78,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const percentCheck = (flip.profitPerc || 0) > skipMinPercent
                 const priceCheck = flip.startingBid > skipMinPrice
 
-                // Determine if we should use skip - any condition met triggers skip
-                const useSkipOnFlip = profitCheck || skinCheck || finderCheck || percentCheck || priceCheck || useSkipAlways
+                // Determine if we should use skip - ALWAYS takes precedence, otherwise check other conditions
+                const useSkipOnFlip = useSkipAlways || profitCheck || skinCheck || finderCheck || percentCheck || priceCheck
 
                 let multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY')
                 let delayUntilBuyStart = isBed
@@ -117,8 +117,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             `§f[§4BAF§f]: §aUsed skip because ${skipReasons.join(' and ')}. You can change this in your config`
                         )
                     }
-                } else {
-                    recentlySkipped = false
                 }
             }
             if (title.toString().includes('Confirm Purchase')) {

@@ -89,11 +89,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
 
                 if (isBed && getConfigProperty('BED_MULTIPLE_CLICKS_DELAY') > 0) {
                     for (let i = 0; i < 3; i++) {
-                        clickWindow(bot, 31)
+                        clickWindow(bot, 31).catch(err => log(`Error clicking bed slot: ${err}`, 'error'))
                         await sleep(getConfigProperty('BED_MULTIPLE_CLICKS_DELAY'))
                     }
                 } else {
-                    clickWindow(bot, 31)
+                    clickWindow(bot, 31).catch(err => log(`Error clicking purchase slot: ${err}`, 'error'))
                 }
 
                 // If skip should be used, click the skip button (slot 11)
@@ -101,7 +101,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     recentlySkipped = true
                     // Small delay to ensure the BIN purchase click is registered before skip
                     await sleep(50)
-                    clickWindow(bot, 11)
+                    clickWindow(bot, 11).catch(err => log(`Error clicking skip slot: ${err}`, 'error'))
 
                     // Log the skip reason
                     if (useSkipAlways) {
@@ -122,7 +122,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
             if (title.toString().includes('Confirm Purchase')) {
                 // Only click confirm if we didn't skip
                 if (!recentlySkipped) {
-                    clickWindow(bot, 11)
+                    clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                 }
                 bot.removeAllListeners('windowOpen')
                 bot.state = null

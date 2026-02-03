@@ -85,7 +85,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
             log('Claiming auction window: ' + title)
 
             if (title.toString().includes('Auction House')) {
-                clickWindow(bot, 13)
+                clickWindow(bot, 13).catch(err => log(`Error clicking auction house slot: ${err}`, 'error'))
             }
 
             if (title.toString().includes('Your Bids')) {
@@ -95,7 +95,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
                     let name = (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString()
                     if (useCollectAll && slot?.type === 380 && name?.includes('Claim') && name?.includes('All')) {
                         log('Found cauldron to claim all purchased auctions -> clicking index ' + i)
-                        clickWindow(bot, i)
+                        clickWindow(bot, i).catch(err => log(`Error clicking claim all slot: ${err}`, 'error'))
                         bot.removeAllListeners('windowOpen')
                         bot.state = null
                         clearTimeout(timeout)
@@ -118,7 +118,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
                     resolve(false)
                     return
                 }
-                clickWindow(bot, slotToClick)
+                clickWindow(bot, slotToClick).catch(err => log(`Error clicking purchased auction slot: ${err}`, 'error'))
             }
 
             if (title.toString().includes('BIN Auction View')) {
@@ -126,7 +126,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
                 bot.removeAllListeners('windowOpen')
                 bot.state = null
                 clearTimeout(timeout)
-                clickWindow(bot, 31)
+                clickWindow(bot, 31).catch(err => log(`Error claiming purchased auction: ${err}`, 'error'))
                 resolve(true)
             }
         })
@@ -157,7 +157,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         bot.on('windowOpen', async window => {
             let title = getWindowTitle(window)
             if (title.toString().includes('Auction House')) {
-                clickWindow(bot, 15)
+                clickWindow(bot, 15).catch(err => log(`Error clicking manage auctions slot: ${err}`, 'error'))
             }
             if (title.toString().includes('Manage Auctions')) {
                 log('Claiming sold auction...')
@@ -179,7 +179,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                     if (item && item.name === 'cauldron' && (item.nbt as any).value?.display?.value?.Name?.value?.toString().includes('Claim All')) {
                         log(item)
                         log('Found cauldron to claim all sold auctions -> clicking index ' + item.slot)
-                        clickWindow(bot, item.slot)
+                        clickWindow(bot, item.slot).catch(err => log(`Error clicking claim all sold slot: ${err}`, 'error'))
                         clearTimeout(timeout)
                         bot.removeAllListeners('windowOpen')
                         bot.state = null
@@ -200,11 +200,11 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 log('Clicking auction to claim, index: ' + clickSlot)
                 log(JSON.stringify(window.slots[clickSlot]))
 
-                clickWindow(bot, clickSlot)
+                clickWindow(bot, clickSlot).catch(err => log(`Error clicking sold auction slot: ${err}`, 'error'))
             }
             if (title == 'BIN Auction View') {
                 log('Clicking slot 31, claiming purchased auction')
-                clickWindow(bot, 31)
+                clickWindow(bot, 31).catch(err => log(`Error claiming sold auction: ${err}`, 'error'))
                 clearTimeout(timeout)
                 bot.removeAllListeners('windowOpen')
                 bot.state = null
@@ -221,14 +221,14 @@ function claimExpiredAuction(bot, slot) {
             let title = getWindowTitle(window)
             if (title == 'BIN Auction View') {
                 log('Clicking slot 31, claiming expired auction')
-                clickWindow(bot, 31)
+                clickWindow(bot, 31).catch(err => log(`Error claiming expired auction: ${err}`, 'error'))
                 bot.removeAllListeners('windowOpen')
                 bot.state = null
                 bot.closeWindow(window)
                 resolve(true)
             }
         })
-        clickWindow(bot, slot)
+        clickWindow(bot, slot).catch(err => log(`Error clicking expired auction slot: ${err}`, 'error'))
     })
 }
 

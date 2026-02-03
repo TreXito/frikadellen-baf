@@ -192,7 +192,7 @@ async function onWebsocketMessage(msg) {
             if (tradeDisplay.includes('Deal!') || tradeDisplay.includes('Warning!')) {
                 await sleep(3400)
             }
-            clickWindow(bot, 39)
+            clickWindow(bot, 39).catch(err => log(`Error clicking trade response slot: ${err}`, 'error'))
             break
         case 'getInventory':
             log('Uploading inventory...')

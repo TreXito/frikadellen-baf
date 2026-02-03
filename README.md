@@ -28,8 +28,8 @@ To create a new release with pre-built executables:
 
 The workflow accepts tags in these formats:
 - `v*` (e.g., `v2.0.1`, `v1.0`)
-- `[0-9]+.[0-9]+.[0-9]+` (e.g., `2.0.1`)
-- `[0-9]+.[0-9]+` (e.g., `1.0`)
+- `[0-9]*.[0-9]*.[0-9]*` (e.g., `2.0.1`)
+- `[0-9]*.[0-9]*` (e.g., `1.0`)
 
 ## Is this bannable
 

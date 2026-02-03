@@ -4,7 +4,7 @@ import { log, printMcChatToConsole } from './logger'
 let bazaarFlipsPaused = false
 let pauseTimeoutHandle: NodeJS.Timeout | null = null
 
-const PAUSE_DURATION_MS = 40000 // 40 seconds total pause around AH flip
+const PAUSE_DURATION_MS = 20000 // 20 seconds - pause starts when "flips in 10 seconds" appears, resumes 20 seconds after
 
 /**
  * Check if bazaar flips are currently paused due to incoming AH flip
@@ -14,8 +14,9 @@ export function areBazaarFlipsPaused(): boolean {
 }
 
 /**
- * Pause bazaar flips for AH flip window (40 seconds)
- * Called when AH flip message is detected
+ * Pause bazaar flips for AH flip window (20 seconds)
+ * Called when AH flip message is detected (e.g., "flips in 10 seconds")
+ * Resumes 20 seconds after the message appears
  * Only pauses if both bazaar flips and AH flips are enabled
  */
 export function pauseBazaarFlips(): void {
@@ -30,7 +31,7 @@ export function pauseBazaarFlips(): void {
     printMcChatToConsole('§f[§4BAF§f]: §eAH Flips incoming, pausing bazaar flips')
     log('Bazaar flips paused for AH flip window', 'info')
 
-    // Resume after 40 seconds
+    // Resume after 20 seconds
     pauseTimeoutHandle = setTimeout(() => {
         resumeBazaarFlips()
     }, PAUSE_DURATION_MS)

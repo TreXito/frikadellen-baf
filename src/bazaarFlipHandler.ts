@@ -5,6 +5,16 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 /**
  * Parse a bazaar flip recommendation message from Coflnet
  * Example: "[Coflnet]: Recommending an order of 4x Cindershade for 1.06M(1)"
+ * 
+ * The format is: "[Coflnet]: Recommending an order of {amount}x {itemName} for {price}({index})"
+ * Where:
+ * - amount: number of items to buy/sell
+ * - itemName: the name of the bazaar item
+ * - price: total price with optional K/M suffix (e.g., "1.06M", "500K", "1000")
+ * - index: a number that corresponds to a clickable command (e.g., (1) -> /bz ItemName)
+ * 
+ * @param message The raw chat message from Coflnet
+ * @returns Parsed recommendation or null if not a bazaar flip message
  */
 export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendation | null {
     const cleanMessage = removeMinecraftColorCodes(message)
@@ -42,8 +52,10 @@ export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendatio
 
         const pricePerUnit = totalPrice / amount
 
-        // Bazaar flips are typically buy orders (buy low, sell high later)
-        const isBuyOrder = true
+        // Determine if it's a buy or sell order based on message content
+        // If the message contains "sell" or "offer", it's a sell order
+        // Otherwise, default to buy order (most common for flipping)
+        const isBuyOrder = !(cleanMessage.toLowerCase().includes('sell') || cleanMessage.toLowerCase().includes('offer'))
 
         return {
             itemName,
@@ -58,6 +70,18 @@ export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendatio
     }
 }
 
+/**
+ * Handle a bazaar flip recommendation from Coflnet
+ * 
+ * This function:
+ * 1. Waits if the bot is busy with another operation
+ * 2. Opens the bazaar for the recommended item
+ * 3. Places a buy/sell order at the recommended price and amount
+ * 4. Confirms the order
+ * 
+ * @param bot The Minecraft bot instance
+ * @param recommendation The parsed bazaar flip recommendation
+ */
 export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation: BazaarFlipRecommendation) {
     if (bot.state) {
         setTimeout(() => {
@@ -97,6 +121,21 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     }
 }
 
+/**
+ * Place a bazaar order by navigating through the Hypixel bazaar interface
+ * 
+ * The bazaar interface has multiple steps:
+ * 1. Main bazaar view for the item (title: "Bazaar ➜ ItemName")
+ * 2. Amount selection (title: "How many do you want to...")
+ * 3. Price selection (title: "How much do you want to pay/be paid")
+ * 4. Confirmation (title: "Confirm...")
+ * 
+ * @param bot The Minecraft bot instance
+ * @param amount Number of items to buy/sell
+ * @param pricePerUnit Price per item unit
+ * @param isBuyOrder True for buy order, false for sell offer
+ * @returns Promise that resolves when the order is placed
+ */
 function placeBazaarOrder(bot: MyBot, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let currentStep = 'initial'

@@ -14,7 +14,7 @@ import { sendWebhookInitialized } from './webhookHandler'
 import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
-import { handleBazaarFlipRecommendation, parseBazaarFlipMessage } from './bazaarFlipHandler'
+import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -198,6 +198,26 @@ async function onWebsocketMessage(msg) {
         case 'bazaarFlip':
             log(message, 'debug')
             handleBazaarFlipRecommendation(bot, data)
+            break
+        case 'getbazaarflips':
+            log(message, 'debug')
+            // Handle response from /cofl getbazaarflips command
+            // Data could be a single recommendation or an array of recommendations
+            if (Array.isArray(data)) {
+                // Handle multiple recommendations
+                for (let recommendation of data) {
+                    const parsed = parseBazaarFlipJson(recommendation)
+                    if (parsed) {
+                        handleBazaarFlipRecommendation(bot, parsed)
+                    }
+                }
+            } else if (data && typeof data === 'object') {
+                // Handle single recommendation
+                const parsed = parseBazaarFlipJson(data)
+                if (parsed) {
+                    handleBazaarFlipRecommendation(bot, parsed)
+                }
+            }
             break
     }
 }

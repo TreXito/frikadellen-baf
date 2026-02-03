@@ -2,6 +2,84 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 
+// Constants
+const RETRY_DELAY_MS = 1100
+const OPERATION_TIMEOUT_MS = 20000
+
+/**
+ * Parse bazaar flip data from JSON response (from websocket)
+ * This handles the structured JSON data sent by the server when using `/cofl getbazaarflips`
+ * 
+ * Expected JSON format examples:
+ * - { itemName: "Cindershade", amount: 4, pricePerUnit: 265000, totalPrice: 1060000, isBuyOrder: true }
+ * - { item: "Cindershade", count: 4, price: 265000, type: "buy" }
+ * 
+ * @param data The JSON data from the websocket
+ * @returns Parsed recommendation or null if data is invalid
+ */
+export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null {
+    try {
+        // Handle different possible JSON formats from the server
+        let itemName: string
+        let amount: number
+        let pricePerUnit: number
+        let totalPrice: number | undefined
+        let isBuyOrder: boolean
+
+        // Try to extract item name (could be 'itemName', 'item', or 'name')
+        itemName = data.itemName || data.item || data.name
+        if (!itemName) {
+            log('Missing item name in bazaar flip JSON data', 'error')
+            return null
+        }
+
+        // Try to extract amount (could be 'amount', 'count', 'quantity')
+        amount = parseInt(data.amount || data.count || data.quantity)
+        if (!amount || isNaN(amount)) {
+            log('Missing or invalid amount in bazaar flip JSON data', 'error')
+            return null
+        }
+
+        // Try to extract price per unit (could be 'pricePerUnit', 'price', 'unitPrice')
+        pricePerUnit = parseFloat(data.pricePerUnit || data.price || data.unitPrice)
+        if (!pricePerUnit || isNaN(pricePerUnit)) {
+            log('Missing or invalid price in bazaar flip JSON data', 'error')
+            return null
+        }
+
+        // Total price might be provided or calculated
+        if (data.totalPrice) {
+            totalPrice = parseFloat(data.totalPrice)
+        } else {
+            totalPrice = pricePerUnit * amount
+        }
+
+        // Determine if it's a buy or sell order
+        // Check 'isBuyOrder', 'type', or 'orderType' fields
+        if (typeof data.isBuyOrder === 'boolean') {
+            isBuyOrder = data.isBuyOrder
+        } else if (data.type) {
+            isBuyOrder = data.type.toLowerCase() === 'buy'
+        } else if (data.orderType) {
+            isBuyOrder = data.orderType.toLowerCase() === 'buy'
+        } else {
+            // Default to buy order
+            isBuyOrder = true
+        }
+
+        return {
+            itemName,
+            amount,
+            pricePerUnit,
+            totalPrice,
+            isBuyOrder
+        }
+    } catch (error) {
+        log(`Error parsing bazaar flip JSON data: ${error}`, 'error')
+        return null
+    }
+}
+
 /**
  * Parse a bazaar flip recommendation message from Coflnet
  * Example: "[Coflnet]: Recommending an order of 4x Cindershade for 1.06M(1)"
@@ -86,24 +164,25 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     if (bot.state) {
         setTimeout(() => {
             handleBazaarFlipRecommendation(bot, recommendation)
-        }, 1100)
+        }, RETRY_DELAY_MS)
         return
     }
 
     bot.state = 'purchasing'
-    let timeout = setTimeout(() => {
+    let operationTimeout = setTimeout(() => {
         if (bot.state === 'purchasing') {
             log("Resetting 'bot.state === purchasing' lock in bazaar flip")
             bot.state = null
             bot.removeAllListeners('windowOpen')
         }
-    }, 20000)
+    }, OPERATION_TIMEOUT_MS)
 
     try {
         const { itemName, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
+        const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
         printMcChatToConsole(
-            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${totalPrice.toFixed(0)})`
+            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
 
         // Open bazaar for the item
@@ -116,7 +195,7 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         log(`Error handling bazaar flip: ${error}`, 'error')
         printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${error}`)
     } finally {
-        clearTimeout(timeout)
+        clearTimeout(operationTimeout)
         bot.state = null
     }
 }

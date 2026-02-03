@@ -69,6 +69,32 @@ chmod +x BAF-$version-linux
 The bot creates a config.toml file after the first start. This file contains configuration properties for the bot. Currently, only the ingame username is stored, so you don't need to enter it every time. I may add more configurations in the future. The Cofl configurations apply as normal.
 <br/> NOTE: The mod uses the Median price (minus a bit to sell faster) to auto-sell
 
+### Skip Configuration
+
+The bot now supports automatically skipping the confirmation dialog on certain flips to buy them faster. This feature is inspired by TPM-rewrite's autobuy skip functionality.
+
+In your `config.toml`, you can configure the `[SKIP]` section with the following options:
+
+- `ALWAYS` - Set to `true` to always skip confirmation on all flips (requires `FLIP_ACTION_DELAY >= 150`)
+- `MIN_PROFIT` - Skip confirmation if the profit is above this value (in coins, default: 1000000)
+- `USER_FINDER` - Set to `true` to skip confirmation on flips found by USER
+- `SKINS` - Set to `true` to skip confirmation on skin items
+- `PROFIT_PERCENTAGE` - Skip confirmation if profit percentage is above this value (default: 50)
+- `MIN_PRICE` - Skip confirmation if the starting bid is above this value (in coins, default: 10000000)
+
+Example configuration:
+```toml
+[SKIP]
+ALWAYS = false
+MIN_PROFIT = 1000000
+USER_FINDER = false
+SKINS = true
+PROFIT_PERCENTAGE = 50
+MIN_PRICE = 10000000
+```
+
+When skip is used, the bot will automatically click the green checkmark in the BIN Auction View window to skip the confirmation dialog, allowing for faster purchases.
+
 ## System Requirements
 
 -   Any operating system

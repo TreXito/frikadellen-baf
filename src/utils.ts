@@ -33,3 +33,8 @@ export function isCoflChatMessage(message: string) {
 export function removeMinecraftColorCodes(text: string) {
     return text?.replace(/§[0-9a-fk-or]/gi, '')
 }
+
+export function isSkin(itemName: string): boolean {
+    const lowerName = itemName?.toLowerCase() || ''
+    return lowerName.includes('skin') || lowerName.includes('✦')
+}

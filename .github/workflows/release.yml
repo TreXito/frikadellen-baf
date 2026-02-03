@@ -1,0 +1,54 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build TypeScript
+        run: npm run build
+      
+      - name: Build Windows executable
+        run: npx pkg ./build/BAF.js --targets node18-win-x64 --output ./executables/BAF-${{ github.ref_name }}-win
+      
+      - name: Build Linux executable
+        run: npx pkg ./build/BAF.js --targets node18-linux-x64 --output ./executables/BAF-${{ github.ref_name }}-linux
+      
+      - name: Build macOS executable
+        run: npx pkg ./build/BAF.js --targets node18-macos-x64 --output ./executables/BAF-${{ github.ref_name }}-macos
+      
+      - name: Make executables executable
+        run: |
+          chmod +x ./executables/BAF-${{ github.ref_name }}-linux
+          chmod +x ./executables/BAF-${{ github.ref_name }}-macos
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./executables/BAF-${{ github.ref_name }}-win.exe
+            ./executables/BAF-${{ github.ref_name }}-linux
+            ./executables/BAF-${{ github.ref_name }}-macos
+            ./start_script/BAF.ps1
+            ./start_script/BAF.cmd
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

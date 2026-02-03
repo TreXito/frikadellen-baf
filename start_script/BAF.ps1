@@ -15,7 +15,7 @@ if (!$FolderExists) {
 
 # Download latest version of BAF
 $ProgressPreference = "SilentlyContinue"
-$Response = Invoke-WebRequest -URI "https://api.github.com/repos/Hannesimo/auto-flipper/releases" -UseBasicParsing
+$Response = Invoke-WebRequest -URI "https://api.github.com/repos/TreXito/frikadellen-baf/releases" -UseBasicParsing
 $Releases = ConvertFrom-Json $Response.Content
 $ZipURL = $Releases[0].zipball_url
 $ZipFilePath = "$BafPath\BAF.zip"

@@ -3,9 +3,6 @@ import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
 
-// Track if skip was used for the current flip
-let recentlySkipped = false
-
 export async function flipHandler(bot: MyBot, flip: Flip) {
     // Check if AH flips are enabled in config
     if (!getConfigProperty('ENABLE_AH_FLIPS')) {
@@ -45,6 +42,9 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
 }
 
 function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
+    // Track if skip was used for this specific flip (scoped to avoid race conditions)
+    let recentlySkipped = false
+
     return new Promise<void>((resolve, reject) => {
         bot.addListener('windowOpen', async window => {
             await sleep(getConfigProperty('FLIP_ACTION_DELAY'))
@@ -62,6 +62,15 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const skipMinPercent = skipSettings.PROFIT_PERCENTAGE
                 const skipMinPrice = skipSettings.MIN_PRICE
 
+                // Validate FLIP_ACTION_DELAY if ALWAYS skip is enabled
+                if (useSkipAlways && getConfigProperty('FLIP_ACTION_DELAY') < 150) {
+                    printMcChatToConsole(
+                        '§f[§4BAF§f]: §cWarning: SKIP.ALWAYS requires FLIP_ACTION_DELAY >= 150ms. Using skip may cause issues with current delay of ' +
+                            getConfigProperty('FLIP_ACTION_DELAY') +
+                            'ms'
+                    )
+                }
+
                 // Check skip conditions
                 const finderCheck = flip.finder === 'USER' && skipUser
                 const skinCheck = isSkin(flip.itemName) && skipSkins
@@ -69,7 +78,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const percentCheck = (flip.profitPerc || 0) > skipMinPercent
                 const priceCheck = flip.startingBid > skipMinPrice
 
-                // Determine if we should use skip
+                // Determine if we should use skip - any condition met triggers skip
                 const useSkipOnFlip = profitCheck || skinCheck || finderCheck || percentCheck || priceCheck || useSkipAlways
 
                 let multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY')
@@ -90,7 +99,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 // If skip should be used, click the skip button (slot 11)
                 if (useSkipOnFlip) {
                     recentlySkipped = true
-                    await sleep(50) // Small delay before clicking skip
+                    // Small delay to ensure the BIN purchase click is registered before skip
+                    await sleep(50)
                     clickWindow(bot, 11)
 
                     // Log the skip reason
@@ -118,7 +128,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 }
                 bot.removeAllListeners('windowOpen')
                 bot.state = null
-                recentlySkipped = false // Reset for next flip
                 resolve()
                 return
             }

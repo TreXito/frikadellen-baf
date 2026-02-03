@@ -39,6 +39,7 @@ export function initConfigHelper() {
                 hadChange = true
             } else if (typeof config[key] === 'object' && !Array.isArray(config[key]) && config[key] !== null && key !== 'SESSIONS') {
                 // Recursively merge nested objects (like SKIP settings)
+                // SESSIONS is excluded because it stores dynamic session data that shouldn't be overwritten with defaults
                 Object.keys(config[key]).forEach(nestedKey => {
                     if (existingConfig[key][nestedKey] === undefined) {
                         existingConfig[key][nestedKey] = config[key][nestedKey]

@@ -15,7 +15,7 @@ import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
 import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
-import { isAHFlipIncomingMessage, pauseBazaarFlips } from './bazaarFlipPauser'
+import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -139,14 +139,8 @@ async function onWebsocketMessage(msg) {
                     log(message, 'debug')
                 }
                 
-                // Check if this is an AH flip incoming message
-                // Only pause if both bazaar flips and AH flips are enabled
-                if (isAHFlipIncomingMessage(da.text)) {
-                    log('Detected AH flip incoming message', 'info')
-                    if (getConfigProperty('ENABLE_BAZAAR_FLIPS') && getConfigProperty('ENABLE_AH_FLIPS')) {
-                        pauseBazaarFlips()
-                    }
-                }
+                // Check if this is an AH flip incoming message and pause if needed
+                checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
                 
                 // Check if this is a bazaar flip recommendation
                 const bazaarFlip = parseBazaarFlipMessage(da.text)
@@ -166,14 +160,8 @@ async function onWebsocketMessage(msg) {
                 log(message, 'debug')
             }
             
-            // Check if this is an AH flip incoming message
-            // Only pause if both bazaar flips and AH flips are enabled
-            if (isAHFlipIncomingMessage(data.text)) {
-                log('Detected AH flip incoming message', 'info')
-                if (getConfigProperty('ENABLE_BAZAAR_FLIPS') && getConfigProperty('ENABLE_AH_FLIPS')) {
-                    pauseBazaarFlips()
-                }
-            }
+            // Check if this is an AH flip incoming message and pause if needed
+            checkAndPauseForAHFlip(data.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
             
             // Check if this is a bazaar flip recommendation
             const bazaarFlip = parseBazaarFlipMessage(data.text)

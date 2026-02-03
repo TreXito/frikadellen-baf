@@ -51,6 +51,20 @@ export function resumeBazaarFlips(): void {
 }
 
 /**
+ * Check if a message indicates an incoming AH flip and pause bazaar flips if needed
+ * Only pauses if both bazaar flips and AH flips are enabled
+ * @param message The message text to check
+ */
+export function checkAndPauseForAHFlip(message: string, enableBazaarFlips: boolean, enableAHFlips: boolean): void {
+    if (isAHFlipIncomingMessage(message)) {
+        log('Detected AH flip incoming message', 'info')
+        if (enableBazaarFlips && enableAHFlips) {
+            pauseBazaarFlips()
+        }
+    }
+}
+
+/**
  * Detect if a message indicates an incoming AH flip
  * Looks for patterns like "flips in 10 seconds", "flip in X seconds", etc.
  */

@@ -12,7 +12,9 @@ let config: Config = {
     USE_COFL_CHAT: true,
     SESSIONS: {},
     WEBSOCKET_URL: 'wss://sky.coflnet.com/modsocket',
-    BED_MULTIPLE_CLICKS_DELAY: 50
+    BED_MULTIPLE_CLICKS_DELAY: 50,
+    ENABLE_BAZAAR_FLIPS: true,
+    ENABLE_AH_FLIPS: true
 }
 
 json2toml({ simple: true })

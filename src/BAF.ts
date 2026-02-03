@@ -15,6 +15,7 @@ import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
 import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
+import { isAHFlipIncomingMessage, pauseBazaarFlips } from './bazaarFlipPauser'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -28,7 +29,21 @@ if (!ingameName) {
     updatePersistentConfigProperty('INGAME_NAME', ingameName)
 }
 
+// Prompt for auction house flips setting if not set
+if (getConfigProperty('ENABLE_AH_FLIPS') === undefined) {
+    let enableAHFlips = prompt('Enable auction house flips (true/false)? ').toLowerCase()
+    updatePersistentConfigProperty('ENABLE_AH_FLIPS', enableAHFlips === 'true' || enableAHFlips === 't' || enableAHFlips === 'yes' || enableAHFlips === 'y')
+}
+
+// Prompt for bazaar flips setting if not set
+if (getConfigProperty('ENABLE_BAZAAR_FLIPS') === undefined) {
+    let enableBazaarFlips = prompt('Enable bazaar flips (true/false)? ').toLowerCase()
+    updatePersistentConfigProperty('ENABLE_BAZAAR_FLIPS', enableBazaarFlips === 'true' || enableBazaarFlips === 't' || enableBazaarFlips === 'yes' || enableBazaarFlips === 'y')
+}
+
 log(`Starting BAF v${version} for ${ingameName}`, 'info')
+log(`AH Flips: ${getConfigProperty('ENABLE_AH_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
+log(`Bazaar Flips: ${getConfigProperty('ENABLE_BAZAAR_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
 const bot: MyBot = createBot({
     username: ingameName,
     auth: 'microsoft',
@@ -124,6 +139,15 @@ async function onWebsocketMessage(msg) {
                     log(message, 'debug')
                 }
                 
+                // Check if this is an AH flip incoming message
+                // Only pause if both bazaar flips and AH flips are enabled
+                if (isAHFlipIncomingMessage(da.text)) {
+                    log('Detected AH flip incoming message', 'info')
+                    if (getConfigProperty('ENABLE_BAZAAR_FLIPS') && getConfigProperty('ENABLE_AH_FLIPS')) {
+                        pauseBazaarFlips()
+                    }
+                }
+                
                 // Check if this is a bazaar flip recommendation
                 const bazaarFlip = parseBazaarFlipMessage(da.text)
                 if (bazaarFlip) {
@@ -140,6 +164,15 @@ async function onWebsocketMessage(msg) {
             let isCoflChat = isCoflChatMessage(data.text)
             if (!isCoflChat) {
                 log(message, 'debug')
+            }
+            
+            // Check if this is an AH flip incoming message
+            // Only pause if both bazaar flips and AH flips are enabled
+            if (isAHFlipIncomingMessage(data.text)) {
+                log('Detected AH flip incoming message', 'info')
+                if (getConfigProperty('ENABLE_BAZAAR_FLIPS') && getConfigProperty('ENABLE_AH_FLIPS')) {
+                    pauseBazaarFlips()
+                }
             }
             
             // Check if this is a bazaar flip recommendation

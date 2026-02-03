@@ -8,7 +8,7 @@ export async function swapProfile(bot: MyBot, data: SwapData) {
     bot.on('windowOpen', window => {
         let title = getWindowTitle(window)
         if (title == 'SkyBlock Menu') {
-            clickWindow(bot, 48)
+            clickWindow(bot, 48).catch(err => log(`Error clicking SkyBlock menu slot: ${err}`, 'error'))
         }
         if (title == 'Profile Management') {
             let clickSlot
@@ -16,10 +16,10 @@ export async function swapProfile(bot: MyBot, data: SwapData) {
                 if (item && (item.nbt.value as any).display.value.Name.value.includes((data as SwapData).profile)) clickSlot = item.slot
             })
             log('Clickslot is ' + clickSlot)
-            clickWindow(bot, clickSlot)
+            clickWindow(bot, clickSlot).catch(err => log(`Error clicking profile slot: ${err}`, 'error'))
         }
         if (title.includes('Profile:')) {
-            clickWindow(bot, 11)
+            clickWindow(bot, 11).catch(err => log(`Error clicking confirm profile slot: ${err}`, 'error'))
             log('Successfully swapped profiles')
         }
     })

@@ -1,5 +1,12 @@
 export async function clickWindow(bot, slot: number) {
-    return bot.clickWindow(slot, 0, 0)
+    try {
+        return await bot.clickWindow(slot, 0, 0)
+    } catch (error) {
+        // Import log function inline to avoid circular dependencies
+        const { log } = require('./logger')
+        log(`Error clicking window slot ${slot}: ${error}`, 'error')
+        throw error
+    }
 }
 
 export async function sleep(ms: number): Promise<void> {

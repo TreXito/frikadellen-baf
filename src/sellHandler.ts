@@ -52,7 +52,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
     let title = getWindowTitle(sellWindow)
     log(title)
     if (title.toString().includes('Auction House')) {
-        clickWindow(bot, 15)
+        clickWindow(bot, 15).catch(err => log(`Error clicking auction house slot: ${err}`, 'error'))
     }
     if (title == 'Manage Auctions') {
         let clickSlot
@@ -68,16 +68,16 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 clickSlot = item.slot
             }
         }
-        clickWindow(bot, clickSlot)
+        clickWindow(bot, clickSlot).catch(err => log(`Error clicking create auction slot: ${err}`, 'error'))
     }
     if (title == 'Create Auction') {
-        clickWindow(bot, 48)
+        clickWindow(bot, 48).catch(err => log(`Error clicking BIN auction slot: ${err}`, 'error'))
     }
 
     if (title == 'Create BIN Auction') {
         if (!setPrice && !durationSet) {
             if (!sellWindow.slots[13].nbt.value.display.value.Name.value.includes('Click an item in your inventory!')) {
-                clickWindow(bot, 13)
+                clickWindow(bot, 13).catch(err => log(`Error clicking item selection slot: ${err}`, 'error'))
             }
 
             // calculate item slot, by calculating the slot index without the chest
@@ -118,7 +118,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
             }
             previousError = null
 
-            clickWindow(bot, itemSlot)
+            clickWindow(bot, itemSlot).catch(err => log(`Error clicking item slot for sell: ${err}`, 'error'))
             bot._client.once('open_sign_entity', ({ location }) => {
                 let price = (data as SellData).price
                 log('Price to set ' + Math.floor(price).toString())
@@ -135,13 +135,13 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 })
             })
             log('opening pricer')
-            clickWindow(bot, 31)
+            clickWindow(bot, 31).catch(err => log(`Error clicking price setter slot: ${err}`, 'error'))
             setPrice = true
         } else if (setPrice && !durationSet) {
-            clickWindow(bot, 33)
+            clickWindow(bot, 33).catch(err => log(`Error clicking duration slot: ${err}`, 'error'))
         } else if (setPrice && durationSet) {
             const resetAndTakeOutItem = () => {
-                clickWindow(bot, 13) // Take the item out of the window
+                clickWindow(bot, 13).catch(err => log(`Error taking item out: ${err}`, 'error')) // Take the item out of the window
                 removeEventListenerCallback()
                 setPrice = false
                 durationSet = false
@@ -178,17 +178,17 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 log('Checking if correct price was set in sellHandler through an error: ' + JSON.stringify(e), 'error')
             }
 
-            clickWindow(bot, 29)
+            clickWindow(bot, 29).catch(err => log(`Error clicking confirm sell slot: ${err}`, 'error'))
         }
     }
     if (title == 'Auction Duration') {
         setAuctionDuration(bot, data.duration).then(() => {
             durationSet = true
         })
-        clickWindow(bot, 16)
+        clickWindow(bot, 16).catch(err => log(`Error clicking duration confirm slot: ${err}`, 'error'))
     }
     if (title == 'Confirm BIN Auction') {
-        clickWindow(bot, 11)
+        clickWindow(bot, 11).catch(err => log(`Error clicking final confirm slot: ${err}`, 'error'))
     }
     if (title == 'BIN Auction View') {
         log('Successfully listed an item')

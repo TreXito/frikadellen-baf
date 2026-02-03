@@ -32,7 +32,7 @@ export async function tradePerson(bot: MyBot, data: TradeData) {
                     if (!addedItems) {
                         for (let slot of data.slots) {
                             slot += 44
-                            clickWindow(bot, slot)
+                            clickWindow(bot, slot).catch(err => log(`Error clicking trade slot: ${err}`, 'error'))
                             log('Clicked slot ' + slot)
                         }
                         log('Added all items')
@@ -55,7 +55,7 @@ export async function tradePerson(bot: MyBot, data: TradeData) {
                             })
                             addedCoins = true
                         })
-                        clickWindow(bot, 36)
+                        clickWindow(bot, 36).catch(err => log(`Error clicking coin slot: ${err}`, 'error'))
                     }
                     if (!(data.coins > 0) || addedCoins) {
                         wss.send(JSON.stringify({ type: 'affirmFlip', data: [JSON.stringify(window.slots)] }))

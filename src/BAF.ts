@@ -14,6 +14,7 @@ import { sendWebhookInitialized } from './webhookHandler'
 import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
+import { handleBazaarFlipRecommendation, parseBazaarFlipMessage } from './bazaarFlipHandler'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -122,6 +123,14 @@ async function onWebsocketMessage(msg) {
                 if (!isCoflChat) {
                     log(message, 'debug')
                 }
+                
+                // Check if this is a bazaar flip recommendation
+                const bazaarFlip = parseBazaarFlipMessage(da.text)
+                if (bazaarFlip) {
+                    log('Detected bazaar flip recommendation', 'info')
+                    handleBazaarFlipRecommendation(bot, bazaarFlip)
+                }
+                
                 if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
                     printMcChatToConsole(da.text)
                 }
@@ -132,6 +141,14 @@ async function onWebsocketMessage(msg) {
             if (!isCoflChat) {
                 log(message, 'debug')
             }
+            
+            // Check if this is a bazaar flip recommendation
+            const bazaarFlip = parseBazaarFlipMessage(data.text)
+            if (bazaarFlip) {
+                log('Detected bazaar flip recommendation', 'info')
+                handleBazaarFlipRecommendation(bot, bazaarFlip)
+            }
+            
             if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
                 printMcChatToConsole((data as TextMessageData).text)
             }
@@ -177,6 +194,10 @@ async function onWebsocketMessage(msg) {
             log(message, 'debug')
             data.chatRegex = new RegExp(data.chatRegex)
             bot.privacySettings = data
+            break
+        case 'bazaarFlip':
+            log(message, 'debug')
+            handleBazaarFlipRecommendation(bot, data)
             break
     }
 }

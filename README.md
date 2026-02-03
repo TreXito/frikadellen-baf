@@ -7,6 +7,10 @@ You found the Best Auto Flipper (BAF) for hypixel Skyblock
 Note: This code is a headless (no user interface) Minecraft client and has features sending custom packages to the server to compete with other macroers. This is against the Hypixel Terms of Service.
 Hypixel currently doesn't ban for doing so but has all the rights to start doing it without notice so use this with caution.
 
+## Releases
+
+Pre-built executables for Windows, Linux, and macOS are available in the [releases section](https://github.com/TreXito/frikadellen-baf/releases). Download the latest release for your operating system.
+
 ## Is this bannable
 
 Yes, it is against the TOS of Hypixel, so don't use it if you don't want to risk that.
@@ -28,7 +32,7 @@ As far as I am aware mineflayer only stores the credentials in `.minecraft/nmp-c
 
 For Windows there is a PowerShell-Script "BAF.ps1". This script automatically downloads/updates and starts the newest version from GitHub and saves it at `%appdata$/BAF`. Created files like the config and log file are also stored there. You can execute it by double clicking the cmd file or right-clicking the .ps1 and click "Run with PowerShell". You need to have Node.js installed for the Windows version.
 
-You can also paste this command into the PowerShell to run the script: `Invoke-Expression (New-Object System.Net.WebClient).DownloadString("https://raw.githubusercontent.com/Hannesimo/auto-flipper/master/start_script/BAF.ps1`. This command downloads the Script and executes it.
+You can also paste this command into the PowerShell to run the script: `Invoke-Expression (New-Object System.Net.WebClient).DownloadString("https://raw.githubusercontent.com/TreXito/frikadellen-baf/main/start_script/BAF.ps1`. This command downloads the Script and executes it.
 
 Tutorial on how to open PowerShell: https://www.youtube.com/watch?v=aLwq9AggFw8&t=1s
 
@@ -42,6 +46,7 @@ To run or build the code, you need Node and npm.
 -   To build the executables the following command for the following OS:
     -   Windows: `npm run build-executables-win`
     -   Linux: `npm run build-executables-linux`
+    -   macOS: `npm run build-executables-macos`
 
 NOTE: You only need this if you want to build the code yourself. If you are using a executable, you can ignore the node steps.
 
@@ -50,8 +55,8 @@ NOTE: You only need this if you want to build the code yourself. If you are usin
 To execute BAF on Linux use the following (and follow the input requests)
 
 ```bash
-version=2.0.1
-wget -c https://github.com/Hannesimo/auto-flipper/releases/download/$version/BAF-$version-linux
+version=v2.0.1
+wget -c https://github.com/TreXito/frikadellen-baf/releases/download/$version/BAF-$version-linux
 chmod +x BAF-$version-linux
 ./BAF-$version-linux
 ```

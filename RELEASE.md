@@ -88,8 +88,9 @@ Once the workflow completes:
 The workflow will trigger on any of these tag patterns:
 
 - `v*` - Any tag starting with `v` (e.g., `v1.0`, `v2.0.1`, `v2.0.1-beta`)
-- `[0-9]*.[0-9]*.[0-9]*` - Semantic version without `v` (e.g., `2.0.1`)
-- `[0-9]*.[0-9]*` - Short version without `v` (e.g., `1.0`)
+- `[0-9]*` - Any tag starting with a digit (e.g., `2.0.1`, `1.0`)
+
+This covers all common version tag formats used in semantic versioning.
 
 ## Recommended Tag Format
 

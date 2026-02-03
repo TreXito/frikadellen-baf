@@ -24,6 +24,8 @@ interface Flip {
     purchaseAt: Date
     itemName: string
     target: number
+    finder?: string
+    profitPerc?: number
 }
 
 interface TextMessageData {

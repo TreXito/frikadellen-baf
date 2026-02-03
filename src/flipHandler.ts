@@ -1,7 +1,10 @@
 import { Flip, FlipWhitelistedData, MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
+import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
+
+// Track if skip was used for the current flip
+let recentlySkipped = false
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
     // Check if AH flips are enabled in config
@@ -47,6 +50,28 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
             await sleep(getConfigProperty('FLIP_ACTION_DELAY'))
             let title = getWindowTitle(window)
             if (title.toString().includes('BIN Auction View')) {
+                // Calculate profit
+                const profit = flip.target - flip.startingBid
+
+                // Get skip settings
+                const skipSettings = getConfigProperty('SKIP')
+                const useSkipAlways = skipSettings.ALWAYS
+                const skipMinProfit = skipSettings.MIN_PROFIT
+                const skipUser = skipSettings.USER_FINDER
+                const skipSkins = skipSettings.SKINS
+                const skipMinPercent = skipSettings.PROFIT_PERCENTAGE
+                const skipMinPrice = skipSettings.MIN_PRICE
+
+                // Check skip conditions
+                const finderCheck = flip.finder === 'USER' && skipUser
+                const skinCheck = isSkin(flip.itemName) && skipSkins
+                const profitCheck = profit > skipMinProfit
+                const percentCheck = (flip.profitPerc || 0) > skipMinPercent
+                const priceCheck = flip.startingBid > skipMinPrice
+
+                // Determine if we should use skip
+                const useSkipOnFlip = profitCheck || skinCheck || finderCheck || percentCheck || priceCheck || useSkipAlways
+
                 let multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY')
                 let delayUntilBuyStart = isBed
                     ? flip.purchaseAt.getTime() - new Date().getTime() - (multipleBedClicksDelay > 0 ? multipleBedClicksDelay : 0)
@@ -61,11 +86,39 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 } else {
                     clickWindow(bot, 31)
                 }
+
+                // If skip should be used, click the skip button (slot 11)
+                if (useSkipOnFlip) {
+                    recentlySkipped = true
+                    await sleep(50) // Small delay before clicking skip
+                    clickWindow(bot, 11)
+
+                    // Log the skip reason
+                    if (useSkipAlways) {
+                        printMcChatToConsole('§f[§4BAF§f]: §cUsed skip because you have skip always enabled in config')
+                    } else {
+                        let skipReasons = []
+                        if (finderCheck) skipReasons.push('it was a user flip')
+                        if (profitCheck) skipReasons.push('profit was over ' + numberWithThousandsSeparators(skipMinProfit))
+                        if (skinCheck) skipReasons.push('it was a skin')
+                        if (percentCheck) skipReasons.push('profit percentage was over ' + skipMinPercent + '%')
+                        if (priceCheck) skipReasons.push('price was over ' + numberWithThousandsSeparators(skipMinPrice))
+                        printMcChatToConsole(
+                            `§f[§4BAF§f]: §aUsed skip because ${skipReasons.join(' and ')}. You can change this in your config`
+                        )
+                    }
+                } else {
+                    recentlySkipped = false
+                }
             }
             if (title.toString().includes('Confirm Purchase')) {
-                clickWindow(bot, 11)
+                // Only click confirm if we didn't skip
+                if (!recentlySkipped) {
+                    clickWindow(bot, 11)
+                }
                 bot.removeAllListeners('windowOpen')
                 bot.state = null
+                recentlySkipped = false // Reset for next flip
                 resolve()
                 return
             }

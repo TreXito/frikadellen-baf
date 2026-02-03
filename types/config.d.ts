@@ -2,6 +2,15 @@ interface SESSIONS {
     [key: string]: ColfSession
 }
 
+interface SkipSettings {
+    ALWAYS: boolean
+    MIN_PROFIT: number
+    USER_FINDER: boolean
+    SKINS: boolean
+    PROFIT_PERCENTAGE: number
+    MIN_PRICE: number
+}
+
 interface Config {
     INGAME_NAME: string
     WEBHOOK_URL: string
@@ -13,6 +22,7 @@ interface Config {
     BED_MULTIPLE_CLICKS_DELAY: number
     ENABLE_BAZAAR_FLIPS: boolean
     ENABLE_AH_FLIPS: boolean
+    SKIP: SkipSettings
 }
 
 interface ColfSession {

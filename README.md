@@ -11,6 +11,25 @@ Hypixel currently doesn't ban for doing so but has all the rights to start doing
 
 Pre-built executables for Windows, Linux, and macOS are available in the [releases section](https://github.com/TreXito/frikadellen-baf/releases). Download the latest release for your operating system.
 
+### For Maintainers: Creating a Release
+
+To create a new release with pre-built executables:
+
+1. Update the version in `package.json`
+2. Create and push a version tag (with or without `v` prefix):
+   ```bash
+   git tag v2.0.1  # or just 2.0.1
+   git push origin v2.0.1
+   ```
+3. The GitHub Actions workflow will automatically:
+   - Build executables for Windows, Linux, and macOS
+   - Create a GitHub release with the tag name
+   - Upload all executables and start scripts to the release
+
+The workflow accepts tags in these formats:
+- `v*` (e.g., `v2.0.1`, `v1.0`)
+- `[0-9]*` (any tag starting with a digit, e.g., `2.0.1`, `1.0`)
+
 ## Is this bannable
 
 Yes, it is against the TOS of Hypixel, so don't use it if you don't want to risk that.

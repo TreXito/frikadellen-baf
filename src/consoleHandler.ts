@@ -68,10 +68,16 @@ export async function handleCommand(bot: MyBot, data: string) {
             return
         }
 
-        // For all other /cofl or /baf commands, send them to the game chat
-        // so that the Coflnet server (which monitors chat) can see and respond to them
+        // For all other /cofl or /baf commands, send them to the websocket
+        // so that the Coflnet server can process them and respond appropriately
         const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
-        bot.chat(`${prefix} ${command}${params}`)
+        const fullCommand = `${prefix} ${command}${params}`
+        wss.send(
+            JSON.stringify({
+                type: 'chat',
+                data: JSON.stringify(fullCommand)
+            })
+        )
     } else {
         bot.chat(data)
     }

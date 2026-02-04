@@ -3,3 +3,5 @@ build
 config.toml
 executables
 log.txt
+test_*.js
+run_all_tests.js

@@ -44,9 +44,10 @@ export async function handleCommand(bot: MyBot, data: string) {
     let lowercaseInput = data.toLowerCase()
     if ((lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) && data?.split(' ').length >= 2) {
         let splits = data.split(' ')
-        splits.shift() // remove /cofl
+        splits.shift() // remove /cofl or /baf
         let command = splits.shift()
 
+        // Handle locally-processed commands
         if (command === 'connect') {
             changeWebsocketURL(splits[0])
             return
@@ -67,12 +68,9 @@ export async function handleCommand(bot: MyBot, data: string) {
             return
         }
 
-        wss.send(
-            JSON.stringify({
-                type: command,
-                data: `"${splits.join(' ')}"`
-            })
-        )
+        // For all other /cofl commands, send them to the game chat
+        // so that the Coflnet server (which monitors chat) can see and respond to them
+        bot.chat(`/cofl ${command} ${splits.join(' ')}`.trim())
     } else {
         bot.chat(data)
     }

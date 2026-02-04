@@ -44,7 +44,7 @@ export async function handleCommand(bot: MyBot, data: string) {
     let lowercaseInput = data.toLowerCase()
     if ((lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) && data?.split(' ').length >= 2) {
         let splits = data.split(' ')
-        splits.shift() // remove /cofl or /baf
+        let prefix = splits.shift() // remove /cofl or /baf and store it
         let command = splits.shift()
 
         // Handle locally-processed commands
@@ -68,9 +68,10 @@ export async function handleCommand(bot: MyBot, data: string) {
             return
         }
 
-        // For all other /cofl commands, send them to the game chat
+        // For all other /cofl or /baf commands, send them to the game chat
         // so that the Coflnet server (which monitors chat) can see and respond to them
-        bot.chat(`/cofl ${command} ${splits.join(' ')}`.trim())
+        const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
+        bot.chat(`${prefix} ${command}${params}`)
     } else {
         bot.chat(data)
     }

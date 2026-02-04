@@ -218,7 +218,12 @@ async function onWebsocketMessage(msg) {
             break
         case 'bazaarFlip':
             log(message, 'debug')
-            handleBazaarFlipRecommendation(bot, data)
+            const parsedBazaarFlip = parseBazaarFlipJson(data)
+            if (parsedBazaarFlip) {
+                handleBazaarFlipRecommendation(bot, parsedBazaarFlip)
+            } else {
+                log(`Failed to parse bazaar flip data from websocket: ${JSON.stringify(data)}`, 'error')
+            }
             break
         case 'getbazaarflips':
             log(message, 'debug')

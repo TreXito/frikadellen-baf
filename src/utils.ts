@@ -84,6 +84,9 @@ export function formatInventoryForUpload(inventory: any): any[] {
             }
         } catch (e) {
             // If NBT parsing fails, just use basic item data
+            // Import log function inline to avoid circular dependencies
+            const { log } = require('./logger')
+            log(`Warning: Failed to parse NBT data for item ${item.type}: ${e}`, 'debug')
         }
         
         return itemData

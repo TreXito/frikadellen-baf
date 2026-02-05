@@ -180,14 +180,21 @@ class WebGuiServer {
         switch (message.type) {
             case 'command':
                 this.addChatMessage(`> ${message.command}`, 'system')
-                // The command will be handled by the console handler through executeCommand
                 if (this.bot && typeof message.command === 'string') {
-                    // Import and use the handleCommand function
-                    import('./consoleHandler').then(({ handleCommand }) => {
-                        handleCommand(this.bot!, message.command)
-                    }).catch(err => {
-                        log(`Error executing command from web GUI: ${err}`, 'error')
-                    })
+                    const command = message.command.trim()
+                    const lowercaseCommand = command.toLowerCase()
+                    
+                    // Handle /cofl and /baf commands through the console handler
+                    if (lowercaseCommand.startsWith('/cofl') || lowercaseCommand.startsWith('/baf')) {
+                        import('./consoleHandler').then(({ handleCommand }) => {
+                            handleCommand(this.bot!, command)
+                        }).catch(err => {
+                            log(`Error executing command from web GUI: ${err}`, 'error')
+                        })
+                    } else {
+                        // Send all other commands directly to Minecraft chat
+                        this.bot.chat(command)
+                    }
                 }
                 break
             
@@ -384,10 +391,10 @@ class WebGuiServer {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
-            color: #e0e0e0;
-            padding: 20px;
-            overflow-x: hidden;
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 24px;
+            margin: 0;
             min-height: 100vh;
         }
         
@@ -396,156 +403,117 @@ class WebGuiServer {
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: radial-gradient(circle at 50% 50%, rgba(52, 152, 219, 0.1) 0%, transparent 50%);
+            background: #f8fafc;
         }
         
         .login-box {
-            background: rgba(26, 26, 46, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(52, 152, 219, 0.3);
-            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
             padding: 48px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            max-width: 420px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
             width: 100%;
-            transition: all 0.3s ease;
-        }
-        
-        .login-box:hover {
-            box-shadow: 0 12px 48px rgba(52, 152, 219, 0.2);
-            transform: translateY(-2px);
         }
         
         .login-title {
-            font-size: 2.5em;
+            font-size: 1.875em;
             text-align: center;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 700;
-            letter-spacing: -1px;
+            margin-bottom: 8px;
+            color: #0f172a;
+            font-weight: 600;
+            letter-spacing: -0.025em;
         }
         
         .login-subtitle {
             text-align: center;
-            color: #8892a6;
+            color: #64748b;
             margin-bottom: 32px;
-            font-size: 1em;
+            font-size: 0.875em;
             font-weight: 400;
         }
         
         .container {
-            max-width: 1600px;
+            max-width: 1400px;
             margin: 0 auto;
             display: none;
-            animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         
         .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 32px;
-            padding: 24px 32px;
-            background: rgba(26, 26, 46, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            border-radius: 16px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-        }
-        
-        .header:hover {
-            box-shadow: 0 6px 32px rgba(52, 152, 219, 0.15);
+            margin-bottom: 24px;
+            padding: 20px 24px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
         
         .header-left {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 16px;
         }
         
         .player-head {
-            width: 64px;
-            height: 64px;
-            border-radius: 12px;
-            border: 2px solid rgba(52, 152, 219, 0.5);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .player-head:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 24px rgba(52, 152, 219, 0.4);
-            border-color: rgba(52, 152, 219, 0.8);
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
         }
         
         .header-info h1 {
-            font-size: 1.75em;
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 4px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
+            font-size: 1.5em;
+            color: #0f172a;
+            margin-bottom: 2px;
+            font-weight: 600;
+            letter-spacing: -0.025em;
         }
         
         .header-info .subtitle {
-            color: #8892a6;
+            color: #64748b;
             font-size: 0.875em;
             font-weight: 400;
         }
         
         .header-right {
             display: flex;
-            gap: 12px;
+            gap: 8px;
         }
         
         .icon-btn {
-            width: 48px;
-            height: 48px;
-            background: rgba(52, 152, 219, 0.1);
-            border: 1px solid rgba(52, 152, 219, 0.3);
-            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            font-size: 1.5em;
+            transition: all 0.2s ease;
+            font-size: 1.25em;
+            color: #475569;
         }
         
         .icon-btn:hover {
-            background: rgba(52, 152, 219, 0.2);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.25);
-            border-color: rgba(52, 152, 219, 0.5);
-        }
-        
-        .icon-btn:active {
-            transform: translateY(0);
+            background: #e2e8f0;
+            color: #1e293b;
         }
         
         .settings-panel {
             position: fixed;
             top: 0;
-            right: -420px;
-            width: 420px;
+            right: -400px;
+            width: 400px;
             height: 100vh;
-            background: rgba(26, 26, 46, 0.98);
-            backdrop-filter: blur(30px);
-            border-left: 1px solid rgba(52, 152, 219, 0.3);
-            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
-            padding: 32px;
-            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #ffffff;
+            border-left: 1px solid #e2e8f0;
+            box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            transition: right 0.3s ease;
             z-index: 1000;
             overflow-y: auto;
         }
@@ -555,23 +523,23 @@ class WebGuiServer {
         }
         
         .settings-title {
-            font-size: 1.5em;
-            color: #3498db;
-            margin-bottom: 32px;
+            font-size: 1.25em;
+            color: #0f172a;
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             font-weight: 600;
         }
         
         .settings-group {
-            margin-bottom: 32px;
+            margin-bottom: 24px;
         }
         
         .settings-group h3 {
-            color: #3498db;
-            margin-bottom: 16px;
-            font-size: 1.1em;
+            color: #0f172a;
+            margin-bottom: 12px;
+            font-size: 1em;
             font-weight: 600;
         }
         
@@ -579,265 +547,224 @@ class WebGuiServer {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px;
-            background: rgba(52, 152, 219, 0.05);
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            border-radius: 12px;
-            margin-bottom: 12px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .toggle-option:hover {
-            background: rgba(52, 152, 219, 0.1);
-            border-color: rgba(52, 152, 219, 0.4);
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 8px;
         }
         
         .toggle-switch {
             position: relative;
-            width: 56px;
-            height: 28px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 14px;
+            width: 44px;
+            height: 24px;
+            background: #cbd5e1;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: background 0.2s ease;
         }
         
         .toggle-switch.active {
-            background: linear-gradient(135deg, #3498db, #2ecc71);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.4);
+            background: #3b82f6;
         }
         
         .toggle-switch::after {
             content: '';
             position: absolute;
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
             background: white;
             border-radius: 50%;
-            top: 3px;
-            left: 3px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
         
         .toggle-switch.active::after {
-            left: 31px;
+            left: 22px;
         }
         
         .grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
+            gap: 20px;
+            margin-bottom: 20px;
         }
         
         .panel {
-            background: rgba(26, 26, 46, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 16px;
-            padding: 28px;
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .panel:hover {
-            border-color: rgba(52, 152, 219, 0.4);
-            box-shadow: 0 6px 32px rgba(52, 152, 219, 0.15);
-            transform: translateY(-2px);
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
         
         .panel h2 {
-            color: #3498db;
-            margin-bottom: 24px;
-            font-size: 1.375em;
+            color: #0f172a;
+            margin-bottom: 20px;
+            font-size: 1.25em;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             font-weight: 600;
-            text-shadow: none;
         }
         
         .status-indicator {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             display: inline-block;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.15); opacity: 0.7; }
         }
         
         .status-online {
-            background: #2ecc71;
-            box-shadow: 0 0 12px rgba(46, 204, 113, 0.6);
+            background: #10b981;
         }
         
         .status-offline {
-            background: #e74c3c;
-            box-shadow: 0 0 12px rgba(231, 76, 60, 0.6);
+            background: #ef4444;
         }
         
         #chatBox {
-            background: rgba(16, 16, 28, 0.8);
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
             height: 500px;
             overflow-y: auto;
             padding: 16px;
             margin-bottom: 16px;
             font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
             font-size: 13px;
-            line-height: 1.7;
-            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.3);
+            line-height: 1.6;
         }
         
         #chatBox::-webkit-scrollbar {
-            width: 6px;
+            width: 8px;
         }
         
         #chatBox::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
+            background: #e2e8f0;
+            border-radius: 4px;
         }
         
         #chatBox::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #3498db, #2ecc71);
-            border-radius: 3px;
+            background: #94a3b8;
+            border-radius: 4px;
         }
         
         #chatBox::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #5dade2, #58d68d);
+            background: #64748b;
         }
         
         .chat-message {
-            margin-bottom: 6px;
-            padding: 6px 0;
-            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
+            margin-bottom: 4px;
+            padding: 4px 0;
         }
         
         .chat-timestamp {
-            color: #5a6c7d;
+            color: #64748b;
             font-size: 0.85em;
             margin-right: 8px;
         }
         
-        .chat-info { color: #3498db; }
-        .chat-error { color: #e74c3c; }
-        .chat-chat { color: #ecf0f1; }
-        .chat-system { color: #f39c12; }
+        .chat-info { color: #3b82f6; }
+        .chat-error { color: #ef4444; }
+        .chat-chat { color: #1e293b; }
+        .chat-system { color: #f59e0b; }
         
         .input-group {
             display: flex;
-            gap: 12px;
+            gap: 8px;
         }
         
         input[type="text"], input[type="password"] {
             flex: 1;
-            padding: 14px 16px;
-            background: rgba(16, 16, 28, 0.8);
-            border: 1px solid rgba(52, 152, 219, 0.3);
-            border-radius: 12px;
-            color: #ecf0f1;
+            padding: 10px 12px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            color: #0f172a;
             font-size: 14px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
             font-family: inherit;
         }
         
         input[type="text"]:focus, input[type="password"]:focus {
             outline: none;
-            border-color: #3498db;
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.25);
-            background: rgba(0, 0, 0, 0.8);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         
         button {
-            padding: 14px 28px;
-            background: linear-gradient(135deg, #3498db, #2ecc71);
+            padding: 10px 20px;
+            background: #3b82f6;
             border: none;
-            border-radius: 12px;
+            border-radius: 6px;
             color: #ffffff;
-            font-weight: 600;
+            font-weight: 500;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+            transition: all 0.2s ease;
             font-family: inherit;
         }
         
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(52, 152, 219, 0.4);
+            background: #2563eb;
         }
         
         button:active {
-            transform: translateY(0);
+            background: #1d4ed8;
         }
         
         button.danger {
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            box-shadow: 0 4px 16px rgba(231, 76, 60, 0.3);
+            background: #ef4444;
         }
         
         button.danger:hover {
-            box-shadow: 0 6px 24px rgba(231, 76, 60, 0.4);
+            background: #dc2626;
         }
         
         button.secondary {
-            background: linear-gradient(135deg, #9b59b6, #8e44ad);
-            box-shadow: 0 4px 16px rgba(155, 89, 182, 0.3);
+            background: #64748b;
         }
         
         button.secondary:hover {
-            box-shadow: 0 6px 24px rgba(155, 89, 182, 0.4);
+            background: #475569;
         }
         
         .status-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
+            gap: 12px;
             margin-top: 16px;
         }
         
         .status-item {
-            background: rgba(16, 16, 28, 0.8);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .status-item:hover {
-            border-color: rgba(52, 152, 219, 0.5);
-            background: rgba(52, 152, 219, 0.05);
-            transform: translateY(-2px);
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
         }
         
         .status-label {
-            color: #8892a6;
-            font-size: 0.875em;
-            margin-bottom: 8px;
+            color: #64748b;
+            font-size: 0.8125em;
+            margin-bottom: 6px;
             font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
         }
         
         .status-value {
-            color: #3498db;
-            font-size: 1.25em;
+            color: #0f172a;
+            font-size: 1.125em;
             font-weight: 600;
         }
         
         .button-group {
             display: flex;
-            gap: 12px;
-            margin-top: 24px;
+            gap: 8px;
+            margin-top: 20px;
         }
         
         .button-group button {
@@ -847,34 +774,36 @@ class WebGuiServer {
         #inventoryGrid {
             display: grid;
             grid-template-columns: repeat(9, 1fr);
-            gap: 8px;
+            gap: 6px;
             margin-top: 16px;
         }
         
         .inventory-slot {
             aspect-ratio: 1;
-            background: rgba(16, 16, 28, 0.8);
-            border: 1px solid rgba(52, 152, 219, 0.2);
-            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
             overflow: hidden;
         }
         
         .inventory-slot:hover {
-            border-color: rgba(52, 152, 219, 0.6);
-            background: rgba(52, 152, 219, 0.1);
-            transform: scale(1.05);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+            border-color: #cbd5e1;
+            background: #f1f5f9;
         }
         
         .inventory-slot.has-item {
-            border-color: rgba(46, 204, 113, 0.5);
-            box-shadow: 0 2px 8px rgba(46, 204, 113, 0.2);
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        
+        .inventory-slot.has-item:hover {
+            border-color: #059669;
         }
         
         .inventory-slot img {
@@ -898,17 +827,10 @@ class WebGuiServer {
         }
         
         .error-message {
-            color: #e74c3c;
+            color: #ef4444;
             text-align: center;
-            margin-top: 16px;
-            font-size: 0.9em;
-            animation: shake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-8px); }
-            75% { transform: translateX(8px); }
+            margin-top: 12px;
+            font-size: 0.875em;
         }
         
         @media (max-width: 1024px) {
@@ -930,12 +852,12 @@ class WebGuiServer {
 <body>
     <div class="login-container" id="loginContainer">
         <div class="login-box">
-            <div class="login-title">🎮 BAF</div>
-            <div class="login-subtitle">Control Panel</div>
+            <div class="login-title">BAF Control Panel</div>
+            <div class="login-subtitle">Auction Flipper for Hypixel Skyblock</div>
             <form onsubmit="attemptLogin(event)">
-                <div class="input-group" style="flex-direction: column; gap: 15px;">
+                <div class="input-group" style="flex-direction: column; gap: 12px;">
                     <input type="password" id="passwordInput" placeholder="Enter password..." required />
-                    <button type="submit" style="width: 100%;">🔓 Login</button>
+                    <button type="submit" style="width: 100%;" aria-label="Login to control panel">Login</button>
                 </div>
                 <div id="loginError" class="error-message" style="display: none;"></div>
             </form>
@@ -958,10 +880,10 @@ class WebGuiServer {
         
         <div class="grid">
             <div class="panel">
-                <h2>💬 Chat & Console</h2>
+                <h2>Chat & Console</h2>
                 <div id="chatBox"></div>
                 <div class="input-group">
-                    <input type="text" id="commandInput" placeholder="Enter command (e.g., /cofl getbazaar)..." />
+                    <input type="text" id="commandInput" placeholder="Enter command..." />
                     <button onclick="sendCommand()">Send</button>
                 </div>
             </div>
@@ -995,18 +917,18 @@ class WebGuiServer {
                     <button class="secondary" onclick="startBot()">Start Bot</button>
                 </div>
                 
-                <h2 style="margin-top: 30px;">📦 Inventory</h2>
-                <button onclick="loadInventory()" style="width: 100%; margin-bottom: 15px;">Refresh Inventory</button>
+                <h2 style="margin-top: 24px;">Inventory</h2>
+                <button onclick="loadInventory()" style="width: 100%; margin-bottom: 12px;">Refresh Inventory</button>
                 <div id="inventoryGrid"></div>
             </div>
         </div>
     </div>
     
     <div class="settings-panel" id="settingsPanel">
-        <div class="settings-title">⚙️ Settings</div>
+        <div class="settings-title">Settings</div>
         
         <div class="settings-group">
-            <h3>🔒 Privacy Controls</h3>
+            <h3>Privacy Controls</h3>
             <div class="toggle-option">
                 <span>Show Username</span>
                 <div class="toggle-switch active" id="toggleUsername" onclick="togglePrivacy('username')"></div>

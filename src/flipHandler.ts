@@ -5,6 +5,78 @@ import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, rem
 import { trackFlipPurchase } from './flipTracker'
 
 let currentFlip: Flip | null = null
+let actionCounter = 1
+let fromCoflSocket = false
+let recentlySkipped = false
+
+/**
+ * Polls the window slot to wait for an item to load
+ * @param bot The bot instance
+ * @param slot The slot number to check
+ * @param alreadyLoaded Whether to wait for a change in the slot (for feather double-check)
+ * @returns The item in the slot or null if timeout
+ */
+async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false): Promise<any> {
+    return new Promise((resolve) => {
+        let index = 1
+        let found = false
+        const first = bot.currentWindow?.slots[slot]?.name
+        const delay = getConfigProperty('FLIP_ACTION_DELAY') || 150
+        
+        const interval = alreadyLoaded ? setInterval(() => {
+            const check = bot.currentWindow?.slots[slot]
+            if (check?.name !== first) {
+                clearInterval(interval)
+                found = true
+                resolve(check)
+                log(`Found ${check?.name} on index ${index}`, 'debug')
+            }
+            index++
+        }, 1) : setInterval(() => {
+            const check = bot.currentWindow?.slots[slot]
+            if (check) {
+                clearInterval(interval)
+                found = true
+                resolve(check)
+                log(`Found ${check?.name} on index ${index}`, 'debug')
+            }
+            index++
+        }, 1)
+
+        setTimeout(() => {
+            if (found) return
+            log(`Failed to find an item in slot ${slot}`, 'debug')
+            clearInterval(interval)
+            resolve(null)
+        }, delay * 3)
+    })
+}
+
+/**
+ * Sends a confirmClick packet for faster window confirmation
+ */
+function confirmClick(bot: MyBot, windowId: number) {
+    bot._client.write('transaction', {
+        windowId: windowId,
+        action: actionCounter,
+        accepted: true
+    })
+}
+
+/**
+ * Clicks a slot using low-level packets for faster response
+ */
+function clickSlot(bot: MyBot, slot: number, windowId: number, itemId: number) {
+    bot._client.write('window_click', {
+        windowId: windowId,
+        slot: slot,
+        mouseButton: 2,
+        mode: 3,
+        item: { "blockId": itemId },
+        action: actionCounter
+    })
+    actionCounter++
+}
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
     // Check if AH flips are enabled in config
@@ -27,7 +99,7 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         if (bot.state === 'purchasing') {
             log("Resetting 'bot.state === purchasing' lock")
             bot.state = null
-            bot.removeAllListeners('windowOpen')
+            bot._client.removeAllListeners('open_window')
         }
     }, 10000)
     let isBed = flip.purchaseAt.getTime() > new Date().getTime()
@@ -41,23 +113,30 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         )} coins (Target: ${numberWithThousandsSeparators(flip.target)})`
     )
 
+    // Store flip data for access in open_window handler
+    fromCoflSocket = true
+    recentlySkipped = false
+    
     await useRegularPurchase(bot, flip, isBed)
     clearTimeout(timeout)
 }
 
 function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
-    // Track if skip was used for this specific flip (scoped to avoid race conditions)
-    let recentlySkipped = false
-
     return new Promise<void>((resolve, reject) => {
-        bot.addListener('windowOpen', async window => {
-            await sleep(getConfigProperty('FLIP_ACTION_DELAY'))
-            let title = getWindowTitle(window)
-            if (title.toString().includes('BIN Auction View')) {
-                // Calculate profit
+        let firstGui: number
+        
+        bot._client.on('open_window', async (window) => {
+            const windowID = window.windowId
+            const nextWindowID = windowID === 100 ? 1 : windowID + 1
+            const windowName = window.windowTitle
+            log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
+            
+            // Send confirm click packet for faster response
+            confirmClick(bot, windowID)
+            
+            if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
+                // Calculate profit and skip conditions
                 const profit = flip.target - flip.startingBid
-
-                // Get skip settings
                 const skipSettings = getConfigProperty('SKIP')
                 const useSkipAlways = skipSettings.ALWAYS
                 const skipMinProfit = skipSettings.MIN_PROFIT
@@ -69,9 +148,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 // Validate FLIP_ACTION_DELAY if ALWAYS skip is enabled
                 if (useSkipAlways && getConfigProperty('FLIP_ACTION_DELAY') < 150) {
                     printMcChatToConsole(
-                        '§f[§4BAF§f]: §cWarning: SKIP.ALWAYS requires FLIP_ACTION_DELAY >= 150ms. Using skip may cause issues with current delay of ' +
-                            getConfigProperty('FLIP_ACTION_DELAY') +
-                            'ms'
+                        '§f[§4BAF§f]: §cWarning: SKIP.ALWAYS requires FLIP_ACTION_DELAY >= 150ms'
                     )
                 }
 
@@ -82,59 +159,215 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const percentCheck = (flip.profitPerc || 0) > skipMinPercent
                 const priceCheck = flip.startingBid > skipMinPrice
 
-                // Determine if we should use skip - ALWAYS takes precedence, otherwise check other conditions
-                const useSkipOnFlip = useSkipAlways || profitCheck || skinCheck || finderCheck || percentCheck || priceCheck
-
-                let multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY')
-                let delayUntilBuyStart = isBed
-                    ? flip.purchaseAt.getTime() - new Date().getTime() - (multipleBedClicksDelay > 0 ? multipleBedClicksDelay : 0)
-                    : flip.purchaseAt.getTime() - new Date().getTime()
-                await sleep(delayUntilBuyStart)
-
-                if (isBed && getConfigProperty('BED_MULTIPLE_CLICKS_DELAY') > 0) {
-                    for (let i = 0; i < 3; i++) {
-                        clickWindow(bot, 31).catch(err => log(`Error clicking bed slot: ${err}`, 'error'))
-                        await sleep(getConfigProperty('BED_MULTIPLE_CLICKS_DELAY'))
-                    }
-                } else {
-                    clickWindow(bot, 31).catch(err => log(`Error clicking purchase slot: ${err}`, 'error'))
-                }
-
-                // If skip should be used, click the skip button (slot 11)
-                if (useSkipOnFlip) {
-                    recentlySkipped = true
-                    // Small delay to ensure the BIN purchase click is registered before skip
-                    await sleep(50)
-                    clickWindow(bot, 11).catch(err => log(`Error clicking skip slot: ${err}`, 'error'))
-
-                    // Log the skip reason
-                    if (useSkipAlways) {
-                        printMcChatToConsole('§f[§4BAF§f]: §cUsed skip because you have skip always enabled in config')
-                    } else {
-                        let skipReasons = []
-                        if (finderCheck) skipReasons.push('it was a user flip')
-                        if (profitCheck) skipReasons.push('profit was over ' + numberWithThousandsSeparators(skipMinProfit))
-                        if (skinCheck) skipReasons.push('it was a skin')
-                        if (percentCheck) skipReasons.push('profit percentage was over ' + skipMinPercent + '%')
-                        if (priceCheck) skipReasons.push('price was over ' + numberWithThousandsSeparators(skipMinPrice))
-                        printMcChatToConsole(
-                            `§f[§4BAF§f]: §aUsed skip because ${skipReasons.join(' and ')}. You can change this in your config`
-                        )
+                // Determine if we should use skip - checked BEFORE clicking
+                const useSkipOnFlip = (useSkipAlways || profitCheck || skinCheck || finderCheck || percentCheck || priceCheck) && fromCoflSocket
+                
+                // Reset fromCoflSocket flag
+                fromCoflSocket = false
+                
+                firstGui = Date.now()
+                
+                // Wait for item to load in slot 31
+                let item = (await itemLoad(bot, 31))?.name
+                
+                if (item === 'gold_nugget') {
+                    // Click on gold nugget first
+                    clickSlot(bot, 31, windowID, 371)
+                    clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
+                    
+                    // If skip should be used, click skip button in next window
+                    if (useSkipOnFlip) {
+                        clickSlot(bot, 11, nextWindowID, 159)
+                        recentlySkipped = true
+                        
+                        // Log the skip reason
+                        if (useSkipAlways) {
+                            printMcChatToConsole('§f[§4BAF§f]: §cUsed skip because you have skip always enabled in config')
+                        } else {
+                            let skipReasons = []
+                            if (finderCheck) skipReasons.push('it was a user flip')
+                            if (profitCheck) skipReasons.push('profit was over ' + numberWithThousandsSeparators(skipMinProfit))
+                            if (skinCheck) skipReasons.push('it was a skin')
+                            if (percentCheck) skipReasons.push('profit percentage was over ' + skipMinPercent + '%')
+                            if (priceCheck) skipReasons.push('price was over ' + numberWithThousandsSeparators(skipMinPrice))
+                            printMcChatToConsole(
+                                `§f[§4BAF§f]: §aUsed skip because ${skipReasons.join(' and ')}`
+                            )
+                        }
+                        return
                     }
                 }
-            }
-            if (title.toString().includes('Confirm Purchase')) {
+                
+                recentlySkipped = false
+                
+                // Handle different item types
+                switch (item) {
+                    case "bed":
+                        printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
+                        await initBedSpam(bot, flip, isBed)
+                        break
+                    case null:
+                    case undefined:
+                    case "potato":
+                        printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        break
+                    case "feather":
+                        // Double check for potato or gold_block
+                        const secondItem = (await itemLoad(bot, 31, true))?.name
+                        if (secondItem === 'potato') {
+                            printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
+                            if (bot.currentWindow) {
+                                bot.closeWindow(bot.currentWindow)
+                            }
+                            bot.state = null
+                            break
+                        } else if (secondItem !== 'gold_block') {
+                            log(`Found unexpected item on second check: ${secondItem}`, 'debug')
+                            if (bot.currentWindow) {
+                                bot.closeWindow(bot.currentWindow)
+                            }
+                            bot.state = null
+                            break
+                        }
+                        // Fall through to gold_block case
+                    case "gold_block":
+                        // Claim sold item
+                        clickWindow(bot, 31).catch(err => log(`Error clicking claim slot: ${err}`, 'error'))
+                        bot.state = null
+                        break
+                    case "poisonous_potato":
+                        printMcChatToConsole(`§f[§4BAF§f]: §cToo poor to buy it :(`)
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        break
+                    case "stained_glass_pane":
+                        // Handle edge cases - just close window for now
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        break
+                    default:
+                        log(`Unexpected item found in slot 31: ${item}`, 'warn')
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        break
+                }
+            } else if (windowName === '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
+                const confirmAt = Date.now() - firstGui
+                printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
+                
                 // Only click confirm if we didn't skip
                 if (!recentlySkipped) {
                     clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
+                    
+                    // Ensure confirm is clicked even if first click didn't register
+                    await sleep(50)
+                    let attempts = 0
+                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase' && attempts < 5) {
+                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
+                        await sleep(50)
+                        attempts++
+                    }
                 }
-                bot.removeAllListeners('windowOpen')
+                
+                bot._client.removeAllListeners('open_window')
                 bot.state = null
                 resolve()
                 return
             }
+            
+            await sleep(500)
         })
     })
+}
+
+/**
+ * Handles bed spam clicking for bed flips
+ */
+async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
+    const clickDelay = getConfigProperty('BED_SPAM_CLICK_DELAY') || 5
+    const multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY') || 0
+    const bedSpam = getConfigProperty('BED_SPAM') || false
+    
+    let delayUntilBuyStart = isBed
+        ? flip.purchaseAt.getTime() - new Date().getTime() - (multipleBedClicksDelay > 0 ? multipleBedClicksDelay : 0)
+        : 0
+    
+    if (delayUntilBuyStart > 0) {
+        await sleep(delayUntilBuyStart)
+    }
+    
+    if (bedSpam) {
+        // Continuous bed spam until window changes or item changes
+        let undefinedCount = 0
+        const bedSpamInterval = setInterval(() => {
+            const window = bot.currentWindow
+            const item = window?.slots[31]?.name
+            
+            if (item === undefined) {
+                undefinedCount++
+                if (undefinedCount >= 5) {
+                    clearInterval(bedSpamInterval)
+                    log('Clearing bed spam due to undefined count', 'debug')
+                }
+                return
+            }
+            
+            if (item === "gold_nugget") {
+                clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
+                undefinedCount++
+                return
+            } else if (item === "potato") {
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                bot.state = null
+                clearInterval(bedSpamInterval)
+                return
+            }
+            
+            if (getWindowTitle(window) !== 'BIN Auction View' || item !== 'bed') {
+                clearInterval(bedSpamInterval)
+                log('Clearing bed spam', 'debug')
+                return
+            }
+            
+            clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
+        }, clickDelay)
+        
+        // Failsafe timeout
+        setTimeout(() => {
+            clearInterval(bedSpamInterval)
+            if (getWindowTitle(bot.currentWindow) === 'BIN Auction View' && bot.state === 'purchasing') {
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                bot.state = null
+                printMcChatToConsole('§f[§4BAF§f]: §cBed timing failed, aborted auction')
+            }
+        }, 5000)
+    } else {
+        // Multiple click approach
+        const clicks = multipleBedClicksDelay > 0 ? 5 : 3
+        for (let i = 0; i < clicks; i++) {
+            if (getWindowTitle(bot.currentWindow) === 'BIN Auction View') {
+                clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
+                log(`Bed click ${i + 1}`, 'debug')
+                await sleep(multipleBedClicksDelay || 3)
+            } else {
+                break
+            }
+        }
+    }
 }
 
 // Stores the last 3 whitelist messages so add it to the webhook message for purchased flips

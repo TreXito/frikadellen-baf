@@ -8,6 +8,7 @@ interface FlipData {
     purchaseTime: number
     itemName: string
     buyPrice: number
+    auctionId: string
 }
 
 export function trackFlipPurchase(itemName: string, buyPrice: number, flip: Flip): void {
@@ -15,7 +16,8 @@ export function trackFlipPurchase(itemName: string, buyPrice: number, flip: Flip
         flip,
         purchaseTime: Date.now(),
         itemName,
-        buyPrice
+        buyPrice,
+        auctionId: flip.id
     })
 }
 

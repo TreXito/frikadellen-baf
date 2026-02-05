@@ -105,6 +105,15 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
         })
     }
 
+    // Add auction link if flip data is available
+    if (flip && flip.id) {
+        webhookData.embeds[0].fields.push({
+            name: '🔗 Auction Link',
+            value: `[View on Coflnet](https://sky.coflnet.com/auction/${flip.id})`,
+            inline: false
+        })
+    }
+
     sendWebhookData(webhookData)
 }
 
@@ -124,11 +133,13 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
     let profit = 0
     let timeToSell = ''
     let profitStr = '0'
+    let auctionId = ''
     
     if (flipData) {
         profit = calculateProfit(flipData, sellPrice)
         timeToSell = formatTimeToSell(Date.now() - flipData.purchaseTime)
         profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : `${numberWithThousandsSeparators(profit)}`
+        auctionId = flipData.auctionId
         removeFlipData(itemName)
     }
     
@@ -186,6 +197,15 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
             value: `\`\`\`${roi}%\`\`\``,
             inline: true
         })
+        
+        // Add auction link if auction ID is available
+        if (auctionId) {
+            webhookData.embeds[0].fields.push({
+                name: '🔗 Auction Link',
+                value: `[View on Coflnet](https://sky.coflnet.com/auction/${auctionId})`,
+                inline: false
+            })
+        }
     }
     
     sendWebhookData(webhookData)

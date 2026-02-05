@@ -4,6 +4,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log } from './logger'
+import { removeMinecraftColorCodes } from './utils'
 
 interface ChatMessage {
     timestamp: number
@@ -273,11 +274,30 @@ class WebGuiServer {
         try {
             const inventory = this.bot.inventory.slots.map((item, index) => {
                 if (!item) return null
+                
+                // Extract display name from NBT data if available
+                let displayName = item.name
+                try {
+                    const nbtValue = item.nbt?.value as any
+                    if (nbtValue?.display?.value?.Name?.value) {
+                        displayName = removeMinecraftColorCodes(nbtValue.display.value.Name.value)
+                    }
+                } catch (e) {
+                    // If NBT parsing fails, use the item name - this is expected for vanilla items
+                    log(`Debug: Could not parse NBT for item ${item.name} at slot ${index}`, 'debug')
+                }
+                
+                // Format item name for better display (remove minecraft: prefix, capitalize)
+                const formattedName = item.name.replace('minecraft:', '')
+                    .split('_')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')
+                
                 return {
                     slot: index,
                     name: item.name,
                     count: item.count,
-                    displayName: item.displayName || item.name,
+                    displayName: displayName !== item.name ? displayName : formattedName,
                     // Add minecraft item ID for icon rendering
                     itemId: item.name.replace('minecraft:', '')
                 }

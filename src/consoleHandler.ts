@@ -77,15 +77,16 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
         // This prevents infinite loops where server sends 'execute' -> client sends back 'execute' -> etc
         if (!fromServer) {
             // For all other /cofl or /baf commands (including bare /cofl or /baf),
-            // send them to the websocket so that the Coflnet server can process them
+            // send them directly to the websocket so that the Coflnet server can process them
             // Send the command with the /cofl or /baf prefix so server recognizes it as a command
             const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
             const commandWithPrefix = command ? `${prefix} ${command}${params}` : prefix
             
-            // Use 'execute' type for commands to be processed by the server
+            // Send commands directly to websocket using 'chat' type instead of 'execute'
+            // The server processes /cofl commands when they come through the chat channel
             wss.send(
                 JSON.stringify({
-                    type: 'execute',
+                    type: 'chat',
                     data: JSON.stringify(commandWithPrefix)
                 })
             )

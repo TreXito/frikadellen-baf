@@ -83,7 +83,7 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
                 wss.send(
                     JSON.stringify({
                         type: command,
-                        data: `"${splits.join(' ')}"`
+                        data: JSON.stringify(splits.join(' '))
                     })
                 )
             } else {

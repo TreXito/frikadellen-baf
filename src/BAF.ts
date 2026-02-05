@@ -329,8 +329,8 @@ async function onScoreboardChanged() {
                 log('Requesting bazaar flip recommendations...')
                 wss.send(
                     JSON.stringify({
-                        type: 'chat',
-                        data: JSON.stringify('/cofl getbazaarflips')
+                        type: 'getbazaarflips',
+                        data: JSON.stringify('')
                     })
                 )
             }

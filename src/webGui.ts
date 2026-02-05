@@ -1,4 +1,5 @@
 import http from 'http'
+import crypto from 'crypto'
 import { WebSocket, WebSocketServer } from 'ws'
 import { MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
@@ -148,7 +149,7 @@ class WebGuiServer {
         if (message.type === 'auth') {
             if (this.password && message.password === this.password) {
                 session.authenticated = true
-                session.token = Math.random().toString(36).substring(7)
+                session.token = crypto.randomBytes(32).toString('hex')
                 session.timestamp = Date.now()
                 this.sendToClient(ws, {
                     type: 'authSuccess',
@@ -1016,16 +1017,25 @@ class WebGuiServer {
             document.getElementById('settingsPanel').classList.toggle('open');
         }
         
+        let loginRetries = 0;
+        const maxLoginRetries = 10;
+        
         function attemptLogin(event) {
             event.preventDefault();
             const password = document.getElementById('passwordInput').value;
             
             if (!ws || ws.readyState !== WebSocket.OPEN) {
-                showLoginError('Connecting to server...');
-                setTimeout(() => attemptLogin(event), 1000);
+                if (loginRetries < maxLoginRetries) {
+                    loginRetries++;
+                    showLoginError('Connecting to server...');
+                    setTimeout(() => attemptLogin(event), 1000);
+                } else {
+                    showLoginError('Failed to connect to server. Please refresh the page.');
+                }
                 return;
             }
             
+            loginRetries = 0;
             ws.send(JSON.stringify({
                 type: 'auth',
                 password: password

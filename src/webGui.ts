@@ -852,12 +852,12 @@ class WebGuiServer {
 <body>
     <div class="login-container" id="loginContainer">
         <div class="login-box">
-            <div class="login-title">BAF</div>
-            <div class="login-subtitle">Control Panel</div>
+            <div class="login-title">BAF Control Panel</div>
+            <div class="login-subtitle">Auction Flipper for Hypixel Skyblock</div>
             <form onsubmit="attemptLogin(event)">
                 <div class="input-group" style="flex-direction: column; gap: 12px;">
                     <input type="password" id="passwordInput" placeholder="Enter password..." required />
-                    <button type="submit" style="width: 100%;">Login</button>
+                    <button type="submit" style="width: 100%;" aria-label="Login to control panel">Login</button>
                 </div>
                 <div id="loginError" class="error-message" style="display: none;"></div>
             </form>
@@ -879,7 +879,7 @@ class WebGuiServer {
         </div>
         
         <div class="grid">
-            <div class="panel">
+            <div class="panel" role="region" aria-label="Chat and console">
                 <h2>Chat & Console</h2>
                 <div id="chatBox"></div>
                 <div class="input-group">
@@ -888,7 +888,7 @@ class WebGuiServer {
                 </div>
             </div>
             
-            <div class="panel">
+            <div class="panel" role="region" aria-label="Bot status and controls">
                 <h2>
                     <span class="status-indicator" id="statusIndicator"></span>
                     Bot Status

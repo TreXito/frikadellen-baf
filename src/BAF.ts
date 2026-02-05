@@ -1,7 +1,7 @@
 import { createBot } from 'mineflayer'
 import { createFastWindowClicker } from './fastWindowClick'
 import { initLogger, log, printMcChatToConsole } from './logger'
-import { clickWindow, isCoflChatMessage, removeMinecraftColorCodes, sleep, formatInventoryForUpload } from './utils'
+import { clickWindow, isCoflChatMessage, removeMinecraftColorCodes, sleep } from './utils'
 import { onWebsocketCreateAuction } from './sellHandler'
 import { tradePerson } from './tradeHandler'
 import { swapProfile } from './swapProfileHandler'
@@ -244,11 +244,10 @@ async function onWebsocketMessage(msg) {
         case 'getInventory':
             log('Uploading inventory...')
             let wss = await getCurrentWebsocket()
-            const formattedInventory = formatInventoryForUpload(bot.inventory)
             wss.send(
                 JSON.stringify({
                     type: 'uploadInventory',
-                    data: JSON.stringify(formattedInventory)
+                    data: JSON.stringify(bot.inventory)
                 })
             )
             break

@@ -25,36 +25,25 @@ export function sendWebhookInitialized() {
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
+    let ahEnabled = getConfigProperty('ENABLE_AH_FLIPS')
+    let bazaarEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
+    
+    let statusParts = [
+        `AH Flips: ${ahEnabled ? '✅' : '❌'}`,
+        `Bazaar Flips: ${bazaarEnabled ? '✅' : '❌'}`
+    ]
+    
     sendWebhookData({
         content: '',
         embeds: [
             {
-                title: '🚀 BAF Connection Initialized',
-                description: '**BAF is now online and ready to flip!**',
+                title: '✓ Started BAF',
+                description: `${statusParts.join(' | ')}\n<t:${Math.floor(Date.now() / 1000)}:R>`,
                 color: 0x00ff88, // Bright green
-                fields: [
-                    { 
-                        name: '👤 Connected As', 
-                        value: `\`\`\`fix\n${ingameName}\n\`\`\``, 
-                        inline: true 
-                    },
-                    {
-                        name: '⏰ Started At',
-                        value: `<t:${(Date.now() / 1000).toFixed(0)}:F>`,
-                        inline: true
-                    },
-                    {
-                        name: '📊 Status',
-                        value: '```yaml\nOnline and Active\n```',
-                        inline: false
-                    }
-                ],
-                thumbnail: { url: `https://mc-heads.net/avatar/${ingameName}/600.png` },
                 footer: {
-                    text: `BAF • ${ingameName}`,
-                    icon_url: 'https://mc-heads.net/avatar/Steve/32.png'
-                },
-                timestamp: new Date().toISOString()
+                    text: `BAF - ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
             }
         ]
     })
@@ -75,7 +64,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
         embeds: [
             {
                 title: '🛒 Item Purchased Successfully',
-                description: `**${itemName}**`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
                 color: 0x3498db, // Professional blue
                 fields: [
                     {
@@ -90,8 +79,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                 footer: {
                     text: `BAF • ${ingameName}`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
-                },
-                timestamp: new Date().toISOString()
+                }
             }
         ]
     }
@@ -152,7 +140,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         embeds: [
             {
                 title: `${statusEmoji} Item Sold ${profit >= 0 ? '(Profit)' : '(Loss)'}`,
-                description: `**${itemName}**`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
                 color: color,
                 fields: [
                     {
@@ -172,8 +160,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
                 footer: {
                     text: `BAF • ${ingameName}`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
-                },
-                timestamp: new Date().toISOString()
+                }
             }
         ]
     }
@@ -213,7 +200,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
         embeds: [
             {
                 title: '📋 Item Listed on Auction House',
-                description: `**${itemName}**`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
                 color: 0x9b59b6, // Purple for listing
                 fields: [
                     {
@@ -238,8 +225,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
                 footer: {
                     text: `BAF • ${ingameName}`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
-                },
-                timestamp: new Date().toISOString()
+                }
             }
         ]
     })

@@ -1,6 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle } from './utils'
+import { clickWindow, getWindowTitle, sleep } from './utils'
 import { ChatMessage } from 'prismarine-chat'
 import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
@@ -93,6 +93,8 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
             log('Claiming auction window: ' + title)
 
             if (title.toString().includes('Auction House')) {
+                // Add a small delay to ensure the window is fully loaded before clicking
+                await sleep(300)
                 clickWindow(bot, 13).catch(err => log(`Error clicking auction house slot: ${err}`, 'error'))
             }
 
@@ -165,7 +167,16 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         bot.on('windowOpen', async window => {
             let title = getWindowTitle(window)
             if (title.toString().includes('Auction House')) {
-                clickWindow(bot, 15).catch(err => log(`Error clicking manage auctions slot: ${err}`, 'error'))
+                // Add a small delay to ensure the window is fully loaded before clicking
+                await sleep(300)
+                clickWindow(bot, 15).catch(err => {
+                    log(`Error clicking manage auctions slot: ${err}`, 'error')
+                    // Clean up on error
+                    bot.removeAllListeners('windowOpen')
+                    bot.state = null
+                    clearTimeout(timeout)
+                    resolve(false)
+                })
             }
             if (title.toString().includes('Manage Auctions')) {
                 log('Claiming sold auction...')

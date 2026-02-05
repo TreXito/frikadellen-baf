@@ -36,12 +36,14 @@ export function initLogger() {
 }
 
 export function log(string: any, level?: string) {
-    logger.log(level || 'info', string)
+    // Convert objects to JSON strings for proper logging
+    const logMessage = typeof string === 'object' && string !== null ? JSON.stringify(string) : string
+    logger.log(level || 'info', logMessage)
     
     // Send to web GUI if available
     try {
         const msgType = level === 'error' ? 'error' : level === 'warn' ? 'error' : 'info'
-        addWebGuiChatMessage(String(string), msgType)
+        addWebGuiChatMessage(String(logMessage), msgType)
     } catch (e) {
         // Web GUI not available yet, ignore
     }

@@ -45,3 +45,52 @@ export function isSkin(itemName: string): boolean {
     const lowerName = itemName?.toLowerCase() || ''
     return lowerName.includes('skin') || lowerName.includes('✦')
 }
+
+export function formatInventoryForUpload(inventory: any): any[] {
+    // Format inventory items to include display names like SkyCrypt does
+    const formattedItems = inventory.items().map((item: any) => {
+        if (!item) return null
+        
+        const itemData: any = {
+            type: item.type,
+            count: item.count,
+            metadata: item.metadata,
+            slot: item.slot
+        }
+        
+        // Extract display name from NBT if available
+        try {
+            if (item.nbt?.value?.display?.value?.Name?.value) {
+                itemData.displayName = removeMinecraftColorCodes(item.nbt.value.display.value.Name.value)
+            }
+            
+            // Extract lore from NBT if available
+            if (item.nbt?.value?.display?.value?.Lore?.value?.value) {
+                itemData.lore = item.nbt.value.display.value.Lore.value.value.map((line: string) => 
+                    removeMinecraftColorCodes(line)
+                )
+            }
+            
+            // Extract extra attributes for SkyBlock items
+            if (item.nbt?.value?.ExtraAttributes?.value) {
+                const extraAttrs = item.nbt.value.ExtraAttributes.value
+                itemData.extraAttributes = {}
+                
+                // Include common SkyBlock attributes
+                if (extraAttrs.id?.value) itemData.extraAttributes.id = extraAttrs.id.value
+                if (extraAttrs.uuid?.value) itemData.extraAttributes.uuid = extraAttrs.uuid.value
+                if (extraAttrs.timestamp?.value) itemData.extraAttributes.timestamp = extraAttrs.timestamp.value
+                if (extraAttrs.rarity_upgrades?.value !== undefined) itemData.extraAttributes.rarity_upgrades = extraAttrs.rarity_upgrades.value
+            }
+        } catch (e) {
+            // If NBT parsing fails, just use basic item data
+            // Import log function inline to avoid circular dependencies
+            const { log } = require('./logger')
+            log(`Warning: Failed to parse NBT data for item ${item.type}: ${e}`, 'debug')
+        }
+        
+        return itemData
+    }).filter((item: any) => item !== null)
+    
+    return formattedItems
+}

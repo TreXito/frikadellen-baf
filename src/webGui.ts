@@ -271,13 +271,32 @@ class WebGuiServer {
         }
 
         try {
+            const { removeMinecraftColorCodes } = require('./utils')
             const inventory = this.bot.inventory.slots.map((item, index) => {
                 if (!item) return null
+                
+                // Extract display name from NBT data if available
+                let displayName = item.name
+                try {
+                    const nbtValue = item.nbt?.value as any
+                    if (nbtValue?.display?.value?.Name?.value) {
+                        displayName = removeMinecraftColorCodes(nbtValue.display.value.Name.value)
+                    }
+                } catch (e) {
+                    // If NBT parsing fails, use the item name
+                }
+                
+                // Format item name for better display (remove minecraft: prefix, capitalize)
+                const formattedName = item.name.replace('minecraft:', '')
+                    .split('_')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')
+                
                 return {
                     slot: index,
                     name: item.name,
                     count: item.count,
-                    displayName: item.displayName || item.name,
+                    displayName: displayName !== item.name ? displayName : formattedName,
                     // Add minecraft item ID for icon rendering
                     itemId: item.name.replace('minecraft:', '')
                 }

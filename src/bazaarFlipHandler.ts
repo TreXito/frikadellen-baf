@@ -202,7 +202,9 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         // Set up the listener BEFORE opening the bazaar to catch the first window
         const orderPromise = placeBazaarOrder(bot, amount, pricePerUnit, isBuyOrder)
         
-        // Give a tiny delay to ensure listener is registered
+        // Wait briefly to ensure the event listener is fully registered
+        // This prevents a race condition where the /bz command opens a window
+        // before the 'windowOpen' listener is attached
         await sleep(100)
         
         // Open bazaar for the item

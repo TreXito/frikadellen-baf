@@ -275,6 +275,8 @@ async function onScoreboardChanged() {
             
             // Request bazaar flips if enabled
             if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+                // Wait for the server connection to stabilize before requesting flips
+                // This ensures the websocket is ready to handle the command and response
                 await sleep(1000)
                 log('Requesting bazaar flip recommendations...')
                 wss.send(

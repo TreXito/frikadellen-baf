@@ -371,7 +371,7 @@ class WebGuiServer {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BAF - AMOLED Control Panel</title>
+    <title>BAF - Control Panel</title>
     <style>
         * {
             margin: 0;
@@ -380,11 +380,12 @@ class WebGuiServer {
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #000000;
-            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
             padding: 20px;
             overflow-x: hidden;
+            min-height: 100vh;
         }
         
         .login-container {
@@ -392,53 +393,55 @@ class WebGuiServer {
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: radial-gradient(circle at center, rgba(0, 255, 136, 0.1) 0%, rgba(0, 0, 0, 1) 70%);
+            background: radial-gradient(circle at 50% 50%, rgba(52, 152, 219, 0.1) 0%, transparent 50%);
         }
         
         .login-box {
-            background: rgba(10, 10, 10, 0.9);
+            background: rgba(26, 26, 46, 0.95);
             backdrop-filter: blur(20px);
-            border: 2px solid #00ff88;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 0 50px rgba(0, 255, 136, 0.3), inset 0 0 30px rgba(0, 255, 136, 0.05);
-            animation: glow 2s ease-in-out infinite alternate;
-            max-width: 400px;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            border-radius: 16px;
+            padding: 48px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            max-width: 420px;
             width: 100%;
+            transition: all 0.3s ease;
         }
         
-        @keyframes glow {
-            from { box-shadow: 0 0 30px rgba(0, 255, 136, 0.3), inset 0 0 20px rgba(0, 255, 136, 0.05); }
-            to { box-shadow: 0 0 60px rgba(0, 255, 136, 0.5), inset 0 0 40px rgba(0, 255, 136, 0.1); }
+        .login-box:hover {
+            box-shadow: 0 12px 48px rgba(52, 152, 219, 0.2);
+            transform: translateY(-2px);
         }
         
         .login-title {
             font-size: 2.5em;
             text-align: center;
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, #00ff88, #ff00ff);
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            font-weight: bold;
+            font-weight: 700;
+            letter-spacing: -1px;
         }
         
         .login-subtitle {
             text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-            font-size: 1.1em;
+            color: #8892a6;
+            margin-bottom: 32px;
+            font-size: 1em;
+            font-weight: 400;
         }
         
         .container {
             max-width: 1600px;
             margin: 0 auto;
             display: none;
-            animation: fadeIn 0.5s ease-in;
+            animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
         
@@ -446,13 +449,18 @@ class WebGuiServer {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: rgba(10, 10, 10, 0.8);
+            margin-bottom: 32px;
+            padding: 24px 32px;
+            background: rgba(26, 26, 46, 0.95);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            border-radius: 15px;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .header:hover {
+            box-shadow: 0 6px 32px rgba(52, 152, 219, 0.15);
         }
         
         .header-left {
@@ -464,68 +472,77 @@ class WebGuiServer {
         .player-head {
             width: 64px;
             height: 64px;
-            border-radius: 10px;
-            border: 2px solid #00ff88;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
-            transition: all 0.3s;
+            border-radius: 12px;
+            border: 2px solid rgba(52, 152, 219, 0.5);
+            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .player-head:hover {
-            transform: scale(1.1) rotate(5deg);
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+            transform: scale(1.05);
+            box-shadow: 0 8px 24px rgba(52, 152, 219, 0.4);
+            border-color: rgba(52, 152, 219, 0.8);
         }
         
         .header-info h1 {
-            font-size: 2em;
-            background: linear-gradient(135deg, #00ff88, #00aaff);
+            font-size: 1.75em;
+            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
         
         .header-info .subtitle {
-            color: #888;
-            font-size: 0.9em;
+            color: #8892a6;
+            font-size: 0.875em;
+            font-weight: 400;
         }
         
         .header-right {
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
         
         .icon-btn {
-            width: 50px;
-            height: 50px;
-            background: rgba(0, 255, 136, 0.1);
-            border: 1px solid #00ff88;
+            width: 48px;
+            height: 48px;
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid rgba(52, 152, 219, 0.3);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 1.5em;
         }
         
         .icon-btn:hover {
-            background: rgba(0, 255, 136, 0.2);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+            background: rgba(52, 152, 219, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.25);
+            border-color: rgba(52, 152, 219, 0.5);
+        }
+        
+        .icon-btn:active {
+            transform: translateY(0);
         }
         
         .settings-panel {
             position: fixed;
             top: 0;
-            right: -400px;
-            width: 400px;
+            right: -420px;
+            width: 420px;
             height: 100vh;
-            background: rgba(0, 0, 0, 0.95);
+            background: rgba(26, 26, 46, 0.98);
             backdrop-filter: blur(30px);
-            border-left: 2px solid #00ff88;
-            box-shadow: -10px 0 50px rgba(0, 255, 136, 0.3);
-            padding: 30px;
-            transition: right 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border-left: 1px solid rgba(52, 152, 219, 0.3);
+            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
+            padding: 32px;
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1000;
             overflow-y: auto;
         }
@@ -535,216 +552,227 @@ class WebGuiServer {
         }
         
         .settings-title {
-            font-size: 1.8em;
-            color: #00ff88;
-            margin-bottom: 30px;
+            font-size: 1.5em;
+            color: #3498db;
+            margin-bottom: 32px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            font-weight: 600;
         }
         
         .settings-group {
-            margin-bottom: 30px;
+            margin-bottom: 32px;
         }
         
         .settings-group h3 {
-            color: #ff00ff;
-            margin-bottom: 15px;
-            font-size: 1.2em;
+            color: #3498db;
+            margin-bottom: 16px;
+            font-size: 1.1em;
+            font-weight: 600;
         }
         
         .toggle-option {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
-            background: rgba(0, 255, 136, 0.05);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            border-radius: 10px;
-            margin-bottom: 10px;
-            transition: all 0.3s;
+            padding: 16px;
+            background: rgba(52, 152, 219, 0.05);
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .toggle-option:hover {
-            background: rgba(0, 255, 136, 0.1);
-            border-color: #00ff88;
+            background: rgba(52, 152, 219, 0.1);
+            border-color: rgba(52, 152, 219, 0.4);
         }
         
         .toggle-switch {
             position: relative;
-            width: 60px;
-            height: 30px;
+            width: 56px;
+            height: 28px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
+            border-radius: 14px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .toggle-switch.active {
-            background: #00ff88;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            background: linear-gradient(135deg, #3498db, #2ecc71);
+            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.4);
         }
         
         .toggle-switch::after {
             content: '';
             position: absolute;
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             background: white;
             border-radius: 50%;
             top: 3px;
             left: 3px;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
         
         .toggle-switch.active::after {
-            left: 33px;
+            left: 31px;
         }
         
         .grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
+            gap: 24px;
+            margin-bottom: 24px;
         }
         
         .panel {
-            background: rgba(10, 10, 10, 0.8);
+            background: rgba(26, 26, 46, 0.95);
             backdrop-filter: blur(20px);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.1);
-            transition: all 0.3s;
+            border-radius: 16px;
+            padding: 28px;
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .panel:hover {
-            border-color: rgba(0, 255, 136, 0.5);
-            box-shadow: 0 0 40px rgba(0, 255, 136, 0.2);
+            border-color: rgba(52, 152, 219, 0.4);
+            box-shadow: 0 6px 32px rgba(52, 152, 219, 0.15);
+            transform: translateY(-2px);
         }
         
         .panel h2 {
-            color: #00ff88;
-            margin-bottom: 20px;
-            font-size: 1.5em;
+            color: #3498db;
+            margin-bottom: 24px;
+            font-size: 1.375em;
             display: flex;
             align-items: center;
-            gap: 10px;
-            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            gap: 12px;
+            font-weight: 600;
+            text-shadow: none;
         }
         
         .status-indicator {
-            width: 14px;
-            height: 14px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             display: inline-block;
-            animation: pulse 2s infinite;
+            animation: pulse 2s ease-in-out infinite;
         }
         
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 0.7; }
         }
         
         .status-online {
-            background: #00ff88;
-            box-shadow: 0 0 15px #00ff88;
+            background: #2ecc71;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.6);
         }
         
         .status-offline {
-            background: #ff0055;
-            box-shadow: 0 0 15px #ff0055;
+            background: #e74c3c;
+            box-shadow: 0 0 12px rgba(231, 76, 60, 0.6);
         }
         
         #chatBox {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            border-radius: 10px;
+            background: rgba(16, 16, 28, 0.8);
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            border-radius: 12px;
             height: 500px;
             overflow-y: auto;
-            padding: 15px;
-            margin-bottom: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.8;
-            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
+            padding: 16px;
+            margin-bottom: 16px;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.3);
         }
         
         #chatBox::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         
         #chatBox::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
         }
         
         #chatBox::-webkit-scrollbar-thumb {
-            background: #00ff88;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            background: linear-gradient(180deg, #3498db, #2ecc71);
+            border-radius: 3px;
+        }
+        
+        #chatBox::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #5dade2, #58d68d);
         }
         
         .chat-message {
-            margin-bottom: 8px;
-            padding: 5px 0;
-            animation: slideIn 0.3s ease-out;
+            margin-bottom: 6px;
+            padding: 6px 0;
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-10px); }
+            from { opacity: 0; transform: translateX(-20px); }
             to { opacity: 1; transform: translateX(0); }
         }
         
         .chat-timestamp {
-            color: #666;
+            color: #5a6c7d;
             font-size: 0.85em;
+            margin-right: 8px;
         }
         
-        .chat-info { color: #00aaff; text-shadow: 0 0 5px rgba(0, 170, 255, 0.5); }
-        .chat-error { color: #ff0055; text-shadow: 0 0 5px rgba(255, 0, 85, 0.5); }
-        .chat-chat { color: #ffffff; }
-        .chat-system { color: #ffaa00; text-shadow: 0 0 5px rgba(255, 170, 0, 0.5); }
+        .chat-info { color: #3498db; }
+        .chat-error { color: #e74c3c; }
+        .chat-chat { color: #ecf0f1; }
+        .chat-system { color: #f39c12; }
         
         .input-group {
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
         
         input[type="text"], input[type="password"] {
             flex: 1;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            border-radius: 10px;
-            color: #fff;
+            padding: 14px 16px;
+            background: rgba(16, 16, 28, 0.8);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            border-radius: 12px;
+            color: #ecf0f1;
             font-size: 14px;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
         }
         
         input[type="text"]:focus, input[type="password"]:focus {
             outline: none;
-            border-color: #00ff88;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            border-color: #3498db;
+            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.25);
             background: rgba(0, 0, 0, 0.8);
         }
         
         button {
-            padding: 15px 30px;
-            background: linear-gradient(135deg, #00ff88, #00dd77);
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #3498db, #2ecc71);
             border: none;
-            border-radius: 10px;
-            color: #000;
-            font-weight: bold;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 600;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+            font-family: inherit;
         }
         
         button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 30px rgba(0, 255, 136, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(52, 152, 219, 0.4);
         }
         
         button:active {
@@ -752,61 +780,61 @@ class WebGuiServer {
         }
         
         button.danger {
-            background: linear-gradient(135deg, #ff0055, #dd0044);
-            box-shadow: 0 0 20px rgba(255, 0, 85, 0.3);
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            box-shadow: 0 4px 16px rgba(231, 76, 60, 0.3);
         }
         
         button.danger:hover {
-            box-shadow: 0 5px 30px rgba(255, 0, 85, 0.5);
+            box-shadow: 0 6px 24px rgba(231, 76, 60, 0.4);
         }
         
         button.secondary {
-            background: linear-gradient(135deg, #ff00ff, #dd00dd);
-            box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            box-shadow: 0 4px 16px rgba(155, 89, 182, 0.3);
         }
         
         button.secondary:hover {
-            box-shadow: 0 5px 30px rgba(255, 0, 255, 0.5);
+            box-shadow: 0 6px 24px rgba(155, 89, 182, 0.4);
         }
         
         .status-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-top: 15px;
+            gap: 16px;
+            margin-top: 16px;
         }
         
         .status-item {
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(16, 16, 28, 0.8);
             padding: 20px;
             border-radius: 12px;
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            transition: all 0.3s;
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .status-item:hover {
-            border-color: #00ff88;
-            background: rgba(0, 255, 136, 0.05);
-            transform: translateY(-3px);
+            border-color: rgba(52, 152, 219, 0.5);
+            background: rgba(52, 152, 219, 0.05);
+            transform: translateY(-2px);
         }
         
         .status-label {
-            color: #888;
-            font-size: 0.9em;
+            color: #8892a6;
+            font-size: 0.875em;
             margin-bottom: 8px;
+            font-weight: 500;
         }
         
         .status-value {
-            color: #00ff88;
-            font-size: 1.3em;
-            font-weight: bold;
-            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            color: #3498db;
+            font-size: 1.25em;
+            font-weight: 600;
         }
         
         .button-group {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
+            gap: 12px;
+            margin-top: 24px;
         }
         
         .button-group button {
@@ -817,33 +845,33 @@ class WebGuiServer {
             display: grid;
             grid-template-columns: repeat(9, 1fr);
             gap: 8px;
-            margin-top: 15px;
+            margin-top: 16px;
         }
         
         .inventory-slot {
             aspect-ratio: 1;
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 136, 0.2);
+            background: rgba(16, 16, 28, 0.8);
+            border: 1px solid rgba(52, 152, 219, 0.2);
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow: hidden;
         }
         
         .inventory-slot:hover {
-            border-color: #00ff88;
-            background: rgba(0, 255, 136, 0.1);
+            border-color: rgba(52, 152, 219, 0.6);
+            background: rgba(52, 152, 219, 0.1);
             transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
         }
         
         .inventory-slot.has-item {
-            border-color: #00ff88;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+            border-color: rgba(46, 204, 113, 0.5);
+            box-shadow: 0 2px 8px rgba(46, 204, 113, 0.2);
         }
         
         .inventory-slot img {
@@ -851,7 +879,6 @@ class WebGuiServer {
             height: 100%;
             object-fit: contain;
             image-rendering: pixelated;
-            filter: drop-shadow(0 0 5px rgba(0, 255, 136, 0.3));
         }
         
         .item-count {
@@ -859,23 +886,26 @@ class WebGuiServer {
             bottom: 4px;
             right: 6px;
             font-size: 0.75em;
-            color: #00ff88;
-            text-shadow: 0 0 5px rgba(0, 255, 136, 0.8), 0 0 2px #000;
-            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-weight: 700;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 6px;
+            border-radius: 4px;
         }
         
         .error-message {
-            color: #ff0055;
+            color: #e74c3c;
             text-align: center;
-            margin-top: 15px;
+            margin-top: 16px;
             font-size: 0.9em;
-            animation: shake 0.5s;
+            animation: shake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
         }
         
         @media (max-width: 1024px) {
@@ -898,7 +928,7 @@ class WebGuiServer {
     <div class="login-container" id="loginContainer">
         <div class="login-box">
             <div class="login-title">🎮 BAF</div>
-            <div class="login-subtitle">AMOLED Control Panel</div>
+            <div class="login-subtitle">Control Panel</div>
             <form onsubmit="attemptLogin(event)">
                 <div class="input-group" style="flex-direction: column; gap: 15px;">
                     <input type="password" id="passwordInput" placeholder="Enter password..." required />
@@ -915,7 +945,7 @@ class WebGuiServer {
                 <img id="playerHead" class="player-head" src="" alt="Player" style="display: none;" />
                 <div class="header-info">
                     <h1 id="headerUsername">BAF Control Panel</h1>
-                    <p class="subtitle">Best Auto Flipper - AMOLED Edition</p>
+                    <p class="subtitle">Best Auto Flipper for Hypixel Skyblock</p>
                 </div>
             </div>
             <div class="header-right">
@@ -1144,7 +1174,40 @@ class WebGuiServer {
             div.className = \`chat-message chat-\${msg.type}\`;
             
             const time = new Date(msg.timestamp).toLocaleTimeString();
-            div.innerHTML = \`<span class="chat-timestamp">[\${time}]</span> \${escapeHtml(msg.message)}\`;
+            
+            // Try to parse message as JSON to check for rich message data
+            let messageContent = msg.message;
+            try {
+                const richData = JSON.parse(msg.message);
+                if (richData && typeof richData === 'object' && richData.text) {
+                    // This is a rich message with potential onClick and hover
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = richData.text;
+                    textSpan.style.cursor = richData.onClick ? 'pointer' : 'default';
+                    
+                    if (richData.onClick) {
+                        textSpan.style.textDecoration = 'underline';
+                        textSpan.style.color = '#3498db';
+                        textSpan.title = richData.hover || 'Click to execute: ' + richData.onClick;
+                        textSpan.onclick = function() {
+                            if (richData.onClick) {
+                                sendCommand(richData.onClick);
+                            }
+                        };
+                    } else if (richData.hover) {
+                        textSpan.title = richData.hover;
+                    }
+                    
+                    div.innerHTML = \`<span class="chat-timestamp">[\${time}]</span> \`;
+                    div.appendChild(textSpan);
+                } else {
+                    // Not a rich message, display normally
+                    div.innerHTML = \`<span class="chat-timestamp">[\${time}]</span> \${escapeHtml(messageContent)}\`;
+                }
+            } catch (e) {
+                // Not JSON or parsing failed, display as plain text
+                div.innerHTML = \`<span class="chat-timestamp">[\${time}]</span> \${escapeHtml(messageContent)}\`;
+            }
             
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
@@ -1186,12 +1249,34 @@ class WebGuiServer {
                     slot.classList.add('has-item');
                     slot.title = \`\${item.displayName || item.name} x\${item.count}\`;
                     
-                    const itemId = (item.name || 'stone').toLowerCase().replace(/[^a-z0-9_]/g, '_');
                     const img = document.createElement('img');
-                    img.src = \`https://mc-heads.net/minecraft/item/\${itemId}\`;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.imageRendering = 'pixelated';
+                    
+                    // Try multiple icon sources for better coverage
+                    const itemId = item.itemId || (item.name || 'stone').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                    const iconSources = [
+                        \`https://sky.coflnet.com/static/icon/\${itemId}\`,
+                        \`https://mc-heads.net/minecraft/item/\${itemId}\`,
+                        \`https://sky.shiiyu.moe/item/\${itemId}\`
+                    ];
+                    
+                    let sourceIndex = 0;
+                    img.src = iconSources[sourceIndex];
+                    
                     img.onerror = function() {
-                        this.style.display = 'none';
-                        slot.textContent = item.name.substring(0, 3).toUpperCase();
+                        sourceIndex++;
+                        if (sourceIndex < iconSources.length) {
+                            this.src = iconSources[sourceIndex];
+                        } else {
+                            // All sources failed, show text fallback
+                            this.style.display = 'none';
+                            const fallback = document.createElement('div');
+                            fallback.style.cssText = 'font-size: 10px; text-align: center; color: #888;';
+                            fallback.textContent = itemId.substring(0, 3).toUpperCase();
+                            slot.appendChild(fallback);
+                        }
                     };
                     slot.appendChild(img);
                     
@@ -1207,16 +1292,18 @@ class WebGuiServer {
             }
         }
         
-        function sendCommand() {
+        function sendCommand(cmd) {
             const input = document.getElementById('commandInput');
-            const command = input.value.trim();
+            const command = cmd || input.value.trim();
             
             if (command && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'command',
                     command: command
                 }));
-                input.value = '';
+                if (!cmd) {
+                    input.value = '';
+                }
             }
         }
         

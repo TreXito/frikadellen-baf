@@ -30,6 +30,8 @@ interface Flip {
 
 interface TextMessageData {
     text: string
+    onClick?: string
+    hover?: string
 }
 
 interface MyBot extends Bot {

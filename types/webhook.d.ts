@@ -10,7 +10,7 @@ interface Embed {
     title: string
     description?: string
     url?: string
-    timestamp?: number
+    timestamp?: string
     color?: number
     footer?: EmbedFooter
     image?: string

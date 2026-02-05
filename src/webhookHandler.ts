@@ -30,7 +30,7 @@ export function sendWebhookInitialized() {
         embeds: [
             {
                 title: '🚀 BAF Connection Initialized',
-                description: '**Best Auto Flipper is now online and ready to flip!**',
+                description: '**BAF is now online and ready to flip!**',
                 color: 0x00ff88, // Bright green
                 fields: [
                     { 
@@ -51,7 +51,7 @@ export function sendWebhookInitialized() {
                 ],
                 thumbnail: { url: `https://mc-heads.net/avatar/${ingameName}/600.png` },
                 footer: {
-                    text: 'BAF • Best Auto Flipper',
+                    text: `BAF • ${ingameName}`,
                     icon_url: 'https://mc-heads.net/avatar/Steve/32.png'
                 },
                 timestamp: new Date().toISOString()

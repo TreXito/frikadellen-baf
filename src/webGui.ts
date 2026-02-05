@@ -293,13 +293,16 @@ class WebGuiServer {
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                     .join(' ')
                 
+                // Clean up itemId for better icon compatibility
+                const cleanItemId = item.name.replace('minecraft:', '').toLowerCase().replace(/[^a-z0-9_]/g, '_')
+                
                 return {
                     slot: index,
                     name: item.name,
                     count: item.count,
                     displayName: displayName !== item.name ? displayName : formattedName,
                     // Add minecraft item ID for icon rendering
-                    itemId: item.name.replace('minecraft:', '')
+                    itemId: cleanItemId
                 }
             }).filter(item => item !== null)
 
@@ -945,7 +948,7 @@ class WebGuiServer {
                 <img id="playerHead" class="player-head" src="" alt="Player" style="display: none;" />
                 <div class="header-info">
                     <h1 id="headerUsername">BAF Control Panel</h1>
-                    <p class="subtitle">Best Auto Flipper for Hypixel Skyblock</p>
+                    <p class="subtitle">Auction Flipper for Hypixel Skyblock</p>
                 </div>
             </div>
             <div class="header-right">
@@ -1258,8 +1261,9 @@ class WebGuiServer {
                     const itemId = item.itemId || (item.name || 'stone').toLowerCase().replace(/[^a-z0-9_]/g, '_');
                     const iconSources = [
                         \`https://sky.coflnet.com/static/icon/\${itemId}\`,
-                        \`https://mc-heads.net/minecraft/item/\${itemId}\`,
-                        \`https://sky.shiiyu.moe/item/\${itemId}\`
+                        \`https://mc-heads.net/minecraft/item/\${itemId}.png\`,
+                        \`https://sky.shiiyu.moe/item/\${itemId}\`,
+                        \`https://www.mc-heads.net/minecraft/item/\${itemId}/32.png\`
                     ];
                     
                     let sourceIndex = 0;

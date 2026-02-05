@@ -4,6 +4,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log } from './logger'
+import { removeMinecraftColorCodes } from './utils'
 
 interface ChatMessage {
     timestamp: number
@@ -271,7 +272,6 @@ class WebGuiServer {
         }
 
         try {
-            const { removeMinecraftColorCodes } = require('./utils')
             const inventory = this.bot.inventory.slots.map((item, index) => {
                 if (!item) return null
                 
@@ -283,7 +283,8 @@ class WebGuiServer {
                         displayName = removeMinecraftColorCodes(nbtValue.display.value.Name.value)
                     }
                 } catch (e) {
-                    // If NBT parsing fails, use the item name
+                    // If NBT parsing fails, use the item name - this is expected for vanilla items
+                    log(`Debug: Could not parse NBT for item ${item.name} at slot ${index}`, 'debug')
                 }
                 
                 // Format item name for better display (remove minecraft: prefix, capitalize)

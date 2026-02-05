@@ -76,19 +76,26 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
         // Only send to websocket if this command originated from user input (not from server)
         // This prevents infinite loops where server sends 'execute' -> client sends back 'execute' -> etc
         if (!fromServer) {
-            // For all other /cofl or /baf commands (including bare /cofl or /baf),
-            // send them to the websocket so that the Coflnet server can process them
-            // Send WITHOUT the /cofl or /baf prefix - just the command itself
-            const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
-            const commandWithoutPrefix = command ? `${command}${params}` : ''
-            
-            // Send the command (or empty string for bare /cofl) to the websocket
-            wss.send(
-                JSON.stringify({
-                    type: 'chat',
-                    data: JSON.stringify(commandWithoutPrefix)
-                })
-            )
+            // For commands with a subcommand (e.g., /cofl getbazaarflips), send with the command as the type
+            if (command) {
+                // Send the command to the websocket with the command name as the type
+                // and any remaining arguments as the data
+                wss.send(
+                    JSON.stringify({
+                        type: command,
+                        data: JSON.stringify(splits.join(' '))
+                    })
+                )
+            } else {
+                // For bare /cofl or /baf commands without arguments, send as chat
+                // This allows the server to handle them appropriately
+                wss.send(
+                    JSON.stringify({
+                        type: 'chat',
+                        data: JSON.stringify('')
+                    })
+                )
+            }
         }
     } else {
         // For non-cofl/baf commands sent via 'execute' websocket message, send to game chat

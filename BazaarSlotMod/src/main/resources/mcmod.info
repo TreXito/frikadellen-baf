@@ -1,0 +1,14 @@
+[
+{
+  "modid": "bazaarslotmod",
+  "name": "Bazaar Slot Mod",
+  "description": "Logs GUI names and slot numbers for bazaar operations",
+  "version": "1.0",
+  "mcversion": "1.8.9",
+  "authorList": ["TreXito"],
+  "credits": "Created for frikadellen-baf project",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

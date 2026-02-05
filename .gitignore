@@ -5,3 +5,7 @@ executables
 log.txt
 test_*.js
 run_all_tests.js
+BazaarSlotMod/.gradle
+BazaarSlotMod/build
+BazaarSlotMod/run
+BazaarSlotMod/.gradletasknamecache

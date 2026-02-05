@@ -73,9 +73,10 @@ class WebGuiServer {
             })
         })
 
+        // Register error handler BEFORE calling listen to avoid race conditions
         this.httpServer.on('error', (error: any) => {
             if (error.code === 'EADDRINUSE') {
-                const address = error.address || '0.0.0.0'
+                const address = error.address || 'this IP'
                 console.error(`\n❌ Port ${port} already in use on ${address}`)
                 console.error(`   Another application is using this port. Please:`)
                 console.error(`   1. Stop the other application using port ${port}`)
@@ -83,9 +84,12 @@ class WebGuiServer {
                 console.error(`\n   Web GUI will not be available.\n`)
                 log(`Failed to start web GUI: Port ${port} already in use on ${address}`, 'error')
                 
-                // Clean up
+                // Clean up WebSocket server (HTTP server failed to bind, so no need to close it)
+                if (this.wss) {
+                    this.wss.close()
+                    this.wss = null
+                }
                 this.httpServer = null
-                this.wss = null
             } else {
                 console.error(`\n❌ Failed to start web GUI: ${error.message}\n`)
                 log(`Failed to start web GUI: ${error.message}`, 'error')

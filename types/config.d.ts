@@ -23,6 +23,7 @@ interface Config {
     ENABLE_BAZAAR_FLIPS: boolean
     ENABLE_AH_FLIPS: boolean
     WEB_GUI_PORT: number
+    WEB_GUI_PASSWORD: string
     SKIP: SkipSettings
 }
 

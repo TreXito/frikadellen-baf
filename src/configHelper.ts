@@ -16,6 +16,7 @@ let config: Config = {
     ENABLE_BAZAAR_FLIPS: true,
     ENABLE_AH_FLIPS: true,
     WEB_GUI_PORT: 8080,
+    WEB_GUI_PASSWORD: '',
     SKIP: {
         ALWAYS: false,
         MIN_PROFIT: 1000000,

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getConfigProperty } from './configHelper'
-import { FlipWhitelistedData } from '../types/autobuy'
+import { FlipWhitelistedData, Flip } from '../types/autobuy'
+import { getFlipData, calculateProfit, formatTimeToSell, removeFlipData } from './flipTracker'
 
 function sendWebhookData(options: Partial<Webhook>): void {
     let data = {
@@ -10,7 +11,9 @@ function sendWebhookData(options: Partial<Webhook>): void {
         embeds: options.embeds || [],
         username: options.username || 'BAF'
     }
-    axios.post(getConfigProperty('WEBHOOK_URL'), data)
+    axios.post(getConfigProperty('WEBHOOK_URL'), data).catch(err => {
+        console.error('Failed to send webhook:', err.message)
+    })
 }
 
 function isWebhookConfigured() {
@@ -41,35 +44,55 @@ export function sendWebhookInitialized() {
     })
 }
 
-export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData) {
+export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip) {
     if (!isWebhookConfigured()) {
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
-    let webhookData = {
+    
+    const buyPrice = parseFloat(price.replace(/,/g, ''))
+    const profit = flip ? flip.target - buyPrice : 0
+    const profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : '0'
+    
+    let webhookData: any = {
         embeds: [
             {
-                title: 'Item Purchased',
+                title: '🛒 Item Purchased',
+                color: 0x00ff88, // Green color
                 fields: [
                     {
-                        name: 'Item:',
+                        name: '📦 Item',
                         value: `\`\`\`${itemName}\`\`\``,
                         inline: true
                     },
                     {
-                        name: 'Bought for:',
-                        value: `\`\`\`${price}\`\`\``,
+                        name: '💰 Bought for',
+                        value: `\`\`\`${numberWithThousandsSeparators(buyPrice)} coins\`\`\``,
                         inline: true
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` }
+                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` },
+                timestamp: new Date().toISOString()
             }
         ]
     }
 
+    if (flip && flip.target) {
+        webhookData.embeds[0].fields.push({
+            name: '🎯 Target Price',
+            value: `\`\`\`${numberWithThousandsSeparators(flip.target)} coins\`\`\``,
+            inline: true
+        })
+        webhookData.embeds[0].fields.push({
+            name: '💵 Expected Profit',
+            value: `\`\`\`${profitStr} coins\`\`\``,
+            inline: true
+        })
+    }
+
     if (whitelistedData) {
         webhookData.embeds[0].fields.push({
-            name: 'Whitelist match:',
+            name: '⭐ Whitelist Match',
             value: `\`\`\`${whitelistedData.reason}\`\`\``,
             inline: false
         })
@@ -78,36 +101,75 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     sendWebhookData(webhookData)
 }
 
+function numberWithThousandsSeparators(num: number): string {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
 export function sendWebhookItemSold(itemName: string, price: string, purchasedBy: string) {
     if (!isWebhookConfigured()) {
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
-    sendWebhookData({
+    
+    const sellPrice = parseFloat(price.replace(/,/g, ''))
+    const flipData = getFlipData(itemName)
+    
+    let profit = 0
+    let timeToSell = ''
+    let profitStr = '0'
+    
+    if (flipData) {
+        profit = calculateProfit(flipData, sellPrice)
+        timeToSell = formatTimeToSell(Date.now() - flipData.purchaseTime)
+        profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : `${numberWithThousandsSeparators(profit)}`
+        removeFlipData(itemName)
+    }
+    
+    // Use green color for profit, red for loss
+    const color = profit >= 0 ? 0x00ff88 : 0xff4444
+    
+    const webhookData: any = {
         embeds: [
             {
-                title: 'Item Sold',
+                title: '💸 Item Sold',
+                color: color,
                 fields: [
                     {
-                        name: 'Purchased by:',
+                        name: '👤 Purchased by',
                         value: `\`\`\`${purchasedBy}\`\`\``,
                         inline: true
                     },
                     {
-                        name: 'Item Sold:',
+                        name: '📦 Item Sold',
                         value: `\`\`\`${itemName}\`\`\``,
                         inline: true
                     },
                     {
-                        name: 'Sold for:',
-                        value: `\`\`\`${price}\`\`\``,
+                        name: '💰 Sold for',
+                        value: `\`\`\`${numberWithThousandsSeparators(sellPrice)} coins\`\`\``,
                         inline: true
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` }
+                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` },
+                timestamp: new Date().toISOString()
             }
         ]
-    })
+    }
+    
+    if (flipData) {
+        webhookData.embeds[0].fields.push({
+            name: '💵 Profit',
+            value: `\`\`\`${profitStr} coins\`\`\``,
+            inline: true
+        })
+        webhookData.embeds[0].fields.push({
+            name: '⏱️ Time to Sell',
+            value: `\`\`\`${timeToSell}\`\`\``,
+            inline: true
+        })
+    }
+    
+    sendWebhookData(webhookData)
 }
 
 export function sendWebhookItemListed(itemName: string, price: string, duration: number) {

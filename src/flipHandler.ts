@@ -2,6 +2,9 @@ import { Flip, FlipWhitelistedData, MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
+import { trackFlipPurchase } from './flipTracker'
+
+let currentFlip: Flip | null = null
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
     // Check if AH flips are enabled in config
@@ -11,6 +14,7 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
     }
 
     flip.purchaseAt = new Date(flip.purchaseAt)
+    currentFlip = flip // Store current flip for tracking
 
     if (bot.state) {
         setTimeout(() => {
@@ -157,4 +161,12 @@ export function onItemWhitelistedMessage(text: string) {
 
 export function getWhitelistedData(itemName: string, price: string): FlipWhitelistedData {
     return whitelistObjects.find(x => x.itemName === itemName && x.price === price)
+}
+
+export function getCurrentFlip(): Flip | null {
+    return currentFlip
+}
+
+export function clearCurrentFlip(): void {
+    currentFlip = null
 }

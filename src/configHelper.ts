@@ -13,6 +13,8 @@ let config: Config = {
     SESSIONS: {},
     WEBSOCKET_URL: 'wss://sky.coflnet.com/modsocket',
     BED_MULTIPLE_CLICKS_DELAY: 50,
+    BED_SPAM: false,
+    BED_SPAM_CLICK_DELAY: 5,
     ENABLE_BAZAAR_FLIPS: true,
     ENABLE_AH_FLIPS: true,
     WEB_GUI_PORT: 8080,
@@ -75,6 +77,26 @@ function prepareTomlBeforeWrite(tomlString: string): string {
         0,
         '# Bed flips are clicked 3 times with this setting. First delay in milliseconds before it should mathematically work. Once exactly at the time and once after the time. Disable it with a value less than 0.'
     )
+
+    // Add comments for BED_SPAM
+    let bedSpamIndex = lines.findIndex(l => l.startsWith('BED_SPAM = '))
+    if (bedSpamIndex !== -1) {
+        lines.splice(
+            bedSpamIndex,
+            0,
+            '# Enable continuous bed spam clicking instead of fixed number of clicks. More aggressive but may be more effective.'
+        )
+    }
+
+    // Add comments for BED_SPAM_CLICK_DELAY
+    let bedSpamDelayIndex = lines.findIndex(l => l.startsWith('BED_SPAM_CLICK_DELAY = '))
+    if (bedSpamDelayIndex !== -1) {
+        lines.splice(
+            bedSpamDelayIndex,
+            0,
+            '# Delay in milliseconds between each click when BED_SPAM is enabled. Lower values = faster clicking (minimum: 1ms)'
+        )
+    }
 
     // Add comments for SKIP section
     let skipIndex = lines.findIndex(l => l.startsWith('[SKIP]'))

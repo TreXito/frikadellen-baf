@@ -42,7 +42,7 @@ export function setupConsoleInterface(bot: MyBot) {
     })
 }
 
-export async function handleCommand(bot: MyBot, data: string) {
+export async function handleCommand(bot: MyBot, data: string, fromServer: boolean = false) {
     let wss = await getCurrentWebsocket()
     let lowercaseInput = data.toLowerCase()
     
@@ -73,16 +73,25 @@ export async function handleCommand(bot: MyBot, data: string) {
             return
         }
 
-        // For all other /cofl or /baf commands (including bare /cofl or /baf),
-        // send them to the websocket so that the Coflnet server can process them
-        const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
-        const fullCommand = command ? `${prefix} ${command}${params}` : prefix
-        wss.send(
-            JSON.stringify({
-                type: 'chat',
-                data: JSON.stringify(fullCommand)
-            })
-        )
+        // Only send to websocket if this command originated from user input (not from server)
+        // This prevents infinite loops where server sends 'execute' -> client sends back 'execute' -> etc
+        if (!fromServer) {
+            // For all other /cofl or /baf commands (including bare /cofl or /baf),
+            // send them to the websocket so that the Coflnet server can process them
+            // Send just the command without the prefix to avoid "sent command in chat" error
+            const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
+            const commandOnly = command ? `${command}${params}` : ''
+            // Only send if there's actually a command to send
+            if (commandOnly) {
+                // Use 'chat' type but without the /cofl prefix so server knows it's an API call
+                wss.send(
+                    JSON.stringify({
+                        type: 'chat',
+                        data: JSON.stringify(commandOnly)
+                    })
+                )
+            }
+        }
     } else {
         // For non-cofl/baf commands sent via 'execute' websocket message, send to game chat
         bot.chat(data)

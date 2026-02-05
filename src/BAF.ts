@@ -228,7 +228,7 @@ async function onWebsocketMessage(msg) {
             break
         case 'execute':
             log(message, 'debug')
-            handleCommand(bot, data)
+            handleCommand(bot, data, true) // Prevent echo loop
             break
         case 'runSequence':
             log(message, 'debug')
@@ -304,7 +304,7 @@ async function onScoreboardChanged() {
                 wss.send(
                     JSON.stringify({
                         type: 'chat',
-                        data: JSON.stringify('/cofl getbazaar')
+                        data: JSON.stringify('getbazaar')
                     })
                 )
             }

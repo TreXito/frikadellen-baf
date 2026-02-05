@@ -879,7 +879,7 @@ class WebGuiServer {
         </div>
         
         <div class="grid">
-            <div class="panel" role="region" aria-label="Chat and console">
+            <div class="panel">
                 <h2>Chat & Console</h2>
                 <div id="chatBox"></div>
                 <div class="input-group">
@@ -888,7 +888,7 @@ class WebGuiServer {
                 </div>
             </div>
             
-            <div class="panel" role="region" aria-label="Bot status and controls">
+            <div class="panel">
                 <h2>
                     <span class="status-indicator" id="statusIndicator"></span>
                     Bot Status

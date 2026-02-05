@@ -28,12 +28,10 @@ export function sendWebhookInitialized() {
     let ahEnabled = getConfigProperty('ENABLE_AH_FLIPS')
     let bazaarEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
     
-    let statusParts = []
-    if (ahEnabled) statusParts.push('AH Flips: ✅')
-    else statusParts.push('AH Flips: ❌')
-    
-    if (bazaarEnabled) statusParts.push('Bazaar Flips: ✅')
-    else statusParts.push('Bazaar Flips: ❌')
+    let statusParts = [
+        `AH Flips: ${ahEnabled ? '✅' : '❌'}`,
+        `Bazaar Flips: ${bazaarEnabled ? '✅' : '❌'}`
+    ]
     
     sendWebhookData({
         content: '',

@@ -15,8 +15,9 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.BufferedWriter;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Mod(modid = BazaarSlotMod.MODID, version = BazaarSlotMod.VERSION, clientSideOnly = true)
 public class BazaarSlotMod {
@@ -24,6 +25,8 @@ public class BazaarSlotMod {
     public static final String VERSION = "1.0";
     
     private File logFile;
+    private BufferedWriter logWriter;
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private int tickCounter = 0;
     private String lastGuiName = "";
     
@@ -35,9 +38,27 @@ public class BazaarSlotMod {
         File gameDir = Minecraft.getMinecraft().mcDataDir;
         logFile = new File(gameDir, "bazaar_slot_info.log");
         
-        logToFile("BazaarSlotMod initialized!");
-        logToFile("This mod logs GUI names and slot numbers for bazaar operations.");
-        logToFile("-----------------------------------------------------------");
+        try {
+            logWriter = new BufferedWriter(new FileWriter(logFile, true));
+            logToFile("BazaarSlotMod initialized!");
+            logToFile("This mod logs GUI names and slot numbers for bazaar operations.");
+            logToFile("-----------------------------------------------------------");
+            flushLog();
+        } catch (IOException e) {
+            System.err.println("Failed to initialize log file: " + e.getMessage());
+        }
+        
+        // Add shutdown hook to close the writer
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (logWriter != null) {
+                    flushLog();
+                    logWriter.close();
+                }
+            } catch (IOException e) {
+                System.err.println("Failed to close log writer: " + e.getMessage());
+            }
+        }));
     }
     
     @SubscribeEvent
@@ -56,6 +77,7 @@ public class BazaarSlotMod {
                     lastGuiName = guiName;
                     logToFile("GUI Opened: " + guiName);
                     logToFile("  Inventory Size: " + lowerChestInventory.getSizeInventory() + " slots");
+                    flushLog();
                 }
             }
         }
@@ -86,6 +108,7 @@ public class BazaarSlotMod {
                     }
                     
                     logToFile("Clicked Slot: " + slotNumber + " | Item: " + itemName + " | GUI: " + guiName);
+                    flushLog();
                 }
             }
         }
@@ -123,6 +146,7 @@ public class BazaarSlotMod {
                                 }
                             }
                             logToFile("=== End of GUI slots ===");
+                            flushLog();
                         }
                     }
                 }
@@ -132,15 +156,25 @@ public class BazaarSlotMod {
     
     private void logToFile(String message) {
         try {
-            FileWriter writer = new FileWriter(logFile, true);
-            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-            writer.write("[" + timestamp + "] " + message + "\n");
-            writer.close();
-            
-            // Also print to console
-            System.out.println("[BazaarSlotMod] " + message);
+            if (logWriter != null) {
+                String timestamp = LocalDateTime.now().format(DATE_FORMATTER);
+                logWriter.write("[" + timestamp + "] " + message + "\n");
+                
+                // Also print to console
+                System.out.println("[BazaarSlotMod] " + message);
+            }
         } catch (IOException e) {
             System.err.println("Failed to write to log file: " + e.getMessage());
+        }
+    }
+    
+    private void flushLog() {
+        try {
+            if (logWriter != null) {
+                logWriter.flush();
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to flush log file: " + e.getMessage());
         }
     }
 }

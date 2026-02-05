@@ -73,6 +73,25 @@ class WebGuiServer {
             })
         })
 
+        this.httpServer.on('error', (error: any) => {
+            if (error.code === 'EADDRINUSE') {
+                const address = error.address || '0.0.0.0'
+                console.error(`\n❌ Port ${port} already in use on ${address}`)
+                console.error(`   Another application is using this port. Please:`)
+                console.error(`   1. Stop the other application using port ${port}`)
+                console.error(`   2. Or change WEB_GUI_PORT in your config.toml to a different port`)
+                console.error(`\n   Web GUI will not be available.\n`)
+                log(`Failed to start web GUI: Port ${port} already in use on ${address}`, 'error')
+                
+                // Clean up
+                this.httpServer = null
+                this.wss = null
+            } else {
+                console.error(`\n❌ Failed to start web GUI: ${error.message}\n`)
+                log(`Failed to start web GUI: ${error.message}`, 'error')
+            }
+        })
+
         this.httpServer.listen(port, () => {
             log(`Web GUI started on http://localhost:${port}`, 'info')
             console.log(`\n🌐 Web GUI available at: http://localhost:${port}\n`)

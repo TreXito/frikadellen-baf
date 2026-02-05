@@ -26,19 +26,35 @@ export function sendWebhookInitialized() {
     }
     let ingameName = getConfigProperty('INGAME_NAME')
     sendWebhookData({
-        content: 'Initialized Connection',
+        content: '',
         embeds: [
             {
-                title: 'Initialized Connection',
+                title: '🚀 BAF Connection Initialized',
+                description: '**Best Auto Flipper is now online and ready to flip!**',
+                color: 0x00ff88, // Bright green
                 fields: [
-                    { name: 'Connected as:', value: `\`\`\`${ingameName}\`\`\``, inline: false },
+                    { 
+                        name: '👤 Connected As', 
+                        value: `\`\`\`fix\n${ingameName}\n\`\`\``, 
+                        inline: true 
+                    },
                     {
-                        name: 'Started at:',
-                        value: `<t:${(Date.now() / 1000).toFixed(0)}:t>`,
+                        name: '⏰ Started At',
+                        value: `<t:${(Date.now() / 1000).toFixed(0)}:F>`,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Status',
+                        value: '```yaml\nOnline and Active\n```',
                         inline: false
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` }
+                thumbnail: { url: `https://mc-heads.net/avatar/${ingameName}/600.png` },
+                footer: {
+                    text: 'BAF • Best Auto Flipper',
+                    icon_url: 'https://mc-heads.net/avatar/Steve/32.png'
+                },
+                timestamp: new Date().toISOString()
             }
         ]
     })
@@ -53,25 +69,28 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     const buyPrice = parseFloat(price.replace(/,/g, ''))
     const profit = flip ? flip.target - buyPrice : 0
     const profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : '0'
+    const profitPercent = flip && flip.target > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0'
     
     let webhookData: any = {
         embeds: [
             {
-                title: '🛒 Item Purchased',
-                color: 0x00ff88, // Green color
+                title: '🛒 Item Purchased Successfully',
+                description: `**${itemName}**`,
+                color: 0x3498db, // Professional blue
                 fields: [
                     {
-                        name: '📦 Item',
-                        value: `\`\`\`${itemName}\`\`\``,
-                        inline: true
-                    },
-                    {
-                        name: '💰 Bought for',
-                        value: `\`\`\`${numberWithThousandsSeparators(buyPrice)} coins\`\`\``,
+                        name: '💰 Purchase Price',
+                        value: `\`\`\`fix\n${numberWithThousandsSeparators(buyPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` },
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                },
                 timestamp: new Date().toISOString()
             }
         ]
@@ -80,12 +99,12 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     if (flip && flip.target) {
         webhookData.embeds[0].fields.push({
             name: '🎯 Target Price',
-            value: `\`\`\`${numberWithThousandsSeparators(flip.target)} coins\`\`\``,
+            value: `\`\`\`fix\n${numberWithThousandsSeparators(flip.target)} coins\n\`\`\``,
             inline: true
         })
         webhookData.embeds[0].fields.push({
-            name: '💵 Expected Profit',
-            value: `\`\`\`${profitStr} coins\`\`\``,
+            name: '📈 Expected Profit',
+            value: `\`\`\`diff\n${profitStr} coins (${profitPercent}%)\n\`\`\``,
             inline: true
         })
     }
@@ -93,7 +112,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     if (whitelistedData) {
         webhookData.embeds[0].fields.push({
             name: '⭐ Whitelist Match',
-            value: `\`\`\`${whitelistedData.reason}\`\`\``,
+            value: `\`\`\`yaml\n${whitelistedData.reason}\n\`\`\``,
             inline: false
         })
     }
@@ -125,32 +144,35 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         removeFlipData(itemName)
     }
     
-    // Use green color for profit, red for loss
-    const color = profit >= 0 ? 0x00ff88 : 0xff4444
+    // Use gradient colors - green for profit, red for loss
+    const color = profit >= 0 ? 0x2ecc71 : 0xe74c3c
+    const statusEmoji = profit >= 0 ? '✅' : '❌'
     
     const webhookData: any = {
         embeds: [
             {
-                title: '💸 Item Sold',
+                title: `${statusEmoji} Item Sold ${profit >= 0 ? '(Profit)' : '(Loss)'}`,
+                description: `**${itemName}**`,
                 color: color,
                 fields: [
                     {
-                        name: '👤 Purchased by',
-                        value: `\`\`\`${purchasedBy}\`\`\``,
+                        name: '👤 Buyer',
+                        value: `\`\`\`\n${purchasedBy}\n\`\`\``,
                         inline: true
                     },
                     {
-                        name: '📦 Item Sold',
-                        value: `\`\`\`${itemName}\`\`\``,
-                        inline: true
-                    },
-                    {
-                        name: '💰 Sold for',
-                        value: `\`\`\`${numberWithThousandsSeparators(sellPrice)} coins\`\`\``,
+                        name: '💵 Sale Price',
+                        value: `\`\`\`fix\n${numberWithThousandsSeparators(sellPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` },
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                },
                 timestamp: new Date().toISOString()
             }
         ]
@@ -158,13 +180,23 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
     
     if (flipData) {
         webhookData.embeds[0].fields.push({
-            name: '💵 Profit',
-            value: `\`\`\`${profitStr} coins\`\`\``,
+            name: '💰 Net Profit',
+            value: profit >= 0 
+                ? `\`\`\`diff\n+ ${profitStr} coins\n\`\`\`` 
+                : `\`\`\`diff\n- ${profitStr.replace('-', '')} coins\n\`\`\``,
             inline: true
         })
         webhookData.embeds[0].fields.push({
             name: '⏱️ Time to Sell',
-            value: `\`\`\`${timeToSell}\`\`\``,
+            value: `\`\`\`\n${timeToSell}\n\`\`\``,
+            inline: true
+        })
+        
+        // Add ROI percentage
+        const roi = ((profit / flipData.buyPrice) * 100).toFixed(1)
+        webhookData.embeds[0].fields.push({
+            name: '📊 ROI',
+            value: `\`\`\`${roi}%\`\`\``,
             inline: true
         })
     }
@@ -180,25 +212,34 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
     sendWebhookData({
         embeds: [
             {
-                title: 'Item Listed',
+                title: '📋 Item Listed on Auction House',
+                description: `**${itemName}**`,
+                color: 0x9b59b6, // Purple for listing
                 fields: [
                     {
-                        name: 'Listed Item:',
-                        value: `\`\`\`${itemName}\`\`\``,
-                        inline: false
+                        name: '💵 List Price',
+                        value: `\`\`\`fix\n${price} coins\n\`\`\``,
+                        inline: true
                     },
                     {
-                        name: 'Item Price:',
-                        value: `\`\`\`${price}\`\`\``,
-                        inline: false
+                        name: '⏰ Duration',
+                        value: `\`\`\`\n${duration} hours\n\`\`\``,
+                        inline: true
                     },
                     {
-                        name: 'AH Duration:',
-                        value: `\`\`\`${duration}h\`\`\``,
-                        inline: false
+                        name: '📅 Expires',
+                        value: `<t:${Math.floor((Date.now() + duration * 3600000) / 1000)}:R>`,
+                        inline: true
                     }
                 ],
-                thumbnail: { url: `https://minotar.net/helm/${ingameName}/600.png` }
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                },
+                timestamp: new Date().toISOString()
             }
         ]
     })

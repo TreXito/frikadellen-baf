@@ -16,7 +16,7 @@ import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
 import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
 import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
-import { startWebGui } from './webGui'
+import { startWebGui, addWebGuiChatMessage } from './webGui'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -183,6 +183,21 @@ async function onWebsocketMessage(msg) {
                 
                 if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
                     printMcChatToConsole(da.text)
+                    
+                    // Send rich message data to web GUI if available
+                    if (da.onClick || da.hover) {
+                        try {
+                            const cleanText = removeMinecraftColorCodes(da.text)
+                            const cleanHover = da.hover ? removeMinecraftColorCodes(da.hover) : undefined
+                            addWebGuiChatMessage(JSON.stringify({
+                                text: cleanText,
+                                onClick: da.onClick,
+                                hover: cleanHover
+                            }), 'chat')
+                        } catch (e) {
+                            // Web GUI not available, ignore
+                        }
+                    }
                 }
             }
             break

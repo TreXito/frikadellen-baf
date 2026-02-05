@@ -22,14 +22,17 @@ export function setupConsoleInterface(bot: MyBot) {
     rl.on('line', async input => {
         let ws = await getCurrentWebsocket()
         let lowercaseInput = input.toLowerCase()
-        if ((lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) && lowercaseInput?.split(' ').length >= 2) {
+        // Route all /cofl and /baf commands to the handler (including single-word commands)
+        if (lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) {
             handleCommand(bot, input)
             return
         }
+        // All other slash commands go to Minecraft chat
         if (input?.startsWith('/')) {
             bot.chat(input)
             return
         }
+        // Non-command messages go to the websocket
         ws.send(
             JSON.stringify({
                 type: 'chat',
@@ -42,12 +45,14 @@ export function setupConsoleInterface(bot: MyBot) {
 export async function handleCommand(bot: MyBot, data: string) {
     let wss = await getCurrentWebsocket()
     let lowercaseInput = data.toLowerCase()
-    if ((lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) && data?.split(' ').length >= 2) {
+    
+    // Check if this is a /cofl or /baf command
+    if (lowercaseInput?.startsWith('/cofl') || lowercaseInput?.startsWith('/baf')) {
         let splits = data.split(' ')
         let prefix = splits.shift() // remove /cofl or /baf and store it
         let command = splits.shift()
 
-        // Handle locally-processed commands
+        // Handle locally-processed commands that require a subcommand
         if (command === 'connect') {
             changeWebsocketURL(splits[0])
             return
@@ -68,10 +73,10 @@ export async function handleCommand(bot: MyBot, data: string) {
             return
         }
 
-        // For all other /cofl or /baf commands, send them to the websocket
-        // so that the Coflnet server can process them and respond appropriately
+        // For all other /cofl or /baf commands (including bare /cofl or /baf),
+        // send them to the websocket so that the Coflnet server can process them
         const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
-        const fullCommand = `${prefix} ${command}${params}`
+        const fullCommand = command ? `${prefix} ${command}${params}` : prefix
         wss.send(
             JSON.stringify({
                 type: 'chat',
@@ -79,6 +84,7 @@ export async function handleCommand(bot: MyBot, data: string) {
             })
         )
     } else {
+        // For non-cofl/baf commands sent via 'execute' websocket message, send to game chat
         bot.chat(data)
     }
 }

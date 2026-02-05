@@ -16,6 +16,7 @@ import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
 import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
 import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
+import { startWebGui } from './webGui'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -39,6 +40,16 @@ if (getConfigProperty('ENABLE_AH_FLIPS') === undefined) {
 if (getConfigProperty('ENABLE_BAZAAR_FLIPS') === undefined) {
     let enableBazaarFlips = prompt('Enable bazaar flips (true/false)? ').toLowerCase()
     updatePersistentConfigProperty('ENABLE_BAZAAR_FLIPS', enableBazaarFlips === 'true' || enableBazaarFlips === 't' || enableBazaarFlips === 'yes' || enableBazaarFlips === 'y')
+}
+
+// Prompt for web GUI port if not set
+if (getConfigProperty('WEB_GUI_PORT') === undefined) {
+    let port = prompt('Web GUI port (default 8080, press Enter to skip)? ')
+    if (port && port.trim()) {
+        updatePersistentConfigProperty('WEB_GUI_PORT', parseInt(port) || 8080)
+    } else {
+        updatePersistentConfigProperty('WEB_GUI_PORT', 8080)
+    }
 }
 
 log(`Starting BAF v${version} for ${ingameName}`, 'info')
@@ -65,6 +76,17 @@ bot.on('error', log)
 
 bot.once('login', () => {
     log(`Logged in as ${bot.username}`)
+    
+    // Start web GUI if port is configured
+    const webGuiPort = getConfigProperty('WEB_GUI_PORT')
+    if (webGuiPort) {
+        try {
+            startWebGui(bot)
+        } catch (error) {
+            log(`Failed to start web GUI: ${error}`, 'error')
+        }
+    }
+    
     connectWebsocket()
     bot._client.on('packet', async function (packet, packetMeta) {
         if (packetMeta.name.includes('disconnect')) {
@@ -272,6 +294,20 @@ async function onScoreboardChanged() {
                     data: JSON.stringify(bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, '')))
                 })
             )
+            
+            // Request bazaar flips if enabled
+            if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+                // Wait for the server connection to stabilize before requesting flips
+                // This ensures the websocket is ready to handle the command and response
+                await sleep(1000)
+                log('Requesting bazaar flip recommendations...')
+                wss.send(
+                    JSON.stringify({
+                        type: 'chat',
+                        data: JSON.stringify('/cofl getbazaar')
+                    })
+                )
+            }
         }, 5500)
         await sleep(2500)
         tryToTeleportToIsland(bot, 0)

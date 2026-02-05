@@ -4,7 +4,8 @@ import { clickWindow, getWindowTitle } from './utils'
 import { ChatMessage } from 'prismarine-chat'
 import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
-import { getWhitelistedData } from './flipHandler'
+import { getWhitelistedData, getCurrentFlip, clearCurrentFlip } from './flipHandler'
+import { trackFlipPurchase } from './flipTracker'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -33,8 +34,15 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 let itemName = text.split(' purchased ')[1].split(' for ')[0]
                 let price = text.split(' for ')[1].split(' coins!')[0].replace(/,/g, '')
                 let whitelistedData = getWhitelistedData(itemName, price)
+                let flip = getCurrentFlip()
 
-                sendWebhookItemPurchased(itemName, price, whitelistedData)
+                // Track flip purchase for profit/time calculations
+                if (flip) {
+                    trackFlipPurchase(itemName, parseFloat(price), flip)
+                    clearCurrentFlip()
+                }
+
+                sendWebhookItemPurchased(itemName, price, whitelistedData, flip)
                 setNothingBoughtFor1HourTimeout(wss)
             }
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
@@ -43,7 +51,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
 
                 sendWebhookItemSold(
                     text.split(' bought ')[1].split(' for ')[0],
-                    text.split(' for ')[1].split(' coins')[0],
+                    text.split(' for ')[1].split(' coins')[0].replace(/,/g, ''),
                     text.split('[Auction] ')[1].split(' bought ')[0]
                 )
             }

@@ -199,10 +199,19 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
 
-        // Open bazaar for the item
+        // Set up the listener BEFORE opening the bazaar to catch the first window
+        // placeBazaarOrder() synchronously registers the windowOpen event listener,
+        // then returns a Promise that resolves when the order completes
+        const orderPromise = placeBazaarOrder(bot, amount, pricePerUnit, isBuyOrder)
+        
+        // Small delay to ensure Node.js event loop has processed the listener registration
+        // This guarantees the listener is active before the window opens
+        await sleep(100)
+        
+        // Open bazaar for the item - the listener is now ready to catch this event
         bot.chat(`/bz ${itemName}`)
 
-        await placeBazaarOrder(bot, amount, pricePerUnit, isBuyOrder)
+        await orderPromise
         
         printMcChatToConsole(`§f[§4BAF§f]: §aSuccessfully placed bazaar order!`)
     } catch (error) {

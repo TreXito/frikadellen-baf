@@ -15,6 +15,7 @@ let config: Config = {
     BED_MULTIPLE_CLICKS_DELAY: 50,
     ENABLE_BAZAAR_FLIPS: true,
     ENABLE_AH_FLIPS: true,
+    WEB_GUI_PORT: 8080,
     SKIP: {
         ALWAYS: false,
         MIN_PROFIT: 1000000,

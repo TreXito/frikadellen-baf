@@ -1,6 +1,7 @@
 import { Client, PacketMeta } from 'minecraft-protocol'
 import winston from 'winston'
 import { getConfigProperty } from './configHelper'
+import { addWebGuiChatMessage } from './webGui'
 let fs = require('fs')
 let path = require('path')
 let logFilePath = path.join((process as any).pkg ? process.argv[0] : process.argv[1], '..')
@@ -36,6 +37,14 @@ export function initLogger() {
 
 export function log(string: any, level?: string) {
     logger.log(level || 'info', string)
+    
+    // Send to web GUI if available
+    try {
+        const msgType = level === 'error' ? 'error' : level === 'warn' ? 'error' : 'info'
+        addWebGuiChatMessage(String(string), msgType)
+    } catch (e) {
+        // Web GUI not available yet, ignore
+    }
 }
 
 export function logPacket(packet: any, packetMeta: PacketMeta, toServer: boolean) {
@@ -65,6 +74,15 @@ export function printMcChatToConsole(string: string) {
         msg += message
     }
     console.log('\x1b[0m\x1b[1m\x1b[90m' + msg + '\x1b[0m')
+    
+    // Send to web GUI if available
+    try {
+        // Remove color codes for web GUI
+        const cleanMsg = string.replace(/§./g, '')
+        addWebGuiChatMessage(cleanMsg, 'chat')
+    } catch (e) {
+        // Web GUI not available, ignore
+    }
 }
 
 // this function adds a logging function to the wrtie function of the client

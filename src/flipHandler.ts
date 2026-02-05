@@ -11,6 +11,7 @@ const MAX_UNDEFINED_COUNT = 5
 const BED_SPAM_TIMEOUT_MS = 5000
 const BED_CLICKS_WITH_DELAY = 5
 const BED_CLICKS_DEFAULT = 3
+const BED_CLICK_DELAY_FALLBACK = 3
 const WINDOW_INTERACTION_DELAY = 500
 
 let currentFlip: Flip | null = null
@@ -197,10 +198,10 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const profit = flip.target - flip.startingBid
                 const skipSettings = getConfigProperty('SKIP')
                 const useSkipAlways = skipSettings.ALWAYS
+                const currentDelay = getConfigProperty('FLIP_ACTION_DELAY')
 
                 // Validate FLIP_ACTION_DELAY if ALWAYS skip is enabled
-                if (useSkipAlways && getConfigProperty('FLIP_ACTION_DELAY') < 150) {
-                    const currentDelay = getConfigProperty('FLIP_ACTION_DELAY')
+                if (useSkipAlways && currentDelay < 150) {
                     printMcChatToConsole(
                         `§f[§4BAF§f]: §cWarning: SKIP.ALWAYS requires FLIP_ACTION_DELAY >= 150ms (current: ${currentDelay}ms)`
                     )
@@ -357,7 +358,6 @@ async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
             
             if (item === "gold_nugget") {
                 clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
-                undefinedCount++
                 return
             } else if (item === "potato") {
                 if (bot.currentWindow) {
@@ -395,7 +395,7 @@ async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
             if (getWindowTitle(bot.currentWindow) === 'BIN Auction View') {
                 clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
                 log(`Bed click ${i + 1}`, 'debug')
-                await sleep(multipleBedClicksDelay || 3)
+                await sleep(multipleBedClicksDelay || BED_CLICK_DELAY_FALLBACK)
             } else {
                 break
             }

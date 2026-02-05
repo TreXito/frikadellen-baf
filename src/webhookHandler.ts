@@ -69,7 +69,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     const buyPrice = parseFloat(price.replace(/,/g, ''))
     const profit = flip ? flip.target - buyPrice : 0
     const profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : '0'
-    const profitPercent = flip && flip.target > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0'
+    const profitPercent = flip && flip.target > 0 && buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0'
     
     let webhookData: any = {
         embeds: [
@@ -193,7 +193,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         })
         
         // Add ROI percentage
-        const roi = ((profit / flipData.buyPrice) * 100).toFixed(1)
+        const roi = flipData.buyPrice > 0 ? ((profit / flipData.buyPrice) * 100).toFixed(1) : '0'
         webhookData.embeds[0].fields.push({
             name: '📊 ROI',
             value: `\`\`\`${roi}%\`\`\``,

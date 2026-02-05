@@ -1187,7 +1187,7 @@ class WebGuiServer {
                     
                     if (richData.onClick) {
                         textSpan.style.textDecoration = 'underline';
-                        textSpan.style.color = '#00ff88';
+                        textSpan.style.color = '#3498db';
                         textSpan.title = richData.hover || 'Click to execute: ' + richData.onClick;
                         textSpan.onclick = function() {
                             if (richData.onClick) {

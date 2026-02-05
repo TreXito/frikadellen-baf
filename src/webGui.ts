@@ -180,14 +180,24 @@ class WebGuiServer {
         switch (message.type) {
             case 'command':
                 this.addChatMessage(`> ${message.command}`, 'system')
-                // The command will be handled by the console handler through executeCommand
                 if (this.bot && typeof message.command === 'string') {
-                    // Import and use the handleCommand function
-                    import('./consoleHandler').then(({ handleCommand }) => {
-                        handleCommand(this.bot!, message.command)
-                    }).catch(err => {
-                        log(`Error executing command from web GUI: ${err}`, 'error')
-                    })
+                    const command = message.command.trim()
+                    const lowercaseCommand = command.toLowerCase()
+                    
+                    // Handle /cofl and /baf commands through the console handler
+                    if (lowercaseCommand.startsWith('/cofl') || lowercaseCommand.startsWith('/baf')) {
+                        import('./consoleHandler').then(({ handleCommand }) => {
+                            handleCommand(this.bot!, command)
+                        }).catch(err => {
+                            log(`Error executing command from web GUI: ${err}`, 'error')
+                        })
+                    } else if (command.startsWith('/')) {
+                        // Send all other slash commands directly to Minecraft chat
+                        this.bot.chat(command)
+                    } else {
+                        // Non-slash commands are sent directly to Minecraft chat
+                        this.bot.chat(command)
+                    }
                 }
                 break
             
@@ -384,11 +394,33 @@ class WebGuiServer {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            background-attachment: fixed;
             color: #e0e0e0;
             padding: 20px;
             overflow-x: hidden;
             min-height: 100vh;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        * {
+            position: relative;
+            z-index: 1;
         }
         
         .login-container {
@@ -420,12 +452,18 @@ class WebGuiServer {
             font-size: 2.5em;
             text-align: center;
             margin-bottom: 12px;
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #10b981 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             font-weight: 700;
             letter-spacing: -1px;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { filter: hue-rotate(0deg); }
+            50% { filter: hue-rotate(10deg); }
         }
         
         .login-subtitle {
@@ -489,7 +527,7 @@ class WebGuiServer {
         
         .header-info h1 {
             font-size: 1.75em;
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #10b981 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -556,7 +594,10 @@ class WebGuiServer {
         
         .settings-title {
             font-size: 1.5em;
-            color: #3498db;
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 32px;
             display: flex;
             align-items: center;
@@ -569,7 +610,10 @@ class WebGuiServer {
         }
         
         .settings-group h3 {
-            color: #3498db;
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 16px;
             font-size: 1.1em;
             font-weight: 600;
@@ -603,8 +647,8 @@ class WebGuiServer {
         }
         
         .toggle-switch.active {
-            background: linear-gradient(135deg, #3498db, #2ecc71);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.4);
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.5);
         }
         
         .toggle-switch::after {
@@ -648,7 +692,10 @@ class WebGuiServer {
         }
         
         .panel h2 {
-            color: #3498db;
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 24px;
             font-size: 1.375em;
             display: flex;
@@ -672,13 +719,13 @@ class WebGuiServer {
         }
         
         .status-online {
-            background: #2ecc71;
-            box-shadow: 0 0 12px rgba(46, 204, 113, 0.6);
+            background: #10b981;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.8);
         }
         
         .status-offline {
-            background: #e74c3c;
-            box-shadow: 0 0 12px rgba(231, 76, 60, 0.6);
+            background: #ef4444;
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.8);
         }
         
         #chatBox {
@@ -705,12 +752,12 @@ class WebGuiServer {
         }
         
         #chatBox::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #3498db, #2ecc71);
+            background: linear-gradient(180deg, #3b82f6, #8b5cf6);
             border-radius: 3px;
         }
         
         #chatBox::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #5dade2, #58d68d);
+            background: linear-gradient(180deg, #60a5fa, #a78bfa);
         }
         
         .chat-message {
@@ -730,10 +777,10 @@ class WebGuiServer {
             margin-right: 8px;
         }
         
-        .chat-info { color: #3498db; }
-        .chat-error { color: #e74c3c; }
-        .chat-chat { color: #ecf0f1; }
-        .chat-system { color: #f39c12; }
+        .chat-info { color: #60a5fa; }
+        .chat-error { color: #ef4444; }
+        .chat-chat { color: #f1f5f9; }
+        .chat-system { color: #fbbf24; }
         
         .input-group {
             display: flex;
@@ -761,7 +808,7 @@ class WebGuiServer {
         
         button {
             padding: 14px 28px;
-            background: linear-gradient(135deg, #3498db, #2ecc71);
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
             border: none;
             border-radius: 12px;
             color: #ffffff;
@@ -769,13 +816,31 @@ class WebGuiServer {
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
             font-family: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        button:hover::before {
+            left: 100%;
         }
         
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(52, 152, 219, 0.4);
+            box-shadow: 0 6px 28px rgba(59, 130, 246, 0.6);
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
         }
         
         button:active {
@@ -829,7 +894,10 @@ class WebGuiServer {
         }
         
         .status-value {
-            color: #3498db;
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             font-size: 1.25em;
             font-weight: 600;
         }
@@ -873,8 +941,13 @@ class WebGuiServer {
         }
         
         .inventory-slot.has-item {
-            border-color: rgba(46, 204, 113, 0.5);
-            box-shadow: 0 2px 8px rgba(46, 204, 113, 0.2);
+            border-color: rgba(16, 185, 129, 0.6);
+            box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .inventory-slot.has-item:hover {
+            border-color: rgba(16, 185, 129, 0.8);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5);
         }
         
         .inventory-slot img {

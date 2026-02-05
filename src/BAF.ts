@@ -109,6 +109,16 @@ bot.once('spawn', async () => {
     bot.chat('/play sb')
     bot.on('scoreboardTitleChanged', onScoreboardChanged)
     registerIngameMessageHandler(bot)
+    
+    // Initialize AFK handler after a delay to ensure it runs even if the bot doesn't join SkyBlock immediately
+    // This is a fallback to handle cases where the bot stays in lobby
+    setTimeout(() => {
+        if (!(bot as any).AFKHandlerInitialized) {
+            log('Initializing AFK handler as fallback', 'info')
+            initAFKHandler(bot)
+            ;(bot as any).AFKHandlerInitialized = true
+        }
+    }, 15000)
 })
 
 function connectWebsocket(url: string = getConfigProperty('WEBSOCKET_URL')) {
@@ -282,6 +292,7 @@ async function onScoreboardChanged() {
         bot.removeListener('scoreboardTitleChanged', onScoreboardChanged)
         log('Joined SkyBlock')
         initAFKHandler(bot)
+        ;(bot as any).AFKHandlerInitialized = true
         setTimeout(async () => {
             let wss = await getCurrentWebsocket()
             log('Waited for grace period to end. Flips can now be bought.')

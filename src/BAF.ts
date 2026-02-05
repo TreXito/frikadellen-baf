@@ -330,7 +330,7 @@ async function onScoreboardChanged() {
                 wss.send(
                     JSON.stringify({
                         type: 'chat',
-                        data: JSON.stringify('getbazaar')
+                        data: JSON.stringify('/cofl getbazaarflips')
                     })
                 )
             }

@@ -391,8 +391,8 @@ class WebGuiServer {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
+            background: #0f172a;
+            color: #e2e8f0;
             padding: 24px;
             margin: 0;
             min-height: 100vh;
@@ -403,15 +403,15 @@ class WebGuiServer {
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: #f8fafc;
+            background: #0f172a;
         }
         
         .login-box {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: #1e293b;
+            border: 1px solid #334155;
             border-radius: 8px;
             padding: 48px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             max-width: 400px;
             width: 100%;
         }
@@ -420,14 +420,14 @@ class WebGuiServer {
             font-size: 1.875em;
             text-align: center;
             margin-bottom: 8px;
-            color: #0f172a;
+            color: #f1f5f9;
             font-weight: 600;
             letter-spacing: -0.025em;
         }
         
         .login-subtitle {
             text-align: center;
-            color: #64748b;
+            color: #94a3b8;
             margin-bottom: 32px;
             font-size: 0.875em;
             font-weight: 400;
@@ -445,10 +445,10 @@ class WebGuiServer {
             justify-content: space-between;
             margin-bottom: 24px;
             padding: 20px 24px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: #1e293b;
+            border: 1px solid #334155;
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
         
         .header-left {
@@ -461,19 +461,19 @@ class WebGuiServer {
             width: 48px;
             height: 48px;
             border-radius: 6px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #334155;
         }
         
         .header-info h1 {
             font-size: 1.5em;
-            color: #0f172a;
+            color: #f1f5f9;
             margin-bottom: 2px;
             font-weight: 600;
             letter-spacing: -0.025em;
         }
         
         .header-info .subtitle {
-            color: #64748b;
+            color: #94a3b8;
             font-size: 0.875em;
             font-weight: 400;
         }
@@ -486,8 +486,8 @@ class WebGuiServer {
         .icon-btn {
             width: 40px;
             height: 40px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #334155;
+            border: 1px solid #475569;
             border-radius: 6px;
             display: flex;
             align-items: center;
@@ -495,12 +495,12 @@ class WebGuiServer {
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 1.25em;
-            color: #475569;
+            color: #cbd5e1;
         }
         
         .icon-btn:hover {
-            background: #e2e8f0;
-            color: #1e293b;
+            background: #475569;
+            color: #f1f5f9;
         }
         
         .settings-panel {
@@ -509,9 +509,9 @@ class WebGuiServer {
             right: -400px;
             width: 400px;
             height: 100vh;
-            background: #ffffff;
-            border-left: 1px solid #e2e8f0;
-            box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
+            background: #1e293b;
+            border-left: 1px solid #334155;
+            box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
             padding: 24px;
             transition: right 0.3s ease;
             z-index: 1000;
@@ -524,7 +524,7 @@ class WebGuiServer {
         
         .settings-title {
             font-size: 1.25em;
-            color: #0f172a;
+            color: #f1f5f9;
             margin-bottom: 24px;
             display: flex;
             align-items: center;
@@ -537,7 +537,7 @@ class WebGuiServer {
         }
         
         .settings-group h3 {
-            color: #0f172a;
+            color: #f1f5f9;
             margin-bottom: 12px;
             font-size: 1em;
             font-weight: 600;
@@ -548,8 +548,8 @@ class WebGuiServer {
             justify-content: space-between;
             align-items: center;
             padding: 12px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #334155;
+            border: 1px solid #475569;
             border-radius: 6px;
             margin-bottom: 8px;
         }
@@ -593,15 +593,15 @@ class WebGuiServer {
         }
         
         .panel {
-            background: #ffffff;
+            background: #1e293b;
             border-radius: 8px;
             padding: 24px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #334155;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
         
         .panel h2 {
-            color: #0f172a;
+            color: #f1f5f9;
             margin-bottom: 20px;
             font-size: 1.25em;
             display: flex;
@@ -626,8 +626,8 @@ class WebGuiServer {
         }
         
         #chatBox {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #0f172a;
+            border: 1px solid #334155;
             border-radius: 6px;
             height: 500px;
             overflow-y: auto;
@@ -643,12 +643,12 @@ class WebGuiServer {
         }
         
         #chatBox::-webkit-scrollbar-track {
-            background: #e2e8f0;
+            background: #1e293b;
             border-radius: 4px;
         }
         
         #chatBox::-webkit-scrollbar-thumb {
-            background: #94a3b8;
+            background: #475569;
             border-radius: 4px;
         }
         
@@ -667,10 +667,10 @@ class WebGuiServer {
             margin-right: 8px;
         }
         
-        .chat-info { color: #3b82f6; }
-        .chat-error { color: #ef4444; }
-        .chat-chat { color: #1e293b; }
-        .chat-system { color: #f59e0b; }
+        .chat-info { color: #60a5fa; }
+        .chat-error { color: #f87171; }
+        .chat-chat { color: #e2e8f0; }
+        .chat-system { color: #fbbf24; }
         
         .input-group {
             display: flex;
@@ -680,10 +680,10 @@ class WebGuiServer {
         input[type="text"], input[type="password"] {
             flex: 1;
             padding: 10px 12px;
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
+            background: #334155;
+            border: 1px solid #475569;
             border-radius: 6px;
-            color: #0f172a;
+            color: #e2e8f0;
             font-size: 14px;
             transition: all 0.2s ease;
             font-family: inherit;
@@ -692,7 +692,7 @@ class WebGuiServer {
         input[type="text"]:focus, input[type="password"]:focus {
             outline: none;
             border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
         
         button {
@@ -740,14 +740,14 @@ class WebGuiServer {
         }
         
         .status-item {
-            background: #f8fafc;
+            background: #334155;
             padding: 16px;
             border-radius: 6px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #475569;
         }
         
         .status-label {
-            color: #64748b;
+            color: #94a3b8;
             font-size: 0.8125em;
             margin-bottom: 6px;
             font-weight: 500;
@@ -756,7 +756,7 @@ class WebGuiServer {
         }
         
         .status-value {
-            color: #0f172a;
+            color: #f1f5f9;
             font-size: 1.125em;
             font-weight: 600;
         }
@@ -780,8 +780,8 @@ class WebGuiServer {
         
         .inventory-slot {
             aspect-ratio: 1;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #334155;
+            border: 1px solid #475569;
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -793,13 +793,13 @@ class WebGuiServer {
         }
         
         .inventory-slot:hover {
-            border-color: #cbd5e1;
-            background: #f1f5f9;
+            border-color: #64748b;
+            background: #475569;
         }
         
         .inventory-slot.has-item {
             border-color: #10b981;
-            background: #f0fdf4;
+            background: rgba(16, 185, 129, 0.15);
         }
         
         .inventory-slot.has-item:hover {
@@ -827,7 +827,7 @@ class WebGuiServer {
         }
         
         .error-message {
-            color: #ef4444;
+            color: #f87171;
             text-align: center;
             margin-top: 12px;
             font-size: 0.875em;

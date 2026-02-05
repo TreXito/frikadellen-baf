@@ -272,6 +272,18 @@ async function onScoreboardChanged() {
                     data: JSON.stringify(bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, '')))
                 })
             )
+            
+            // Request bazaar flips if enabled
+            if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+                await sleep(1000)
+                log('Requesting bazaar flip recommendations...')
+                wss.send(
+                    JSON.stringify({
+                        type: 'chat',
+                        data: JSON.stringify('/cofl getbazaar')
+                    })
+                )
+            }
         }, 5500)
         await sleep(2500)
         tryToTeleportToIsland(bot, 0)

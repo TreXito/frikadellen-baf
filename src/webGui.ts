@@ -191,11 +191,8 @@ class WebGuiServer {
                         }).catch(err => {
                             log(`Error executing command from web GUI: ${err}`, 'error')
                         })
-                    } else if (command.startsWith('/')) {
-                        // Send all other slash commands directly to Minecraft chat
-                        this.bot.chat(command)
                     } else {
-                        // Non-slash commands are sent directly to Minecraft chat
+                        // Send all other commands directly to Minecraft chat
                         this.bot.chat(command)
                     }
                 }
@@ -418,7 +415,7 @@ class WebGuiServer {
             z-index: 0;
         }
         
-        * {
+        .container, .header, .panel, .settings-panel, .login-container {
             position: relative;
             z-index: 1;
         }

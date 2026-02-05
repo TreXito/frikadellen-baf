@@ -81,13 +81,16 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
             // Send just the command without the prefix to avoid "sent command in chat" error
             const params = splits.length > 0 ? ` ${splits.join(' ')}` : ''
             const commandOnly = command ? `${command}${params}` : ''
-            // Use 'chat' type but without the /cofl prefix so server knows it's an API call
-            wss.send(
-                JSON.stringify({
-                    type: 'chat',
-                    data: JSON.stringify(commandOnly)
-                })
-            )
+            // Only send if there's actually a command to send
+            if (commandOnly) {
+                // Use 'chat' type but without the /cofl prefix so server knows it's an API call
+                wss.send(
+                    JSON.stringify({
+                        type: 'chat',
+                        data: JSON.stringify(commandOnly)
+                    })
+                )
+            }
         }
     } else {
         // For non-cofl/baf commands sent via 'execute' websocket message, send to game chat

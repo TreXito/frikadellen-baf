@@ -228,7 +228,7 @@ async function onWebsocketMessage(msg) {
             break
         case 'execute':
             log(message, 'debug')
-            handleCommand(bot, data, true) // fromServer = true to prevent sending back to server
+            handleCommand(bot, data, true) // Prevent echo loop
             break
         case 'runSequence':
             log(message, 'debug')

@@ -22,6 +22,7 @@ interface Config {
     BED_MULTIPLE_CLICKS_DELAY: number
     ENABLE_BAZAAR_FLIPS: boolean
     ENABLE_AH_FLIPS: boolean
+    WEB_GUI_PORT: number
     SKIP: SkipSettings
 }
 

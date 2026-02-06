@@ -119,6 +119,38 @@ MIN_PRICE = 10000000
 
 When skip is used, the bot will automatically click the green checkmark in the BIN Auction View window to skip the confirmation dialog, allowing for faster purchases.
 
+### Proxy Configuration
+
+The bot supports SOCKS5 proxy connections. In your `config.toml`, you can configure proxy settings:
+
+- `PROXY_ENABLED` - Set to `true` to enable proxy usage (default: `false`)
+- `PROXY` - Proxy server in `IP:port` format (e.g., `"127.0.0.1:8080"`)
+- `PROXY_USERNAME` - Optional username for proxy authentication
+- `PROXY_PASSWORD` - Optional password for proxy authentication
+
+Example configuration:
+```toml
+PROXY_ENABLED = true
+PROXY = "127.0.0.1:8080"
+PROXY_USERNAME = "myuser"
+PROXY_PASSWORD = "mypassword"
+```
+
+### Automatic Account Switching
+
+The bot supports automatic account switching to rotate between multiple accounts over time. In your `config.toml`, configure:
+
+- `ACCOUNTS` - Comma-separated list of Minecraft usernames (e.g., `"user1,user2,user3"`)
+- `AUTO_SWITCHING` - Time allocation for each account in minutes, format: `"username:minutes"` (e.g., `"user1:8,user2:8,user3:8"`)
+
+Example configuration:
+```toml
+ACCOUNTS = "PlayerOne,PlayerTwo,PlayerThree"
+AUTO_SWITCHING = "PlayerOne:8,PlayerTwo:8,PlayerThree:8"
+```
+
+This will use PlayerOne for 8 minutes, then switch to PlayerTwo for 8 minutes, then PlayerThree for 8 minutes, and repeat the cycle. The bot will automatically disconnect and reconnect with the next account when the time expires.
+
 ## System Requirements
 
 -   Any operating system

@@ -1,0 +1,13 @@
+diff --git a/node_modules/json2toml/index.js b/node_modules/json2toml/index.js
+index dc65320..ae2fb1e 100644
+--- a/node_modules/json2toml/index.js
++++ b/node_modules/json2toml/index.js
+@@ -31,7 +31,7 @@ function isArrayOfTables(simplePairs) {
+  * @returns {boolean}
+  */
+ function isObjectArrayOfTables(obj) {
+-  return Array.isArray(obj) && obj.length === 2 && isPlainObject(obj[1][0]);
++  return Array.isArray(obj) && obj.length === 2 && Array.isArray(obj[1]) && isPlainObject(obj[1][0]);
+ }
+ 
+ /**

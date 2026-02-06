@@ -37,6 +37,28 @@ let config: Config = {
 
 json2toml({ simple: true })
 
+function removeUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined || typeof obj !== 'object') {
+        return obj
+    }
+    
+    if (Array.isArray(obj)) {
+        return obj.map(item => removeUndefinedValues(item)).filter(item => item !== undefined)
+    }
+    
+    const cleaned: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+            if (typeof value === 'object' && value !== null) {
+                cleaned[key] = removeUndefinedValues(value)
+            } else {
+                cleaned[key] = value
+            }
+        }
+    }
+    return cleaned
+}
+
 export function initConfigHelper() {
     if (fs.existsSync(filePath)) {
         let existingConfig = toml.parse(fs.readFileSync(filePath, { encoding: 'utf8', flag: 'r' }))
@@ -59,7 +81,7 @@ export function initConfigHelper() {
             }
         })
         if (hadChange) {
-            fs.writeFileSync(filePath, prepareTomlBeforeWrite(json2toml(existingConfig)))
+            fs.writeFileSync(filePath, prepareTomlBeforeWrite(json2toml(removeUndefinedValues(existingConfig))))
         }
 
         config = existingConfig
@@ -68,7 +90,7 @@ export function initConfigHelper() {
 
 export function updatePersistentConfigProperty(property: keyof Config, value: any) {
     config[property as string] = value
-    fs.writeFileSync(filePath, prepareTomlBeforeWrite(json2toml(config)))
+    fs.writeFileSync(filePath, prepareTomlBeforeWrite(json2toml(removeUndefinedValues(config))))
 }
 
 export function getConfigProperty(property: keyof Config): any {

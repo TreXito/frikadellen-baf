@@ -77,7 +77,7 @@ createBotInstance(ingameName)
 function createBotInstance(username: string) {
     log(`Creating bot instance for ${username}`, 'info')
     
-    // Build bot options
+    // Build bot options - using any type as mineflayer's BotOptions doesn't expose all internal options
     const botOptions: any = {
         username: username,
         auth: 'microsoft',
@@ -89,6 +89,7 @@ function createBotInstance(username: string) {
     // Add proxy configuration if enabled
     const proxyConfig = getProxyConfig()
     if (proxyConfig) {
+        // Custom connect function for SOCKS5 proxy support
         botOptions.connect = (client: any) => {
             // For SOCKS proxy support with mineflayer
             // This requires the socks module
@@ -199,9 +200,9 @@ function switchAccount(newUsername: string) {
     log(`Switching from ${bot.username} to ${newUsername}`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §6Switching to account: ${newUsername}`)
     
-    // Close websocket without auto-reconnect
+    // Close websocket without auto-reconnect by removing the reconnect handler
     if (_websocket) {
-        _websocket.onclose = () => {}
+        _websocket.onclose = () => {} // Prevent auto-reconnect during account switch
         _websocket.close()
     }
     

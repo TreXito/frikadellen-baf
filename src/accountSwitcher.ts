@@ -86,8 +86,10 @@ function scheduleNextSwitch() {
     
     const currentConfig = accountConfigs[currentAccountIndex]
     const delayMs = currentConfig.duration * 60 * 1000 // Convert minutes to milliseconds
+    const nextAccountIndex = (currentAccountIndex + 1) % accountConfigs.length
+    const nextUsername = accountConfigs[nextAccountIndex].username
     
-    log(`Next account switch in ${currentConfig.duration} minutes to account: ${accountConfigs[(currentAccountIndex + 1) % accountConfigs.length].username}`, 'info')
+    log(`Next account switch in ${currentConfig.duration} minutes to account: ${nextUsername}`, 'info')
     
     switchingTimer = setTimeout(() => {
         performSwitch()

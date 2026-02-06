@@ -43,19 +43,19 @@ function removeUndefinedValues(obj: any): any {
     }
     
     if (Array.isArray(obj)) {
-        return obj
+        return obj.map(item => removeUndefinedValues(item)).filter(item => item !== undefined)
     }
     
     const cleaned: any = {}
-    Object.keys(obj).forEach(key => {
-        if (obj[key] !== undefined) {
-            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-                cleaned[key] = removeUndefinedValues(obj[key])
+    for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+            if (typeof value === 'object' && value !== null) {
+                cleaned[key] = removeUndefinedValues(value)
             } else {
-                cleaned[key] = obj[key]
+                cleaned[key] = value
             }
         }
-    })
+    }
     return cleaned
 }
 

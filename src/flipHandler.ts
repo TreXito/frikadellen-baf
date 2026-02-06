@@ -183,6 +183,8 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
 function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
     return new Promise<void>((resolve, reject) => {
         let firstGui: number
+        let handledBinAuction = false
+        let handledConfirm = false
         
         bot._client.on('open_window', async (window) => {
             const windowID = window.windowId
@@ -194,6 +196,13 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
             confirmClick(bot, windowID)
             
             if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
+                // Skip if we already handled this window type
+                if (handledBinAuction) {
+                    log('Already handled BIN Auction View, ignoring duplicate', 'debug')
+                    return
+                }
+                handledBinAuction = true
+                
                 // Calculate profit and check skip conditions
                 const profit = flip.target - flip.startingBid
                 const skipSettings = getConfigProperty('SKIP')
@@ -296,6 +305,13 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         break
                 }
             } else if (windowName === '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
+                // Skip if we already handled this window type
+                if (handledConfirm) {
+                    log('Already handled Confirm Purchase, ignoring duplicate', 'debug')
+                    return
+                }
+                handledConfirm = true
+                
                 const confirmAt = Date.now() - firstGui
                 printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
                 

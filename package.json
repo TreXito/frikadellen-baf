@@ -19,6 +19,7 @@
     "json2toml": "^4.0.1",
     "mineflayer": "^4.29.0",
     "prompt-sync": "^4.2.0",
+    "socks": "^2.8.3",
     "toml": "^3.0.0",
     "winston": "^3.17.0",
     "ws": "^8.18.0"

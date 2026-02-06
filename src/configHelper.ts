@@ -26,7 +26,13 @@ let config: Config = {
         SKINS: false,
         PROFIT_PERCENTAGE: 50,
         MIN_PRICE: 10000000
-    }
+    },
+    PROXY_ENABLED: false,
+    PROXY: undefined,
+    PROXY_USERNAME: undefined,
+    PROXY_PASSWORD: undefined,
+    ACCOUNTS: undefined,
+    AUTO_SWITCHING: undefined
 }
 
 json2toml({ simple: true })
@@ -112,6 +118,35 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             '# SKINS: Skip if the item is a skin',
             '# PROFIT_PERCENTAGE: Skip if profit percentage is above this value',
             '# MIN_PRICE: Skip if starting bid is above this value (in coins)'
+        )
+    }
+
+    // Add comments for proxy settings
+    let proxyEnabledIndex = lines.findIndex(l => l.startsWith('PROXY_ENABLED = '))
+    if (proxyEnabledIndex !== -1) {
+        lines.splice(
+            proxyEnabledIndex,
+            0,
+            '',
+            '# Proxy configuration (optional)',
+            '# PROXY_ENABLED: Enable or disable proxy usage (true/false)',
+            '# PROXY: Proxy server in IP:port format (e.g., "127.0.0.1:8080")',
+            '# PROXY_USERNAME: Proxy authentication username (optional)',
+            '# PROXY_PASSWORD: Proxy authentication password (optional)'
+        )
+    }
+
+    // Add comments for account switching
+    let accountsIndex = lines.findIndex(l => l.startsWith('ACCOUNTS = '))
+    if (accountsIndex !== -1) {
+        lines.splice(
+            accountsIndex,
+            0,
+            '',
+            '# Automatic account switching (optional)',
+            '# ACCOUNTS: Comma-separated list of Minecraft usernames (e.g., "user1,user2,user3")',
+            '# AUTO_SWITCHING: Time allocation for each account in minutes (e.g., "user1:8,user2:8,user3:8")',
+            '# The bot will automatically switch between accounts based on the time allocation'
         )
     }
 

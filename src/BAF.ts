@@ -17,12 +17,15 @@ import { runSequence } from './sequenceRunner'
 import { handleBazaarFlipRecommendation, parseBazaarFlipMessage, parseBazaarFlipJson } from './bazaarFlipHandler'
 import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
 import { startWebGui, addWebGuiChatMessage } from './webGui'
+import { initAccountSwitcher } from './accountSwitcher'
+import { getProxyConfig } from './proxyHelper'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
 initLogger()
 const version = 'af-2.0.0'
 let _websocket: WebSocket
+let bot: MyBot
 let ingameName = getConfigProperty('INGAME_NAME')
 
 if (!ingameName) {
@@ -55,71 +58,166 @@ if (getConfigProperty('WEB_GUI_PORT') === undefined) {
 log(`Starting BAF v${version} for ${ingameName}`, 'info')
 log(`AH Flips: ${getConfigProperty('ENABLE_AH_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
 log(`Bazaar Flips: ${getConfigProperty('ENABLE_BAZAAR_FLIPS') ? 'ENABLED' : 'DISABLED'}`, 'info')
-const bot: MyBot = createBot({
-    username: ingameName,
-    auth: 'microsoft',
-    logErrors: true,
-    version: '1.8.9',
-    host: 'mc.hypixel.net'
+
+// Initialize account switcher if configured
+const accountSwitchingEnabled = initAccountSwitcher((username) => {
+    log(`Account switch requested to: ${username}`, 'info')
+    switchAccount(username)
 })
 
-bot.setMaxListeners(0)
+if (accountSwitchingEnabled) {
+    log('Account switching is ENABLED', 'info')
+} else {
+    log('Account switching is DISABLED', 'info')
+}
 
-bot.state = 'gracePeriod'
-createFastWindowClicker(bot._client)
+// Create initial bot instance
+createBotInstance(ingameName)
 
-// Log packets
-//addLoggerToClientWriteFunction(bot._client)
-
-bot.on('kicked', (reason,_)=>log(reason, 'warn'))
-bot.on('error', log)
-
-bot.once('login', () => {
-    log(`Logged in as ${bot.username}`)
+function createBotInstance(username: string) {
+    log(`Creating bot instance for ${username}`, 'info')
     
-    // Start web GUI if port is configured
-    const webGuiPort = getConfigProperty('WEB_GUI_PORT')
-    if (webGuiPort) {
-        try {
-            startWebGui(bot)
-        } catch (error) {
-            log(`Failed to start web GUI: ${error}`, 'error')
+    // Build bot options - using any type as mineflayer's BotOptions doesn't expose all internal options
+    const botOptions: any = {
+        username: username,
+        auth: 'microsoft',
+        logErrors: true,
+        version: '1.8.9',
+        host: 'mc.hypixel.net'
+    }
+    
+    // Add proxy configuration if enabled
+    const proxyConfig = getProxyConfig()
+    if (proxyConfig) {
+        // Custom connect function for SOCKS5 proxy support
+        botOptions.connect = (client: any) => {
+            // For SOCKS proxy support with mineflayer
+            // This requires the socks module
+            try {
+                const SocksClient = require('socks').SocksClient
+                const options = {
+                    proxy: {
+                        host: proxyConfig.host,
+                        port: proxyConfig.port,
+                        type: 5, // SOCKS5
+                        userId: proxyConfig.username,
+                        password: proxyConfig.password
+                    },
+                    command: 'connect',
+                    destination: {
+                        host: 'mc.hypixel.net',
+                        port: 25565
+                    }
+                }
+                
+                SocksClient.createConnection(options).then((info: any) => {
+                    client.setSocket(info.socket)
+                    client.emit('connect')
+                }).catch((err: any) => {
+                    log(`Proxy connection error: ${err}`, 'error')
+                    client.emit('error', err)
+                })
+            } catch (error) {
+                log(`Failed to use proxy. Make sure 'socks' module is installed: npm install socks`, 'error')
+                log(`Error: ${error}`, 'error')
+            }
         }
     }
     
-    connectWebsocket()
-    bot._client.on('packet', async function (packet, packetMeta) {
-        if (packetMeta.name.includes('disconnect')) {
-            let wss = await getCurrentWebsocket()
-            wss.send(
-                JSON.stringify({
-                    type: 'report',
-                    data: `"${JSON.stringify(packet)}"`
-                })
-            )
-            printMcChatToConsole('§f[§4BAF§f]: §fYou were disconnected from the server...')
-            printMcChatToConsole('§f[§4BAF§f]: §f' + JSON.stringify(packet))
-        }
-    })
-})
-
-bot.once('spawn', async () => {
-    await bot.waitForChunksToLoad()
-    await sleep(2000)
-    bot.chat('/play sb')
-    bot.on('scoreboardTitleChanged', onScoreboardChanged)
-    registerIngameMessageHandler(bot)
+    bot = createBot(botOptions)
     
-    // Initialize AFK handler after a delay to ensure it runs even if the bot doesn't join SkyBlock immediately
-    // This is a fallback to handle cases where the bot stays in lobby
-    setTimeout(() => {
-        if (!(bot as any).AFKHandlerInitialized) {
-            log('Initializing AFK handler as fallback', 'info')
-            initAFKHandler(bot)
-            ;(bot as any).AFKHandlerInitialized = true
+    bot.setMaxListeners(0)
+    bot.state = 'gracePeriod'
+    createFastWindowClicker(bot._client)
+    
+    setupBotHandlers()
+}
+
+function setupBotHandlers() {
+    // Log packets
+    //addLoggerToClientWriteFunction(bot._client)
+    
+    bot.on('kicked', (reason,_)=>log(reason, 'warn'))
+    bot.on('error', log)
+
+    bot.once('login', () => {
+        log(`Logged in as ${bot.username}`)
+        
+        // Start web GUI if port is configured
+        const webGuiPort = getConfigProperty('WEB_GUI_PORT')
+        if (webGuiPort) {
+            try {
+                startWebGui(bot)
+            } catch (error) {
+                log(`Failed to start web GUI: ${error}`, 'error')
+            }
         }
-    }, 15000)
-})
+        
+        connectWebsocket()
+        bot._client.on('packet', async function (packet, packetMeta) {
+            if (packetMeta.name.includes('disconnect')) {
+                let wss = await getCurrentWebsocket()
+                wss.send(
+                    JSON.stringify({
+                        type: 'report',
+                        data: `"${JSON.stringify(packet)}"`
+                    })
+                )
+                printMcChatToConsole('§f[§4BAF§f]: §fYou were disconnected from the server...')
+                printMcChatToConsole('§f[§4BAF§f]: §f' + JSON.stringify(packet))
+            }
+        })
+    })
+
+    bot.once('spawn', async () => {
+        await bot.waitForChunksToLoad()
+        await sleep(2000)
+        bot.chat('/play sb')
+        bot.on('scoreboardTitleChanged', onScoreboardChanged)
+        registerIngameMessageHandler(bot)
+        
+        // Initialize AFK handler after a delay to ensure it runs even if the bot doesn't join SkyBlock immediately
+        // This is a fallback to handle cases where the bot stays in lobby
+        setTimeout(() => {
+            if (!(bot as any).AFKHandlerInitialized) {
+                log('Initializing AFK handler as fallback', 'info')
+                initAFKHandler(bot)
+                ;(bot as any).AFKHandlerInitialized = true
+            }
+        }, 15000)
+    })
+
+    bot.on('end', (reason) => {
+        console.log(`Bot disconnected. Reason: ${reason}`);
+        log(`Bot disconnected. Reason: ${reason}`, 'warn')
+    })
+}
+
+/**
+ * Switches to a different account by disconnecting and reconnecting
+ */
+function switchAccount(newUsername: string) {
+    log(`Switching from ${bot.username} to ${newUsername}`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §6Switching to account: ${newUsername}`)
+    
+    // Close websocket without auto-reconnect by removing the reconnect handler
+    if (_websocket) {
+        _websocket.onclose = () => {} // Prevent auto-reconnect during account switch
+        _websocket.close()
+    }
+    
+    // Disconnect bot
+    if (bot) {
+        bot.removeAllListeners()
+        bot.quit()
+    }
+    
+    // Wait a bit before reconnecting
+    setTimeout(() => {
+        ingameName = newUsername
+        createBotInstance(newUsername)
+    }, 2000)
+}
 
 function connectWebsocket(url: string = getConfigProperty('WEBSOCKET_URL')) {
     log(`Called connectWebsocket for ${url}`)
@@ -294,11 +392,6 @@ async function onWebsocketMessage(msg) {
             break
     }
 }
-
-bot.on('end', (reason) => {
-    console.log(`Bot disconnected. Reason: ${reason}`);
-    log(`Bot disconnected. Reason: ${reason}`, 'warn')
-});
 
 async function onScoreboardChanged() {
     if (

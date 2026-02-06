@@ -66,6 +66,7 @@ function confirmClick(bot: MyBot, windowId: number) {
         action: actionCounter,
         accepted: true
     })
+    actionCounter++
 }
 
 /**

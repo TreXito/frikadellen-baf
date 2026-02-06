@@ -192,9 +192,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
             const windowName = window.windowTitle
             log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
             
-            // Send confirm click packet for faster response
-            confirmClick(bot, windowID)
-            
             if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
                 // Skip if we already handled this window type
                 if (handledBinAuction) {
@@ -202,6 +199,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     return
                 }
                 handledBinAuction = true
+                
+                // Send confirm click packet for faster response
+                confirmClick(bot, windowID)
                 
                 // Calculate profit and check skip conditions
                 const profit = flip.target - flip.startingBid
@@ -311,6 +311,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     return
                 }
                 handledConfirm = true
+                
+                // Send confirm click packet for faster response
+                confirmClick(bot, windowID)
                 
                 const confirmAt = Date.now() - firstGui
                 printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)

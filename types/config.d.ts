@@ -27,6 +27,12 @@ interface Config {
     WEB_GUI_PORT: number
     WEB_GUI_PASSWORD: string
     SKIP: SkipSettings
+    PROXY_ENABLED?: boolean
+    PROXY?: string
+    PROXY_USERNAME?: string
+    PROXY_PASSWORD?: string
+    ACCOUNTS?: string
+    AUTO_SWITCHING?: string
 }
 
 interface ColfSession {

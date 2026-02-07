@@ -162,6 +162,9 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
             }
         }
 
+        // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+        // This prevents stale handlers from claim/sell operations from interfering
+        bot.removeAllListeners('windowOpen')
         bot.state = 'claiming'
         bot.on('windowOpen', windowHandler)
         bot.chat('/ah')
@@ -254,6 +257,9 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             }
         }
 
+        // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+        // This prevents stale handlers from claim/sell operations from interfering
+        bot.removeAllListeners('windowOpen')
         bot.state = 'claiming'
         bot.on('windowOpen', windowHandler)
         bot.chat('/ah')
@@ -282,6 +288,8 @@ function claimExpiredAuction(bot, slot) {
             resolve(false)
         }, 5000)
         
+        // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+        bot.removeAllListeners('windowOpen')
         bot.on('windowOpen', windowHandler)
         clickWindow(bot, slot).catch(err => {
             log(`Error clicking expired auction slot: ${err}`, 'error')
@@ -363,6 +371,8 @@ export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
             }
         }
 
+        // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+        bot.removeAllListeners('windowOpen')
         bot.state = 'claiming'
         bot.on('windowOpen', windowHandler)
         bot.chat('/bz')

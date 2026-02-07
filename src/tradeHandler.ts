@@ -25,7 +25,8 @@ export async function tradePerson(bot: MyBot, data: TradeData) {
                 bot.chat('Hey ' + data.target + ' come here so we can trade!')
             } else if (msg.startsWith('You have sent a trade request to ')) {
                 log('successfully sent trade, waiting for them to accept')
-                bot.on('windowOpen', async window => {
+                
+                const tradeWindowHandler = async window => {
                     trading = false
 
                     log('Trade window opened')
@@ -60,7 +61,13 @@ export async function tradePerson(bot: MyBot, data: TradeData) {
                     if (!(data.coins > 0) || addedCoins) {
                         wss.send(JSON.stringify({ type: 'affirmFlip', data: [JSON.stringify(window.slots)] }))
                     }
-                })
+                    // Clean up listener after trade window is handled
+                    bot.removeListener('windowOpen', tradeWindowHandler)
+                }
+                
+                // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+                bot.removeAllListeners('windowOpen')
+                bot.on('windowOpen', tradeWindowHandler)
             }
         })
 

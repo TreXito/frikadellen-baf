@@ -226,16 +226,22 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     bot.state = 'purchasing'
     let operationTimeout = setTimeout(() => {
         if (bot.state === 'purchasing') {
-            log("[BazaarDebug] Resetting 'bot.state === purchasing' lock in bazaar flip (timeout)")
+            log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
+            log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
+            printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
             bot.state = null
             bot.removeAllListeners('windowOpen')
         }
     }, OPERATION_TIMEOUT_MS)
 
     try {
-        const { itemName, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
+        const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
         const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
+        // Use itemTag if available (internal ID like "FLAWED_PERIDOT_GEM"), otherwise fall back to itemName
+        // The /bz command works better with internal IDs especially for items with spaces in names
+        const searchTerm = itemTag || itemName
+        
         printMcChatToConsole(
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
@@ -251,9 +257,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         await sleep(100)
         
         // Open bazaar for the item - the listener is now ready to catch this event
-        log(`[BazaarDebug] Opening bazaar with command: /bz ${itemName}`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${itemName}`)
-        bot.chat(`/bz ${itemName}`)
+        log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
+        log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
+        bot.chat(`/bz ${searchTerm}`)
 
         await orderPromise
         

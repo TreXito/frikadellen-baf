@@ -143,6 +143,13 @@ function setupBotHandlers() {
     bot.once('login', () => {
         log(`Logged in as ${bot.username}`)
         
+        // Log configuration for diagnostics
+        const bazaarFlipsEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
+        const ahFlipsEnabled = getConfigProperty('ENABLE_AH_FLIPS')
+        log(`[Config] Bazaar Flips: ${bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
+        log(`[Config] AH Flips: ${ahFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §7Configuration - Bazaar Flips: §${bazaarFlipsEnabled ? 'a' : 'c'}${bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'}§7, AH Flips: §${ahFlipsEnabled ? 'a' : 'c'}${ahFlipsEnabled ? 'ENABLED' : 'DISABLED'}`)
+        
         // Start web GUI if port is configured
         const webGuiPort = getConfigProperty('WEB_GUI_PORT')
         if (webGuiPort) {
@@ -252,6 +259,10 @@ function connectWebsocket(url: string = getConfigProperty('WEBSOCKET_URL')) {
 async function onWebsocketMessage(msg) {
     let message = JSON.parse(msg.data)
     let data = JSON.parse(message.data)
+    
+    // Log ALL message types for diagnostics (helps identify if bazaar flip messages are being sent)
+    // This is especially useful for debugging bazaar flip issues
+    log(`[WebSocket] Received message type: ${message.type}`, 'debug')
 
     switch (message.type) {
         case 'flip':

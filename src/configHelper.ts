@@ -98,6 +98,16 @@ export function initConfigHelper() {
             fs.writeFileSync(filePath, prepareTomlBeforeWrite(json2toml(removeUndefinedValues(existingConfig))))
         }
 
+        // Reconstruct Date objects in SESSIONS that were serialized to TOML
+        if (existingConfig.SESSIONS && typeof existingConfig.SESSIONS === 'object') {
+            Object.keys(existingConfig.SESSIONS).forEach(username => {
+                const session = existingConfig.SESSIONS[username]
+                if (session && session.expires && typeof session.expires === 'string') {
+                    session.expires = new Date(session.expires)
+                }
+            })
+        }
+
         config = existingConfig
     }
 }

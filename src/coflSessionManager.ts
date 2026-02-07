@@ -29,5 +29,8 @@ export function getSessionId(username: string): string {
 }
 
 export function isExpired(date: Date) {
+    if (!date || typeof date.getTime !== 'function') {
+        return true
+    }
     return date.getTime() < new Date().getTime()
 }

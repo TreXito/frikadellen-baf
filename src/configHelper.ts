@@ -43,6 +43,12 @@ function removeUndefinedValues(obj: any): any {
         return obj
     }
     
+    // Preserve Date objects as-is (they have no enumerable own properties
+    // and would be converted to empty objects if recursed into)
+    if (obj instanceof Date) {
+        return obj
+    }
+    
     if (Array.isArray(obj)) {
         return obj.map(item => removeUndefinedValues(item)).filter(item => item !== undefined)
     }

@@ -154,6 +154,11 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         }, 1100)
         return
     }
+    
+    // CRITICAL: Clear any stale windowOpen listeners from other operations
+    // This prevents interference from claim/sell handlers that might still be registered
+    bot.removeAllListeners('windowOpen')
+    
     bot.state = 'purchasing'
     let timeout = setTimeout(() => {
         if (bot.state === 'purchasing') {

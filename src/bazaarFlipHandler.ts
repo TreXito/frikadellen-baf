@@ -250,6 +250,12 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
 
+        // CRITICAL: Remove all existing windowOpen listeners before setting up the bazaar handler
+        // This prevents old auction house listeners from interfering with bazaar operations
+        // (e.g., claimSoldAuction listener trying to click slot 15 in the bazaar GUI)
+        log('[BazaarDebug] Clearing any existing windowOpen listeners to prevent conflicts', 'info')
+        bot.removeAllListeners('windowOpen')
+
         // Set up the listener BEFORE opening the bazaar to catch the first window
         // placeBazaarOrder() synchronously registers the windowOpen event listener,
         // then returns a Promise that resolves when the order completes

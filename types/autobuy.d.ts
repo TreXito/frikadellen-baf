@@ -49,6 +49,7 @@ interface FlipWhitelistedData {
 
 interface BazaarFlipRecommendation {
     itemName: string
+    itemTag?: string
     amount: number
     pricePerUnit: number
     isBuyOrder: boolean

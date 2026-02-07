@@ -370,6 +370,15 @@ async function onWebsocketMessage(msg) {
                 log(`Failed to parse bazaar flip data from websocket: ${JSON.stringify(data)}`, 'error')
             }
             break
+        case 'bzRecommend':
+            log(message, 'debug')
+            const bzRecommendFlip = parseBazaarFlipJson(data)
+            if (bzRecommendFlip) {
+                handleBazaarFlipRecommendation(bot, bzRecommendFlip)
+            } else {
+                log(`Failed to parse bzRecommend data: ${JSON.stringify(data)}`, 'error')
+            }
+            break
         case 'getbazaarflips':
             log(message, 'debug')
             // Handle response from /cofl getbazaarflips command

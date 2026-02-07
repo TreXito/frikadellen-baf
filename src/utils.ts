@@ -1,5 +1,26 @@
 export async function clickWindow(bot, slot: number) {
     try {
+        // Import log function inline to avoid circular dependencies
+        const { log, printMcChatToConsole } = require('./logger')
+        
+        // Get item name at this slot for better debugging
+        let itemName = 'Unknown'
+        if (bot.currentWindow && bot.currentWindow.slots[slot]) {
+            const slotItem = bot.currentWindow.slots[slot]
+            if (slotItem && slotItem.nbt) {
+                const displayName = (slotItem.nbt as any)?.value?.display?.value?.Name?.value?.toString()
+                if (displayName) {
+                    itemName = removeMinecraftColorCodes(displayName)
+                }
+            }
+            if (itemName === 'Unknown' && slotItem) {
+                itemName = slotItem.name || 'Air'
+            }
+        }
+        
+        log(`[BazaarDebug] Clicking slot ${slot} | Item: ${itemName} | Window: ${bot.currentWindow ? getWindowTitle(bot.currentWindow) : 'None'}`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §7[Click] Slot §b${slot}§7 | Item: §e${itemName}`)
+        
         return await bot.clickWindow(slot, 0, 0)
     } catch (error) {
         // Import log function inline to avoid circular dependencies

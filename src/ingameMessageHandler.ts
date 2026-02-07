@@ -262,17 +262,18 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
 
 function claimExpiredAuction(bot, slot) {
     return new Promise(resolve => {
-        bot.on('windowOpen', window => {
+        const windowHandler = (window) => {
             let title = getWindowTitle(window)
             if (title == 'BIN Auction View') {
                 log('Clicking slot 31, claiming expired auction')
                 clickWindow(bot, 31).catch(err => log(`Error claiming expired auction: ${err}`, 'error'))
-                bot.removeAllListeners('windowOpen')
+                bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 bot.closeWindow(window)
                 resolve(true)
             }
-        })
+        }
+        bot.on('windowOpen', windowHandler)
         clickWindow(bot, slot).catch(err => log(`Error clicking expired auction slot: ${err}`, 'error'))
     })
 }

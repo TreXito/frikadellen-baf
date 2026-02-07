@@ -167,3 +167,58 @@ Just add the line `WEBHOOK_URL = "YOUR_URL"` into your config. Make sure to plac
 ## Logging
 
 If there is something wrong with the bot and you plan to report it, please add your log file
+
+### Bazaar Flip Debugging
+
+The bot includes comprehensive debugging for bazaar flips to help diagnose issues. When a bazaar flip is processed, you'll see detailed logs showing:
+
+#### 1. **bzRecommend Message Reception**
+```
+[BazaarDebug] ===== RECEIVED bzRecommend MESSAGE =====
+[BazaarDebug] Raw data: {"itemName":"Flawed Peridot Gemstone","itemTag":"FLAWED_PERIDOT_GEM","price":3054.1,"amount":64,"isSell":false}
+```
+This shows the exact data received from Coflnet.
+
+#### 2. **Price Calculation**
+```
+[BazaarDebug] Parsed total price from price field: 3054.1
+[BazaarDebug] Calculated price per unit: 47.7 (3054.1 / 64)
+```
+The bot calculates per-unit price from the total price (important for entering in the GUI).
+
+#### 3. **Order Details**
+```
+[BazaarDebug] ===== STARTING BAZAAR FLIP ORDER =====
+[BazaarDebug] Item: Flawed Peridot Gemstone
+[BazaarDebug] Amount: 64
+[BazaarDebug] Price per unit: 47.7 coins
+[BazaarDebug] Total price: 3054.1 coins
+[BazaarDebug] Order type: BUY
+```
+
+#### 4. **GUI Navigation**
+Every window that opens shows:
+```
+[BazaarDebug] === Window Opened: "Bazaar ➜ Farming" ===
+[BazaarDebug]   Slot 11: ☘ Flawed Peridot Gemstone
+[BazaarDebug]   Slot 15: Create Buy Order
+[BazaarDebug]   Slot 16: Create Sell Offer
+[BazaarDebug] === End Window Slots (45 items) ===
+```
+
+#### 5. **Slot Clicks**
+Every click shows the slot number, item name, and action:
+```
+[BazaarDebug] Clicking slot 15 | Item: Create Buy Order | Window: Bazaar ➜ Flawed Peridot Gemstone
+[BAF]: [Click] Slot 15 | Item: Create Buy Order
+```
+
+#### 6. **Sign Input**
+When entering amounts or prices:
+```
+[BazaarDebug] Sign opened for amount, writing: 64
+[BazaarDebug] Sign opened for price, writing: 47.7
+```
+
+This detailed logging helps identify exactly where the bot might be failing in the bazaar flip process.
+

@@ -319,6 +319,7 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 }
                 // Amount screen - detected by "Custom Amount" slot (buy orders only, sell offers skip this)
                 else if (findSlotWithName(window, 'Custom Amount') !== -1) {
+                    const customAmountSlot = findSlotWithName(window, 'Custom Amount')
                     log(`Setting amount to ${amount}`, 'debug')
                     currentStep = 'setAmount'
                     
@@ -326,7 +327,7 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     bot._client.once('open_sign_entity', ({ location }) => {
                         log(`Sign opened for amount, writing: ${amount}`, 'debug')
                         bot._client.write('update_sign', {
-                            location: { x: location.z, y: location.y, z: location.z },
+                            location: { x: location.x, y: location.y, z: location.z },
                             text1: `\"${amount.toString()}\"`,
                             text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                             text3: '{"italic":false,"extra":[""],"text":""}',
@@ -334,12 +335,13 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                         })
                     })
                     
-                    // Click Custom Amount (slot 16)
+                    // Click Custom Amount at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, 16)
+                    await clickWindow(bot, customAmountSlot)
                 }
                 // Price screen - detected by "Custom Price" slot (works for both buy and sell)
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {
+                    const customPriceSlot = findSlotWithName(window, 'Custom Price')
                     log(`Setting price per unit to ${pricePerUnit}`, 'debug')
                     currentStep = 'setPrice'
                     
@@ -347,7 +349,7 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     bot._client.once('open_sign_entity', ({ location }) => {
                         log(`Sign opened for price, writing: ${pricePerUnit.toFixed(1)}`, 'debug')
                         bot._client.write('update_sign', {
-                            location: { x: location.z, y: location.y, z: location.z },
+                            location: { x: location.x, y: location.y, z: location.z },
                             text1: `\"${pricePerUnit.toFixed(1)}\"`,
                             text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                             text3: '{"italic":false,"extra":[""],"text":""}',
@@ -355,9 +357,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                         })
                     })
                     
-                    // Click Custom Price (slot 16)
+                    // Click Custom Price at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, 16)
+                    await clickWindow(bot, customPriceSlot)
                 }
                 // Confirm screen - detected by title or confirm button presence after price step
                 else if (title.includes('Confirm') ||
@@ -371,13 +373,13 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await clickWindow(bot, 13)
                     
                     // Order placed successfully
-                    bot.removeAllListeners('windowOpen')
+                    bot.removeListener('windowOpen', windowListener)
                     await sleep(500)
                     resolve()
                 }
             } catch (error) {
                 log(`Error in placeBazaarOrder window handler at step ${currentStep}: ${error}`, 'error')
-                bot.removeAllListeners('windowOpen')
+                bot.removeListener('windowOpen', windowListener)
                 reject(error)
             }
         }
@@ -386,7 +388,7 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
 
         // Set a timeout for the entire operation
         setTimeout(() => {
-            bot.removeAllListeners('windowOpen')
+            bot.removeListener('windowOpen', windowListener)
             reject(new Error(`Bazaar order placement timed out at step: ${currentStep}`))
         }, 20000)
     })

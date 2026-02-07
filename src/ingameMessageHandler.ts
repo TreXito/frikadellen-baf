@@ -101,16 +101,15 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
             }, 1000)
             return
         }
-        bot.state = 'claiming'
-        bot.chat('/ah')
 
         let timeout = setTimeout(() => {
             log('Claiming of purchased auction failed. Removing lock')
+            bot.removeListener('windowOpen', windowHandler)
             bot.state = null
             resolve(false)
         }, 5000)
 
-        bot.on('windowOpen', async window => {
+        const windowHandler = async (window) => {
             let title = getWindowTitle(window)
             log('Claiming auction window: ' + title)
 
@@ -128,7 +127,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
                     if (useCollectAll && slot?.type === 380 && name?.includes('Claim') && name?.includes('All')) {
                         log('Found cauldron to claim all purchased auctions -> clicking index ' + i)
                         clickWindow(bot, i).catch(err => log(`Error clicking claim all slot: ${err}`, 'error'))
-                        bot.removeAllListeners('windowOpen')
+                        bot.removeListener('windowOpen', windowHandler)
                         bot.state = null
                         clearTimeout(timeout)
                         resolve(true)
@@ -143,7 +142,7 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
                 }
                 if (slotToClick === -1) {
                     log('No claimable purchased auction found')
-                    bot.removeAllListeners('windowOpen')
+                    bot.removeListener('windowOpen', windowHandler)
                     bot.state = null
                     bot.closeWindow(window)
                     clearTimeout(timeout)
@@ -155,13 +154,17 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
 
             if (title.toString().includes('BIN Auction View')) {
                 log('Claiming purchased auction...')
-                bot.removeAllListeners('windowOpen')
+                bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 clearTimeout(timeout)
                 clickWindow(bot, 31).catch(err => log(`Error claiming purchased auction: ${err}`, 'error'))
                 resolve(true)
             }
-        })
+        }
+
+        bot.state = 'claiming'
+        bot.on('windowOpen', windowHandler)
+        bot.chat('/ah')
     })
 }
 
@@ -178,15 +181,12 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
 
         let timeout = setTimeout(() => {
             log('Seems something went wrong while claiming sold item. Removing lock')
+            bot.removeListener('windowOpen', windowHandler)
             bot.state = null
-            bot.removeAllListeners('windowOpen')
             resolve(false)
         }, 10000)
 
-        bot.state = 'claiming'
-        bot.chat('/ah')
-
-        bot.on('windowOpen', async window => {
+        const windowHandler = async (window) => {
             let title = getWindowTitle(window)
             if (title.toString().includes('Auction House')) {
                 // Add a small delay to ensure the window is fully loaded before clicking
@@ -194,7 +194,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 clickWindow(bot, 15).catch(err => {
                     log(`Error clicking manage auctions slot: ${err}`, 'error')
                     // Clean up on error
-                    bot.removeAllListeners('windowOpen')
+                    bot.removeListener('windowOpen', windowHandler)
                     bot.state = null
                     clearTimeout(timeout)
                     resolve(false)
@@ -222,7 +222,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                         log('Found cauldron to claim all sold auctions -> clicking index ' + item.slot)
                         clickWindow(bot, item.slot).catch(err => log(`Error clicking claim all sold slot: ${err}`, 'error'))
                         clearTimeout(timeout)
-                        bot.removeAllListeners('windowOpen')
+                        bot.removeListener('windowOpen', windowHandler)
                         bot.state = null
                         resolve(true)
                         return
@@ -232,7 +232,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 if (!clickSlot) {
                     log('No sold auctions found')
                     clearTimeout(timeout)
-                    bot.removeAllListeners('windowOpen')
+                    bot.removeListener('windowOpen', windowHandler)
                     bot.state = null
                     bot.closeWindow(window)
                     resolve(false)
@@ -247,29 +247,49 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 log('Clicking slot 31, claiming purchased auction')
                 clickWindow(bot, 31).catch(err => log(`Error claiming sold auction: ${err}`, 'error'))
                 clearTimeout(timeout)
-                bot.removeAllListeners('windowOpen')
+                bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 bot.closeWindow(window)
                 resolve(true)
             }
-        })
+        }
+
+        bot.state = 'claiming'
+        bot.on('windowOpen', windowHandler)
+        bot.chat('/ah')
     })
 }
 
 function claimExpiredAuction(bot, slot) {
     return new Promise(resolve => {
-        bot.on('windowOpen', window => {
+        const windowHandler = (window) => {
             let title = getWindowTitle(window)
             if (title == 'BIN Auction View') {
                 log('Clicking slot 31, claiming expired auction')
                 clickWindow(bot, 31).catch(err => log(`Error claiming expired auction: ${err}`, 'error'))
-                bot.removeAllListeners('windowOpen')
+                clearTimeout(timeout)
+                bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 bot.closeWindow(window)
                 resolve(true)
             }
+        }
+        
+        const timeout = setTimeout(() => {
+            log('Claiming expired auction timed out. Removing listener')
+            bot.removeListener('windowOpen', windowHandler)
+            bot.state = null
+            resolve(false)
+        }, 5000)
+        
+        bot.on('windowOpen', windowHandler)
+        clickWindow(bot, slot).catch(err => {
+            log(`Error clicking expired auction slot: ${err}`, 'error')
+            clearTimeout(timeout)
+            bot.removeListener('windowOpen', windowHandler)
+            bot.state = null
+            resolve(false)
         })
-        clickWindow(bot, slot).catch(err => log(`Error clicking expired auction slot: ${err}`, 'error'))
     })
 }
 
@@ -289,19 +309,16 @@ export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
             return
         }
 
-        bot.state = 'claiming'
-        bot.chat('/bz')
+        let clickedManageOrders = false
 
         let timeout = setTimeout(() => {
             log('Bazaar order claiming timed out. Removing lock')
+            bot.removeListener('windowOpen', windowHandler)
             bot.state = null
-            bot.removeAllListeners('windowOpen')
             resolve(false)
         }, 15000)
 
-        let clickedManageOrders = false
-
-        bot.on('windowOpen', async (window) => {
+        const windowHandler = async (window) => {
             await sleep(300)
             let title = getWindowTitle(window)
             log('Bazaar claiming window: ' + title, 'debug')
@@ -334,7 +351,7 @@ export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
                     }
                 }
 
-                bot.removeAllListeners('windowOpen')
+                bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 clearTimeout(timeout)
                 if (claimedAny) {
@@ -344,7 +361,11 @@ export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
                 }
                 resolve(claimedAny)
             }
-        })
+        }
+
+        bot.state = 'claiming'
+        bot.on('windowOpen', windowHandler)
+        bot.chat('/bz')
     })
 }
 

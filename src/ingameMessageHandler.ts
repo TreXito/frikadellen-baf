@@ -311,8 +311,8 @@ export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
                         await clickWindow(bot, i)
                         claimedAny = true
                         await sleep(500)
-                        // Click again for partial claims
-                        try { await clickWindow(bot, i) } catch {}
+                        // Click again for partial claims (may fail if already fully claimed)
+                        try { await clickWindow(bot, i) } catch (e) { /* already fully claimed */ }
                         await sleep(500)
                     }
                 }

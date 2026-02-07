@@ -267,14 +267,29 @@ function claimExpiredAuction(bot, slot) {
             if (title == 'BIN Auction View') {
                 log('Clicking slot 31, claiming expired auction')
                 clickWindow(bot, 31).catch(err => log(`Error claiming expired auction: ${err}`, 'error'))
+                clearTimeout(timeout)
                 bot.removeListener('windowOpen', windowHandler)
                 bot.state = null
                 bot.closeWindow(window)
                 resolve(true)
             }
         }
+        
+        const timeout = setTimeout(() => {
+            log('Claiming expired auction timed out. Removing listener')
+            bot.removeListener('windowOpen', windowHandler)
+            bot.state = null
+            resolve(false)
+        }, 5000)
+        
         bot.on('windowOpen', windowHandler)
-        clickWindow(bot, slot).catch(err => log(`Error clicking expired auction slot: ${err}`, 'error'))
+        clickWindow(bot, slot).catch(err => {
+            log(`Error clicking expired auction slot: ${err}`, 'error')
+            clearTimeout(timeout)
+            bot.removeListener('windowOpen', windowHandler)
+            bot.state = null
+            resolve(false)
+        })
     })
 }
 

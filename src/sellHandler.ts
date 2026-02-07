@@ -30,18 +30,19 @@ export async function onWebsocketCreateAuction(bot: MyBot, data: SellData) {
 }
 
 async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
-    let timeout = setTimeout(() => {
-        log('Seems something went wrong while selling. Removing lock', 'warn')
-        bot.state = null
-        bot.removeAllListeners('windowOpen')
-    }, 10000)
-
     let handler = function (window: any) {
         sellHandler(data, bot, window, ws, () => {
             clearTimeout(timeout)
-            bot.removeAllListeners('windowOpen')
+            bot.removeListener('windowOpen', handler)
         })
     }
+    
+    let timeout = setTimeout(() => {
+        log('Seems something went wrong while selling. Removing lock', 'warn')
+        bot.removeListener('windowOpen', handler)
+        bot.state = null
+    }, 10000)
+
     bot.on('windowOpen', handler)
     bot.chat('/ah')
 }

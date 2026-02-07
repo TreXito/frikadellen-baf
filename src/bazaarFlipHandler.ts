@@ -10,18 +10,20 @@ const OPERATION_TIMEOUT_MS = 20000
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
- * This handles the structured JSON data sent by the server when using `/cofl getbazaarflips`
+ * This handles the structured JSON data sent by the server via bzRecommend messages
  * 
- * Expected JSON format examples:
- * - { itemName: "Cindershade", amount: 4, pricePerUnit: 265000, totalPrice: 1060000, isBuyOrder: true }
- * - { item: "Cindershade", count: 4, price: 265000, type: "buy" }
+ * The actual bzRecommend format from Coflnet:
+ * { itemName: "Flawed Peridot Gemstone", itemTag: "FLAWED_PERIDOT_GEM", price: 3054.1, amount: 64, isSell: false }
+ * Where 'price' is the TOTAL price for the order (not per unit)
+ * 
+ * Also supports:
+ * - { itemName: "Item", amount: 4, pricePerUnit: 265000, totalPrice: 1060000, isBuyOrder: true }
  * 
  * @param data The JSON data from the websocket
  * @returns Parsed recommendation or null if data is invalid
  */
 export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null {
     try {
-        // Handle different possible JSON formats from the server
         let itemName: string
         let amount: number
         let pricePerUnit: number
@@ -42,18 +44,27 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
             return null
         }
 
-        // Try to extract price per unit (could be 'pricePerUnit', 'price', 'unitPrice')
-        pricePerUnit = parseFloat(data.pricePerUnit || data.price || data.unitPrice)
-        if (!pricePerUnit || isNaN(pricePerUnit)) {
-            log('Missing or invalid price in bazaar flip JSON data', 'error')
-            return null
-        }
-
-        // Total price might be provided or calculated
-        if (data.totalPrice) {
-            totalPrice = parseFloat(data.totalPrice)
+        // Extract price - handle different field names and meanings
+        // 'pricePerUnit' / 'unitPrice' are per-unit prices
+        // 'price' from bzRecommend is the TOTAL price for the whole order
+        if (data.pricePerUnit || data.unitPrice) {
+            pricePerUnit = parseFloat(data.pricePerUnit || data.unitPrice)
+            if (!pricePerUnit || isNaN(pricePerUnit)) {
+                log('Missing or invalid price in bazaar flip JSON data', 'error')
+                return null
+            }
+            totalPrice = data.totalPrice ? parseFloat(data.totalPrice) : pricePerUnit * amount
+        } else if (data.price) {
+            // 'price' field is the TOTAL price (e.g., bzRecommend sends total)
+            totalPrice = parseFloat(data.price)
+            if (!totalPrice || isNaN(totalPrice)) {
+                log('Missing or invalid price in bazaar flip JSON data', 'error')
+                return null
+            }
+            pricePerUnit = totalPrice / amount
         } else {
-            totalPrice = pricePerUnit * amount
+            log('Missing price in bazaar flip JSON data', 'error')
+            return null
         }
 
         // Determine if it's a buy or sell order

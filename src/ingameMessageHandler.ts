@@ -65,7 +65,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
             }
             // Forward all bazaar messages to the websocket so Coflnet knows about
             // order placements, fills, and claims (if not already sent by privacy regex)
-            if (text.includes('[Bazaar]') && !(bot.privacySettings && bot.privacySettings.chatRegex.test(text))) {
+            if (text.includes('[Bazaar]') && !(bot.privacySettings?.chatRegex?.test(text))) {
                 wss.send(
                     JSON.stringify({
                         type: 'chatBatch',

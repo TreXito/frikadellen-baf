@@ -359,8 +359,10 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await sleep(200)
                     await clickWindow(bot, 16)
                 }
-                // Confirm screen - detected by title or as the next step after price entry
-                else if (title.includes('Confirm') || currentStep === 'setPrice') {
+                // Confirm screen - detected by title or confirm button presence after price step
+                else if (title.includes('Confirm') ||
+                         (currentStep === 'setPrice' &&
+                          findSlotWithName(window, 'Cancel') !== -1)) {
                     log('Confirming bazaar order', 'debug')
                     currentStep = 'confirm'
                     

@@ -159,7 +159,10 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         if (bot.state === 'purchasing') {
             log("Resetting 'bot.state === purchasing' lock")
             bot.state = null
-            bot._client.removeAllListeners('open_window')
+            if ((bot as any)._bafOpenWindowHandler) {
+                bot._client.removeListener('open_window', (bot as any)._bafOpenWindowHandler)
+                ;(bot as any)._bafOpenWindowHandler = null
+            }
         }
     }, 10000)
     let isBed = flip.purchaseAt.getTime() > new Date().getTime()
@@ -187,10 +190,12 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
         let handledBinAuction = false
         let handledConfirm = false
         
-        // Remove any existing listeners to prevent stacking
-        bot._client.removeAllListeners('open_window')
+        // Remove only our previous handler to prevent stacking (not mineflayer's internal handlers)
+        if ((bot as any)._bafOpenWindowHandler) {
+            bot._client.removeListener('open_window', (bot as any)._bafOpenWindowHandler)
+        }
         
-        bot._client.on('open_window', async (window) => {
+        const openWindowHandler = async (window) => {
             const windowID = window.windowId
             const windowName = window.windowTitle
             log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
@@ -339,14 +344,19 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     }
                 }
                 
-                bot._client.removeAllListeners('open_window')
+                bot._client.removeListener('open_window', openWindowHandler)
+                ;(bot as any)._bafOpenWindowHandler = null
                 bot.state = null
                 resolve()
                 return
             }
             
             await sleep(WINDOW_INTERACTION_DELAY)
-        })
+        }
+        
+        // Store handler reference for proper cleanup
+        ;(bot as any)._bafOpenWindowHandler = openWindowHandler
+        bot._client.on('open_window', openWindowHandler)
     })
 }
 

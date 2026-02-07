@@ -189,7 +189,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
         
         bot._client.on('open_window', async (window) => {
             const windowID = window.windowId
-            const nextWindowID = windowID === 100 ? 1 : windowID + 1
             const windowName = window.windowTitle
             log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
             
@@ -233,9 +232,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     clickSlot(bot, 31, windowID, 371)
                     clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
                     
-                    // If skip should be used, click skip button in next window
+                    // If skip should be used, set flag to skip in next window
                     if (useSkipOnFlip) {
-                        clickSlot(bot, 11, nextWindowID, 159)
                         recentlySkipped = true
                         logSkipReason(flip, profit)
                         return
@@ -330,6 +328,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                         await sleep(CONFIRM_RETRY_DELAY)
                         attempts++
+                    }
+                } else {
+                    // Close the window to cancel the purchase when skipping
+                    if (bot.currentWindow) {
+                        bot.closeWindow(bot.currentWindow)
                     }
                 }
                 

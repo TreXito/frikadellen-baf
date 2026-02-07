@@ -353,9 +353,14 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                                          findSlotWithName(window, 'Create Sell Offer') !== -1
                     
                     if (hasOrderButton) {
-                        // Item detail page - click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
+                        // Item detail page - find and click the Create Buy Order / Create Sell Offer button
                         const buttonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-                        const slotToClick = isBuyOrder ? 15 : 16
+                        const slotToClick = findSlotWithName(window, buttonName)
+                        
+                        if (slotToClick === -1) {
+                            throw new Error(`Could not find "${buttonName}" button in bazaar item detail page`)
+                        }
+                        
                         log(`[BazaarDebug] On item detail page, clicking "${buttonName}" (slot ${slotToClick})`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
                         currentStep = 'selectOrderType'
@@ -443,13 +448,23 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 else if (title.includes('Confirm') ||
                          (currentStep === 'setPrice' &&
                           findSlotWithName(window, 'Cancel') !== -1)) {
-                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot 13`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b13`)
+                    // Find the confirm button dynamically - it's usually the green wool or similar
+                    // Look for "Confirm" in the slot name
+                    let confirmSlot = findSlotWithName(window, 'Confirm')
+                    if (confirmSlot === -1) {
+                        // Fallback: try to find by checking for common confirm button items
+                        // Slot 13 is the traditional center slot in many GUIs
+                        confirmSlot = 13
+                        log(`[BazaarDebug] Could not find Confirm button by name, using fallback slot ${confirmSlot}`, 'warn')
+                    }
+                    
+                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot ${confirmSlot}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b${confirmSlot}`)
                     currentStep = 'confirm'
                     
-                    // Click the confirm button (slot 13)
+                    // Click the confirm button
                     await sleep(200)
-                    await clickWindow(bot, 13)
+                    await clickWindow(bot, confirmSlot)
                     
                     // Order placed successfully
                     log(`[BazaarDebug] Order placement complete, cleaning up listener`, 'info')

@@ -19,6 +19,7 @@ let config: Config = {
     ENABLE_AH_FLIPS: true,
     WEB_GUI_PORT: 8080,
     WEB_GUI_PASSWORD: '',
+    AUCTION_DURATION_HOURS: 24,
     SKIP: {
         ALWAYS: false,
         MIN_PROFIT: 1000000,
@@ -123,6 +124,17 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             bedSpamDelayIndex,
             0,
             '# Delay in milliseconds between each click when BED_SPAM is enabled. Lower values = faster clicking (minimum: 1ms)'
+        )
+    }
+
+    // Add comments for AUCTION_DURATION_HOURS
+    let auctionDurationLineIndex = lines.findIndex(l => l.startsWith('AUCTION_DURATION_HOURS = '))
+    if (auctionDurationLineIndex !== -1) {
+        lines.splice(
+            auctionDurationLineIndex,
+            0,
+            '',
+            '# Duration in hours for listing auctions on the Auction House (default: 24 hours)'
         )
     }
 

@@ -26,6 +26,7 @@ interface Config {
     ENABLE_AH_FLIPS: boolean
     WEB_GUI_PORT: number
     WEB_GUI_PASSWORD: string
+    AUCTION_DURATION_HOURS: number
     SKIP: SkipSettings
     PROXY_ENABLED?: boolean
     PROXY?: string

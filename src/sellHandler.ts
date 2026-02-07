@@ -1,5 +1,6 @@
 import { MyBot, SellData } from '../types/autobuy'
 import { getCurrentWebsocket } from './BAF'
+import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes } from './utils'
 import { sendWebhookItemListed } from './webhookHandler'
@@ -48,9 +49,16 @@ async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
 // Store the reason if the last sell attempt failed
 // If it happens again, send a error message to the backend
 let previousError
+
+// Default auction duration in hours
+const DEFAULT_AUCTION_DURATION_HOURS = 24
+
 async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket, removeEventListenerCallback: Function) {
     let title = getWindowTitle(sellWindow)
     log(title)
+    
+    // Get configured auction duration once per handler invocation
+    const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || DEFAULT_AUCTION_DURATION_HOURS
     if (title.toString().includes('Auction House')) {
         clickWindow(bot, 15).catch(err => log(`Error clicking auction house slot: ${err}`, 'error'))
     }
@@ -182,7 +190,8 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         }
     }
     if (title == 'Auction Duration') {
-        setAuctionDuration(bot, data.duration).then(() => {
+        // Use configured auction duration instead of backend-provided duration
+        setAuctionDuration(bot, configuredDuration).then(() => {
             durationSet = true
         })
         clickWindow(bot, 16).catch(err => log(`Error clicking duration confirm slot: ${err}`, 'error'))
@@ -197,7 +206,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         durationSet = false
         bot.state = null
         printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${data.itemName} §ffor ${numberWithThousandsSeparators(data.price)} coins`)
-        sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), data.duration)
+        sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), configuredDuration)
         bot.closeWindow(sellWindow)
     }
 }

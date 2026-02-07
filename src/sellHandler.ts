@@ -1,5 +1,6 @@
 import { MyBot, SellData } from '../types/autobuy'
 import { getCurrentWebsocket } from './BAF'
+import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes } from './utils'
 import { sendWebhookItemListed } from './webhookHandler'
@@ -182,7 +183,9 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         }
     }
     if (title == 'Auction Duration') {
-        setAuctionDuration(bot, data.duration).then(() => {
+        // Use configured auction duration instead of backend-provided duration
+        const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || 24
+        setAuctionDuration(bot, configuredDuration).then(() => {
             durationSet = true
         })
         clickWindow(bot, 16).catch(err => log(`Error clicking duration confirm slot: ${err}`, 'error'))
@@ -196,8 +199,9 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         setPrice = false
         durationSet = false
         bot.state = null
+        const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || 24
         printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${data.itemName} §ffor ${numberWithThousandsSeparators(data.price)} coins`)
-        sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), data.duration)
+        sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), configuredDuration)
         bot.closeWindow(sellWindow)
     }
 }

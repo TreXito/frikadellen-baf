@@ -143,6 +143,19 @@ function setupBotHandlers() {
     bot.once('login', () => {
         log(`Logged in as ${bot.username}`)
         
+        // Log configuration for diagnostics
+        const bazaarFlipsEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
+        const ahFlipsEnabled = getConfigProperty('ENABLE_AH_FLIPS')
+        log(`[Config] Bazaar Flips: ${bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
+        log(`[Config] AH Flips: ${ahFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
+        
+        // Format status message with colors
+        const bzColor = bazaarFlipsEnabled ? 'a' : 'c'
+        const bzStatus = bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'
+        const ahColor = ahFlipsEnabled ? 'a' : 'c'
+        const ahStatus = ahFlipsEnabled ? 'ENABLED' : 'DISABLED'
+        printMcChatToConsole(`§f[§4BAF§f]: §7Configuration - Bazaar Flips: §${bzColor}${bzStatus}§7, AH Flips: §${ahColor}${ahStatus}`)
+        
         // Start web GUI if port is configured
         const webGuiPort = getConfigProperty('WEB_GUI_PORT')
         if (webGuiPort) {
@@ -252,6 +265,10 @@ function connectWebsocket(url: string = getConfigProperty('WEBSOCKET_URL')) {
 async function onWebsocketMessage(msg) {
     let message = JSON.parse(msg.data)
     let data = JSON.parse(message.data)
+    
+    // Log ALL message types for diagnostics (helps identify if bazaar flip messages are being sent)
+    // This is especially useful for debugging bazaar flip issues
+    log(`[WebSocket] Received message type: ${message.type}`, 'debug')
 
     switch (message.type) {
         case 'flip':
@@ -275,7 +292,8 @@ async function onWebsocketMessage(msg) {
                 // Check if this is a bazaar flip recommendation
                 const bazaarFlip = parseBazaarFlipMessage(da.text)
                 if (bazaarFlip) {
-                    log('Detected bazaar flip recommendation', 'info')
+                    log('[BazaarDebug] Detected bazaar flip recommendation from chat message', 'info')
+                    log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
                     handleBazaarFlipRecommendation(bot, bazaarFlip)
                 }
                 
@@ -311,7 +329,8 @@ async function onWebsocketMessage(msg) {
             // Check if this is a bazaar flip recommendation
             const bazaarFlip = parseBazaarFlipMessage(data.text)
             if (bazaarFlip) {
-                log('Detected bazaar flip recommendation', 'info')
+                log('[BazaarDebug] Detected bazaar flip recommendation from writeToChat message', 'info')
+                log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
                 handleBazaarFlipRecommendation(bot, bazaarFlip)
             }
             
@@ -391,10 +410,12 @@ async function onWebsocketMessage(msg) {
             }
             break
         case 'getbazaarflips':
-            log(message, 'debug')
+            log(`[BazaarDebug] Received getbazaarflips response`, 'info')
+            log(`[BazaarDebug] Response data: ${JSON.stringify(data)}`, 'debug')
             // Handle response from /cofl getbazaarflips command
             // Data could be a single recommendation or an array of recommendations
             if (Array.isArray(data)) {
+                log(`[BazaarDebug] Processing ${data.length} bazaar flip recommendations`, 'info')
                 // Handle multiple recommendations
                 for (let recommendation of data) {
                     const parsed = parseBazaarFlipJson(recommendation)
@@ -403,11 +424,14 @@ async function onWebsocketMessage(msg) {
                     }
                 }
             } else if (data && typeof data === 'object') {
+                log(`[BazaarDebug] Processing single bazaar flip recommendation`, 'info')
                 // Handle single recommendation
                 const parsed = parseBazaarFlipJson(data)
                 if (parsed) {
                     handleBazaarFlipRecommendation(bot, parsed)
                 }
+            } else {
+                log(`[BazaarDebug] ERROR: Unexpected data format in getbazaarflips response: ${typeof data}`, 'error')
             }
             break
         default:

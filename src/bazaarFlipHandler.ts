@@ -226,16 +226,26 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     bot.state = 'purchasing'
     let operationTimeout = setTimeout(() => {
         if (bot.state === 'purchasing') {
-            log("[BazaarDebug] Resetting 'bot.state === purchasing' lock in bazaar flip (timeout)")
+            log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
+            log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
+            printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
             bot.state = null
             bot.removeAllListeners('windowOpen')
         }
     }, OPERATION_TIMEOUT_MS)
 
     try {
-        const { itemName, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
+        const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
         const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
+        // Use itemTag if available (internal ID like "FLAWED_PERIDOT_GEM"), otherwise fall back to itemName
+        // The /bz command works better with internal IDs especially for items with spaces in names
+        const searchTerm = itemTag || itemName
+        if (!itemTag) {
+            log(`[BazaarDebug] WARNING: itemTag not provided, using itemName "${itemName}" as fallback`, 'warn')
+            log(`[BazaarDebug] This may cause issues if the item name contains spaces or special characters`, 'warn')
+        }
+        
         printMcChatToConsole(
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
@@ -251,9 +261,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         await sleep(100)
         
         // Open bazaar for the item - the listener is now ready to catch this event
-        log(`[BazaarDebug] Opening bazaar with command: /bz ${itemName}`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${itemName}`)
-        bot.chat(`/bz ${itemName}`)
+        log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
+        log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
+        bot.chat(`/bz ${searchTerm}`)
 
         await orderPromise
         
@@ -346,9 +357,14 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                                          findSlotWithName(window, 'Create Sell Offer') !== -1
                     
                     if (hasOrderButton) {
-                        // Item detail page - click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
+                        // Item detail page - find and click the Create Buy Order / Create Sell Offer button
                         const buttonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-                        const slotToClick = isBuyOrder ? 15 : 16
+                        const slotToClick = findSlotWithName(window, buttonName)
+                        
+                        if (slotToClick === -1) {
+                            throw new Error(`Could not find "${buttonName}" button in bazaar item detail page`)
+                        }
+                        
                         log(`[BazaarDebug] On item detail page, clicking "${buttonName}" (slot ${slotToClick})`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
                         currentStep = 'selectOrderType'
@@ -436,13 +452,21 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 else if (title.includes('Confirm') ||
                          (currentStep === 'setPrice' &&
                           findSlotWithName(window, 'Cancel') !== -1)) {
-                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot 13`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b13`)
+                    // Find the confirm button dynamically - it's usually labeled "Confirm"
+                    let confirmSlot = findSlotWithName(window, 'Confirm')
+                    if (confirmSlot === -1) {
+                        // Fallback: slot 13 is the traditional center slot in confirmation GUIs
+                        confirmSlot = 13
+                        log(`[BazaarDebug] Could not find Confirm button by name, using fallback slot ${confirmSlot}`, 'warn')
+                    }
+                    
+                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot ${confirmSlot}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b${confirmSlot}`)
                     currentStep = 'confirm'
                     
-                    // Click the confirm button (slot 13)
+                    // Click the confirm button
                     await sleep(200)
-                    await clickWindow(bot, 13)
+                    await clickWindow(bot, confirmSlot)
                     
                     // Order placed successfully
                     log(`[BazaarDebug] Order placement complete, cleaning up listener`, 'info')

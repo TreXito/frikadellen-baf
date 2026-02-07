@@ -1,8 +1,7 @@
 export async function clickWindow(bot, slot: number) {
     try {
         // Import log function inline to avoid circular dependencies
-        const { log } = require('./logger')
-        const { printMcChatToConsole } = require('./logger')
+        const { log, printMcChatToConsole } = require('./logger')
         
         // Get item name at this slot for better debugging
         let itemName = 'Unknown'

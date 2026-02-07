@@ -7,6 +7,7 @@ import { areBazaarFlipsPaused } from './bazaarFlipPauser'
 // Constants
 const RETRY_DELAY_MS = 1100
 const OPERATION_TIMEOUT_MS = 20000
+const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -216,7 +217,7 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     log(`[BazaarDebug] =====================================`, 'info')
     
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-    printMcChatToConsole(`§f[§4BAF§f]: §e${recommendation.isBuyOrder ? '📥 BUY' : '📤 SELL'} ORDER §7- §e${recommendation.itemName}`)
+    printMcChatToConsole(`§f[§4BAF§f]: §e${recommendation.isBuyOrder ? 'BUY' : 'SELL'} ORDER §7- §e${recommendation.itemName}`)
     printMcChatToConsole(`§f[§4BAF§f]: §7Amount: §a${recommendation.amount}x`)
     printMcChatToConsole(`§f[§4BAF§f]: §7Price/unit: §6${recommendation.pricePerUnit.toFixed(1)} coins`)
     printMcChatToConsole(`§f[§4BAF§f]: §7Total: §6${recommendation.totalPrice ? recommendation.totalPrice.toFixed(0) : (recommendation.pricePerUnit * recommendation.amount).toFixed(0)} coins`)
@@ -316,14 +317,14 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 }
             }
             
-            // Log up to 15 important slots to avoid spam
-            const slotsToLog = importantSlots.slice(0, 15)
+            // Log up to MAX_LOGGED_SLOTS important slots to avoid spam
+            const slotsToLog = importantSlots.slice(0, MAX_LOGGED_SLOTS)
             slotsToLog.forEach(({ slot, name }) => {
                 log(`[BazaarDebug]   Slot ${slot}: ${name}`, 'info')
             })
             
-            if (importantSlots.length > 15) {
-                log(`[BazaarDebug]   ... and ${importantSlots.length - 15} more slots`, 'info')
+            if (importantSlots.length > MAX_LOGGED_SLOTS) {
+                log(`[BazaarDebug]   ... and ${importantSlots.length - MAX_LOGGED_SLOTS} more slots`, 'info')
             }
             
             log(`[BazaarDebug] === End Window Slots (${importantSlots.length} items) ===`, 'info')

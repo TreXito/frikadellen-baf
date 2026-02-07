@@ -212,6 +212,7 @@ Every click shows the slot number, item name, and action:
 [BazaarDebug] Clicking slot 15 | Item: Create Buy Order | Window: Bazaar ➜ Flawed Peridot Gemstone
 [BAF]: [Click] Slot 15 | Item: Create Buy Order
 ```
+(Note: In-game chat messages include Minecraft color codes like `§f`, `§4`, etc. which are omitted here for readability)
 
 #### 6. **Sign Input**
 When entering amounts or prices:

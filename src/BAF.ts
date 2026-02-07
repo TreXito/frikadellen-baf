@@ -148,7 +148,13 @@ function setupBotHandlers() {
         const ahFlipsEnabled = getConfigProperty('ENABLE_AH_FLIPS')
         log(`[Config] Bazaar Flips: ${bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
         log(`[Config] AH Flips: ${ahFlipsEnabled ? 'ENABLED' : 'DISABLED'}`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7Configuration - Bazaar Flips: §${bazaarFlipsEnabled ? 'a' : 'c'}${bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'}§7, AH Flips: §${ahFlipsEnabled ? 'a' : 'c'}${ahFlipsEnabled ? 'ENABLED' : 'DISABLED'}`)
+        
+        // Format status message with colors
+        const bzColor = bazaarFlipsEnabled ? 'a' : 'c'
+        const bzStatus = bazaarFlipsEnabled ? 'ENABLED' : 'DISABLED'
+        const ahColor = ahFlipsEnabled ? 'a' : 'c'
+        const ahStatus = ahFlipsEnabled ? 'ENABLED' : 'DISABLED'
+        printMcChatToConsole(`§f[§4BAF§f]: §7Configuration - Bazaar Flips: §${bzColor}${bzStatus}§7, AH Flips: §${ahColor}${ahStatus}`)
         
         // Start web GUI if port is configured
         const webGuiPort = getConfigProperty('WEB_GUI_PORT')

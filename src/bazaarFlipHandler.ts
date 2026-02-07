@@ -241,6 +241,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         // Use itemTag if available (internal ID like "FLAWED_PERIDOT_GEM"), otherwise fall back to itemName
         // The /bz command works better with internal IDs especially for items with spaces in names
         const searchTerm = itemTag || itemName
+        if (!itemTag) {
+            log(`[BazaarDebug] WARNING: itemTag not provided, using itemName "${itemName}" as fallback`, 'warn')
+            log(`[BazaarDebug] This may cause issues if the item name contains spaces or special characters`, 'warn')
+        }
         
         printMcChatToConsole(
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
@@ -448,12 +452,10 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 else if (title.includes('Confirm') ||
                          (currentStep === 'setPrice' &&
                           findSlotWithName(window, 'Cancel') !== -1)) {
-                    // Find the confirm button dynamically - it's usually the green wool or similar
-                    // Look for "Confirm" in the slot name
+                    // Find the confirm button dynamically - it's usually labeled "Confirm"
                     let confirmSlot = findSlotWithName(window, 'Confirm')
                     if (confirmSlot === -1) {
-                        // Fallback: try to find by checking for common confirm button items
-                        // Slot 13 is the traditional center slot in many GUIs
+                        // Fallback: slot 13 is the traditional center slot in confirmation GUIs
                         confirmSlot = 13
                         log(`[BazaarDebug] Could not find Confirm button by name, using fallback slot ${confirmSlot}`, 'warn')
                     }

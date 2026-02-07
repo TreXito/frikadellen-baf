@@ -24,6 +24,7 @@ const OPERATION_TIMEOUT_MS = 20000
  */
 export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null {
     try {
+        log(`Parsing bazaar flip JSON: ${JSON.stringify(data)}`, 'debug')
         let itemName: string
         let amount: number
         let pricePerUnit: number
@@ -81,6 +82,8 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
             // Default to buy order
             isBuyOrder = true
         }
+
+        log(`Parsed bazaar flip: ${amount}x ${itemName} @ ${pricePerUnit.toFixed(1)} (total: ${totalPrice?.toFixed(1)}) [${isBuyOrder ? 'BUY' : 'SELL'}]`, 'debug')
 
         return {
             itemName,
@@ -179,22 +182,25 @@ export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendatio
 export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation: BazaarFlipRecommendation) {
     // Check if bazaar flips are enabled in config
     if (!getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        log('Bazaar flips are disabled in config', 'debug')
+        log('Bazaar flips are disabled in config', 'warn')
         return
     }
 
     // Check if bazaar flips are paused due to incoming AH flip
     if (areBazaarFlipsPaused()) {
-        log('Bazaar flips are paused due to incoming AH flip', 'debug')
+        log('Bazaar flips are paused due to incoming AH flip', 'warn')
         return
     }
 
     if (bot.state) {
+        log(`Bot is busy (state: ${bot.state}), will retry in ${RETRY_DELAY_MS}ms`, 'info')
         setTimeout(() => {
             handleBazaarFlipRecommendation(bot, recommendation)
         }, RETRY_DELAY_MS)
         return
     }
+
+    log(`Starting bazaar flip order placement for ${recommendation.amount}x ${recommendation.itemName}`, 'info')
 
     bot.state = 'purchasing'
     let operationTimeout = setTimeout(() => {

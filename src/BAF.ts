@@ -371,9 +371,10 @@ async function onWebsocketMessage(msg) {
             }
             break
         case 'bzRecommend':
-            log(message, 'debug')
+            log(`Received bzRecommend message: ${JSON.stringify(data)}`, 'info')
             const bzRecommendFlip = parseBazaarFlipJson(data)
             if (bzRecommendFlip) {
+                log(`Successfully parsed bzRecommend: ${bzRecommendFlip.amount}x ${bzRecommendFlip.itemName} at ${bzRecommendFlip.pricePerUnit.toFixed(1)} coins (${bzRecommendFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
                 handleBazaarFlipRecommendation(bot, bzRecommendFlip)
             } else {
                 log(`Failed to parse bzRecommend data: ${JSON.stringify(data)}`, 'error')

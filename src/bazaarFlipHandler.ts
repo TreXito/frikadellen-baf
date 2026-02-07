@@ -57,9 +57,11 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
         }
 
         // Determine if it's a buy or sell order
-        // Check 'isBuyOrder', 'type', or 'orderType' fields
+        // Check 'isBuyOrder', 'isSell', 'type', or 'orderType' fields
         if (typeof data.isBuyOrder === 'boolean') {
             isBuyOrder = data.isBuyOrder
+        } else if (typeof data.isSell === 'boolean') {
+            isBuyOrder = !data.isSell
         } else if (data.type) {
             isBuyOrder = data.type.toLowerCase() === 'buy'
         } else if (data.orderType) {
@@ -71,6 +73,7 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
 
         return {
             itemName,
+            itemTag: data.itemTag || undefined,
             amount,
             pricePerUnit,
             totalPrice,
@@ -202,7 +205,7 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         // Set up the listener BEFORE opening the bazaar to catch the first window
         // placeBazaarOrder() synchronously registers the windowOpen event listener,
         // then returns a Promise that resolves when the order completes
-        const orderPromise = placeBazaarOrder(bot, amount, pricePerUnit, isBuyOrder)
+        const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
         
         // Small delay to ensure Node.js event loop has processed the listener registration
         // This guarantees the listener is active before the window opens
@@ -227,18 +230,20 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
  * Place a bazaar order by navigating through the Hypixel bazaar interface
  * 
  * The bazaar interface has multiple steps:
- * 1. Main bazaar view for the item (title: "Bazaar ➜ ItemName")
- * 2. Amount selection (title: "How many do you want to...")
- * 3. Price selection (title: "How much do you want to pay/be paid")
- * 4. Confirmation (title: "Confirm...")
+ * 1. Search results (title: "Bazaar ➜ ..." when opened via /bz <item>)
+ * 2. Item detail view (title: "Bazaar ➜ ItemName") with Create Buy Order / Create Sell Offer
+ * 3. Amount selection - buy orders only (title: "How many do you want to...")
+ * 4. Price selection (title: "How much do you want to pay/be paid")
+ * 5. Confirmation (title: "Confirm...")
  * 
  * @param bot The Minecraft bot instance
+ * @param itemName Name of the item (used to find it in search results)
  * @param amount Number of items to buy/sell
  * @param pricePerUnit Price per item unit
  * @param isBuyOrder True for buy order, false for sell offer
  * @returns Promise that resolves when the order is placed
  */
-function placeBazaarOrder(bot: MyBot, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
+function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let currentStep = 'initial'
         
@@ -248,50 +253,106 @@ function placeBazaarOrder(bot: MyBot, amount: number, pricePerUnit: number, isBu
             log(`Bazaar window opened: ${title}, current step: ${currentStep}`, 'debug')
 
             try {
-                // Step 1: In the main bazaar item view
-                if (title.includes('Bazaar ➜')) {
-                    log(`Opening ${isBuyOrder ? 'buy' : 'sell'} order interface`, 'debug')
-                    currentStep = 'selectOrderType'
+                // Handle bazaar pages (search results or item detail)
+                if (title.includes('Bazaar') && currentStep !== 'selectOrderType') {
+                    // Check if this is the item detail page by looking for order creation buttons
+                    let hasOrderButton = false
+                    for (let i = 0; i < window.slots.length; i++) {
+                        const slot = window.slots[i]
+                        const name = removeMinecraftColorCodes(
+                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                        )
+                        if (name.includes('Create Buy Order') || name.includes('Create Sell Offer')) {
+                            hasOrderButton = true
+                            break
+                        }
+                    }
                     
-                    // Click on Create Buy Order (slot 19) or Create Sell Offer (slot 20)
-                    const slotToClick = isBuyOrder ? 19 : 20
-                    await sleep(200)
-                    await clickWindow(bot, slotToClick)
+                    if (hasOrderButton) {
+                        // Item detail page - click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
+                        log(`On item detail page, clicking ${isBuyOrder ? 'Create Buy Order (slot 15)' : 'Create Sell Offer (slot 16)'}`, 'debug')
+                        currentStep = 'selectOrderType'
+                        const slotToClick = isBuyOrder ? 15 : 16
+                        await sleep(200)
+                        await clickWindow(bot, slotToClick)
+                    } else if (currentStep === 'initial') {
+                        // Search results page - find and click the matching item
+                        log('On search results page, looking for item', 'debug')
+                        currentStep = 'searchResults'
+                        
+                        let itemSlot = -1
+                        for (let i = 0; i < window.slots.length; i++) {
+                            const slot = window.slots[i]
+                            const name = removeMinecraftColorCodes(
+                                (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                            )
+                            if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
+                                itemSlot = i
+                                break
+                            }
+                        }
+                        
+                        if (itemSlot !== -1) {
+                            log(`Found item at slot ${itemSlot}`, 'debug')
+                        } else {
+                            // Fallback to slot 11 (first search result position)
+                            itemSlot = 11
+                            log(`Item not found by name, using fallback slot ${itemSlot}`, 'debug')
+                        }
+                        await sleep(200)
+                        await clickWindow(bot, itemSlot)
+                    }
                 }
-                // Step 2: Setting the amount
+                // Step: Setting the amount (buy orders only, sell offers skip this)
                 else if (title.includes('How many do you want to')) {
                     log(`Setting amount to ${amount}`, 'debug')
                     currentStep = 'setAmount'
                     
-                    // Click to set custom amount (typically slot 13)
-                    await sleep(200)
-                    await clickWindow(bot, 13)
+                    // Register sign handler BEFORE clicking to avoid race condition
+                    bot._client.once('open_sign_entity', ({ location }) => {
+                        log(`Sign opened for amount, writing: ${amount}`, 'debug')
+                        bot._client.write('update_sign', {
+                            location: { x: location.z, y: location.y, z: location.z },
+                            text1: `\"${amount.toString()}\"`,
+                            text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
+                            text3: '{"italic":false,"extra":[""],"text":""}',
+                            text4: '{"italic":false,"extra":[""],"text":""}'
+                        })
+                    })
                     
-                    // Type the amount in chat
-                    await sleep(300)
-                    bot.chat(amount.toString())
+                    // Click Custom Amount (slot 16)
+                    await sleep(200)
+                    await clickWindow(bot, 16)
                 }
-                // Step 3: Setting the price
+                // Step: Setting the price
                 else if (title.includes('How much do you want to pay') || title.includes('How much do you want to be paid')) {
                     log(`Setting price per unit to ${pricePerUnit}`, 'debug')
                     currentStep = 'setPrice'
                     
-                    // Click to set custom price (typically slot 13)
-                    await sleep(200)
-                    await clickWindow(bot, 13)
+                    // Register sign handler BEFORE clicking to avoid race condition
+                    bot._client.once('open_sign_entity', ({ location }) => {
+                        log(`Sign opened for price, writing: ${pricePerUnit.toFixed(1)}`, 'debug')
+                        bot._client.write('update_sign', {
+                            location: { x: location.z, y: location.y, z: location.z },
+                            text1: `\"${pricePerUnit.toFixed(1)}\"`,
+                            text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
+                            text3: '{"italic":false,"extra":[""],"text":""}',
+                            text4: '{"italic":false,"extra":[""],"text":""}'
+                        })
+                    })
                     
-                    // Type the price in chat
-                    await sleep(300)
-                    bot.chat(pricePerUnit.toFixed(1))
+                    // Click Custom Price (slot 16)
+                    await sleep(200)
+                    await clickWindow(bot, 16)
                 }
-                // Step 4: Confirming the order
+                // Step: Confirming the order
                 else if (title.includes('Confirm')) {
                     log('Confirming bazaar order', 'debug')
                     currentStep = 'confirm'
                     
-                    // Click the confirm button (typically slot 11)
+                    // Click the confirm button (slot 13)
                     await sleep(200)
-                    await clickWindow(bot, 11)
+                    await clickWindow(bot, 13)
                     
                     // Order placed successfully
                     bot.removeAllListeners('windowOpen')

@@ -1,6 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, sleep } from './utils'
+import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { ChatMessage } from 'prismarine-chat'
 import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
@@ -62,6 +62,11 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                         data: JSON.stringify([text])
                     })
                 )
+            }
+            // Detect bazaar order filled messages and claim them
+            if (text.includes('[Bazaar]') && text.includes('was filled!')) {
+                log('Bazaar order filled, attempting to claim', 'info')
+                claimBazaarOrder(bot)
             }
         }
     })
@@ -248,6 +253,81 @@ function claimExpiredAuction(bot, slot) {
             }
         })
         clickWindow(bot, slot).catch(err => log(`Error clicking expired auction slot: ${err}`, 'error'))
+    })
+}
+
+/**
+ * Claim a filled bazaar order by navigating to Manage Orders
+ * 
+ * Flow: /bz → click Manage Orders (slot 50) → click filled order items to claim
+ */
+export async function claimBazaarOrder(bot: MyBot): Promise<boolean> {
+    return new Promise((resolve) => {
+        if (bot.state) {
+            log('Currently busy with something else (' + bot.state + ') -> not claiming bazaar order')
+            setTimeout(async () => {
+                let result = await claimBazaarOrder(bot)
+                resolve(result)
+            }, 1000)
+            return
+        }
+
+        bot.state = 'claiming'
+        bot.chat('/bz')
+
+        let timeout = setTimeout(() => {
+            log('Bazaar order claiming timed out. Removing lock')
+            bot.state = null
+            bot.removeAllListeners('windowOpen')
+            resolve(false)
+        }, 15000)
+
+        let clickedManageOrders = false
+
+        bot.on('windowOpen', async (window) => {
+            await sleep(300)
+            let title = getWindowTitle(window)
+            log('Bazaar claiming window: ' + title, 'debug')
+
+            // Main bazaar page - click Manage Orders (slot 50)
+            if (title.includes('Bazaar') && !clickedManageOrders) {
+                clickedManageOrders = true
+                await sleep(200)
+                clickWindow(bot, 50).catch(err => log(`Error clicking Manage Orders: ${err}`, 'error'))
+                return
+            }
+
+            // Orders view - find and click filled orders to claim
+            if (clickedManageOrders) {
+                let claimedAny = false
+                for (let i = 0; i < window.slots.length; i++) {
+                    const slot = window.slots[i]
+                    const name = removeMinecraftColorCodes(
+                        (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                    )
+                    // Look for claimable orders (BUY or SELL items with claim indicators)
+                    if (name && (name.startsWith('BUY ') || name.startsWith('SELL '))) {
+                        log(`Clicking bazaar order to claim: slot ${i}, item: ${name}`, 'debug')
+                        await clickWindow(bot, i)
+                        claimedAny = true
+                        await sleep(500)
+                        // Click again for partial claims
+                        try { await clickWindow(bot, i) } catch {}
+                        await sleep(500)
+                    }
+                }
+
+                bot.removeAllListeners('windowOpen')
+                bot.state = null
+                clearTimeout(timeout)
+                if (claimedAny) {
+                    log('Bazaar orders claimed successfully')
+                } else {
+                    log('No claimable bazaar orders found')
+                }
+                resolve(claimedAny)
+            }
+        })
     })
 }
 

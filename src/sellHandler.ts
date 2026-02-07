@@ -49,9 +49,16 @@ async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
 // Store the reason if the last sell attempt failed
 // If it happens again, send a error message to the backend
 let previousError
+
+// Default auction duration in hours
+const DEFAULT_AUCTION_DURATION_HOURS = 24
+
 async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket, removeEventListenerCallback: Function) {
     let title = getWindowTitle(sellWindow)
     log(title)
+    
+    // Get configured auction duration once per handler invocation
+    const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || DEFAULT_AUCTION_DURATION_HOURS
     if (title.toString().includes('Auction House')) {
         clickWindow(bot, 15).catch(err => log(`Error clicking auction house slot: ${err}`, 'error'))
     }
@@ -184,7 +191,6 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
     }
     if (title == 'Auction Duration') {
         // Use configured auction duration instead of backend-provided duration
-        const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || 24
         setAuctionDuration(bot, configuredDuration).then(() => {
             durationSet = true
         })
@@ -199,7 +205,6 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         setPrice = false
         durationSet = false
         bot.state = null
-        const configuredDuration = getConfigProperty('AUCTION_DURATION_HOURS') || 24
         printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${data.itemName} §ffor ${numberWithThousandsSeparators(data.price)} coins`)
         sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), configuredDuration)
         bot.closeWindow(sellWindow)

@@ -371,17 +371,23 @@ async function onWebsocketMessage(msg) {
             }
             break
         case 'bzRecommend':
-            log(`Received bzRecommend message: ${JSON.stringify(data)}`, 'info')
+            log(`[BazaarDebug] ===== RECEIVED bzRecommend MESSAGE =====`, 'info')
+            log(`[BazaarDebug] Raw data: ${JSON.stringify(data)}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §7[Websocket] Received bazaar flip recommendation`)
+            
             if (!bot || !bot.username) {
-                log('Bot not initialized, ignoring bzRecommend', 'warn')
+                log('[BazaarDebug] Bot not initialized, ignoring bzRecommend', 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bot not initialized, cannot process recommendation`)
                 break
             }
+            
             const bzRecommendFlip = parseBazaarFlipJson(data)
             if (bzRecommendFlip) {
-                log(`Successfully parsed bzRecommend: ${bzRecommendFlip.amount}x ${bzRecommendFlip.itemName} at ${bzRecommendFlip.pricePerUnit.toFixed(1)} coins (${bzRecommendFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
+                log(`[BazaarDebug] Successfully parsed bzRecommend: ${bzRecommendFlip.amount}x ${bzRecommendFlip.itemName} at ${bzRecommendFlip.pricePerUnit.toFixed(1)} coins (${bzRecommendFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
                 handleBazaarFlipRecommendation(bot, bzRecommendFlip)
             } else {
-                log(`Failed to parse bzRecommend data: ${JSON.stringify(data)}`, 'error')
+                log(`[BazaarDebug] ERROR: Failed to parse bzRecommend data: ${JSON.stringify(data)}`, 'error')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Failed to parse bazaar flip data`)
             }
             break
         case 'getbazaarflips':

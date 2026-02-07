@@ -187,6 +187,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
         let handledBinAuction = false
         let handledConfirm = false
         
+        // Remove any existing listeners to prevent stacking
+        bot._client.removeAllListeners('open_window')
+        
         bot._client.on('open_window', async (window) => {
             const windowID = window.windowId
             const windowName = window.windowTitle

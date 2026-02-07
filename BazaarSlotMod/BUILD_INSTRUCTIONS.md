@@ -12,7 +12,7 @@ The mod cannot be built in the CI environment because:
 ## How to Build the Mod
 
 ### Prerequisites
-- Java Development Kit (JDK) 8
+- Java Development Kit (JDK) 8 (**required** - newer Java versions will not work)
 - Internet connection
 - At least 2GB of free RAM
 
@@ -25,24 +25,36 @@ The mod cannot be built in the CI environment because:
    cd BazaarSlotMod
    ```
 
-3. **Setup the Forge workspace** (first time only)
+3. **Ensure you're using Java 8**
+   
+   Set JAVA_HOME to point to JDK 8:
+   - **Windows**: `set JAVA_HOME=C:\Program Files\Java\jdk1.8.0_XXX`
+   - **Linux/Mac**: `export JAVA_HOME=/path/to/jdk8`
+   
+   Verify Java version:
+   ```bash
+   java -version
+   ```
+   Should show version 1.8.x
+
+4. **Setup the Forge workspace** (first time only)
    ```bash
    ./gradlew setupDecompWorkspace
    ```
    This will download Minecraft and Forge sources (~100MB+). It may take 5-10 minutes.
 
-4. **Build the mod**
+5. **Build the mod**
    ```bash
    ./gradlew build
    ```
 
-5. **Locate the JAR file**
+6. **Locate the JAR file**
    The compiled mod will be at:
    ```
    build/libs/BazaarSlotMod-1.0.jar
    ```
 
-6. **Install the mod**
+7. **Install the mod**
    - Copy the JAR file to your `.minecraft/mods` folder
    - Launch Minecraft 1.8.9 with Forge installed
    - The mod will create a log file at `.minecraft/bazaar_slot_info.log`
@@ -94,6 +106,12 @@ The mod serves to **verify** these numbers and help diagnose any issues if the b
 - `gradle.properties` - Gradle settings
 
 ## Troubleshooting
+
+**Problem**: Build fails with `Convention.getPlugins()` error
+- **Solution**: This has been fixed. Make sure you're using Gradle 4.10.3 (configured in gradle-wrapper.properties) and Java 8.
+
+**Problem**: Build fails with "Could not determine java version from 'XX'"
+- **Solution**: You must use Java 8. Set JAVA_HOME to point to JDK 8 and ensure `java -version` shows 1.8.x
 
 **Problem**: Build fails with "Could not resolve ForgeGradle"
 - **Solution**: Ensure you have internet access and the Maven repository is reachable

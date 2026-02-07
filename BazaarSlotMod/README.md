@@ -17,10 +17,13 @@ This mod is designed to help measure slot numbers and GUI names for bazaar opera
 ## How to Build
 Since ForgeGradle requires network access to download dependencies, you'll need to build this on a machine with internet access:
 
-1. Install JDK 8
-2. Run `./gradlew setupDecompWorkspace`
-3. Run `./gradlew build`
-4. The compiled JAR will be in `build/libs/`
+1. Install JDK 8 (**required** - ForgeGradle 2.1 does not work with newer Java versions)
+2. Set JAVA_HOME to point to your JDK 8 installation
+3. Run `./gradlew setupDecompWorkspace` (or `gradlew.bat setupDecompWorkspace` on Windows)
+4. Run `./gradlew build` (or `gradlew.bat build` on Windows)
+5. The compiled JAR will be in `build/libs/`
+
+**Note**: The Gradle wrapper has been configured to use Gradle 4.10.3, which is compatible with ForgeGradle 2.1-SNAPSHOT. Do not upgrade to Gradle 9.x or newer as they are incompatible.
 
 ## Slot Numbers Found
 

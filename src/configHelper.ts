@@ -128,10 +128,10 @@ function prepareTomlBeforeWrite(tomlString: string): string {
     }
 
     // Add comments for AUCTION_DURATION_HOURS
-    let auctionDurationIndex = lines.findIndex(l => l.startsWith('AUCTION_DURATION_HOURS = '))
-    if (auctionDurationIndex !== -1) {
+    let auctionDurationLineIndex = lines.findIndex(l => l.startsWith('AUCTION_DURATION_HOURS = '))
+    if (auctionDurationLineIndex !== -1) {
         lines.splice(
-            auctionDurationIndex,
+            auctionDurationLineIndex,
             0,
             '',
             '# Duration in hours for listing auctions on the Auction House (default: 24 hours)'

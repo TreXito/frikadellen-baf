@@ -257,6 +257,18 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
 function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let currentStep = 'initial'
+
+        // Helper: find a slot by display name substring
+        const findSlotWithName = (win, searchName: string): number => {
+            for (let i = 0; i < win.slots.length; i++) {
+                const slot = win.slots[i]
+                const name = removeMinecraftColorCodes(
+                    (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                )
+                if (name && name.includes(searchName)) return i
+            }
+            return -1
+        }
         
         const windowListener = async (window) => {
             await sleep(300)
@@ -267,17 +279,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 // Handle bazaar pages (search results or item detail)
                 if (title.includes('Bazaar') && currentStep !== 'selectOrderType') {
                     // Check if this is the item detail page by looking for order creation buttons
-                    let hasOrderButton = false
-                    for (let i = 0; i < window.slots.length; i++) {
-                        const slot = window.slots[i]
-                        const name = removeMinecraftColorCodes(
-                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                        )
-                        if (name.includes('Create Buy Order') || name.includes('Create Sell Offer')) {
-                            hasOrderButton = true
-                            break
-                        }
-                    }
+                    let hasOrderButton = findSlotWithName(window, 'Create Buy Order') !== -1 ||
+                                         findSlotWithName(window, 'Create Sell Offer') !== -1
                     
                     if (hasOrderButton) {
                         // Item detail page - click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
@@ -314,8 +317,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                         await clickWindow(bot, itemSlot)
                     }
                 }
-                // Step: Setting the amount (buy orders only, sell offers skip this)
-                else if (title.includes('How many do you want to')) {
+                // Amount screen - detected by "Custom Amount" slot (buy orders only, sell offers skip this)
+                else if (findSlotWithName(window, 'Custom Amount') !== -1) {
                     log(`Setting amount to ${amount}`, 'debug')
                     currentStep = 'setAmount'
                     
@@ -335,8 +338,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await sleep(200)
                     await clickWindow(bot, 16)
                 }
-                // Step: Setting the price
-                else if (title.includes('How much do you want to pay') || title.includes('How much do you want to be paid')) {
+                // Price screen - detected by "Custom Price" slot (works for both buy and sell)
+                else if (findSlotWithName(window, 'Custom Price') !== -1) {
                     log(`Setting price per unit to ${pricePerUnit}`, 'debug')
                     currentStep = 'setPrice'
                     
@@ -356,8 +359,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await sleep(200)
                     await clickWindow(bot, 16)
                 }
-                // Step: Confirming the order
-                else if (title.includes('Confirm')) {
+                // Confirm screen - detected by title or as the next step after price entry
+                else if (title.includes('Confirm') || currentStep === 'setPrice') {
                     log('Confirming bazaar order', 'debug')
                     currentStep = 'confirm'
                     

@@ -63,9 +63,26 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     })
                 )
             }
-            // Detect bazaar order filled messages and claim them
+            // Forward all bazaar messages to the websocket so Coflnet knows about
+            // order placements, fills, and claims (if not already sent by privacy regex)
+            if (text.includes('[Bazaar]') && !(bot.privacySettings && bot.privacySettings.chatRegex.test(text))) {
+                wss.send(
+                    JSON.stringify({
+                        type: 'chatBatch',
+                        data: JSON.stringify([text])
+                    })
+                )
+            }
+            // Detect bazaar order filled messages and claim them via bazaar (/bz → Manage Orders)
+            // Handles both buy order fills and sell offer fills
             if (text.includes('[Bazaar]') && text.includes('was filled!')) {
-                log('Bazaar order filled, attempting to claim', 'info')
+                if (text.includes('Buy Order')) {
+                    log('Bazaar buy order filled, claiming via bazaar', 'info')
+                } else if (text.includes('Sell Offer')) {
+                    log('Bazaar sell offer filled, claiming via bazaar', 'info')
+                } else {
+                    log('Bazaar order filled, claiming via bazaar', 'info')
+                }
                 claimBazaarOrder(bot)
             }
         }

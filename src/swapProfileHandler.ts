@@ -5,7 +5,8 @@ import { clickWindow, getWindowTitle } from './utils'
 export async function swapProfile(bot: MyBot, data: SwapData) {
     bot.setQuickBarSlot(8)
     bot.activateItem()
-    bot.on('windowOpen', window => {
+    
+    const windowHandler = window => {
         let title = getWindowTitle(window)
         if (title == 'SkyBlock Menu') {
             clickWindow(bot, 48).catch(err => log(`Error clicking SkyBlock menu slot: ${err}`, 'error'))
@@ -21,6 +22,12 @@ export async function swapProfile(bot: MyBot, data: SwapData) {
         if (title.includes('Profile:')) {
             clickWindow(bot, 11).catch(err => log(`Error clicking confirm profile slot: ${err}`, 'error'))
             log('Successfully swapped profiles')
+            // Clean up listener after profile swap completes
+            bot.removeListener('windowOpen', windowHandler)
         }
-    })
+    }
+    
+    // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+    bot.removeAllListeners('windowOpen')
+    bot.on('windowOpen', windowHandler)
 }

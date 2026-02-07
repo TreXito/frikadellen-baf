@@ -43,6 +43,8 @@ async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
         bot.state = null
     }, 10000)
 
+    // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
+    bot.removeAllListeners('windowOpen')
     bot.on('windowOpen', handler)
     bot.chat('/ah')
 }

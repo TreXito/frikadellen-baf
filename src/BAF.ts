@@ -400,6 +400,10 @@ async function onWebsocketMessage(msg) {
                 }
             }
             break
+        default:
+            log(`Unknown websocket message type: ${message.type}`, 'warn')
+            log(`Message data: ${JSON.stringify(data)}`, 'debug')
+            break
     }
 }
 

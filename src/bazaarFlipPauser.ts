@@ -115,8 +115,9 @@ function processQueuedBazaarFlips(): void {
     // Import here to avoid circular dependency
     const { handleBazaarFlipRecommendation } = require('./bazaarFlipHandler')
     
-    const flipsToProcess = [...queuedBazaarFlips]
-    queuedBazaarFlips = [] // Clear the queue
+    // Clear the queue first to avoid race condition where new flips arrive during processing
+    const flipsToProcess = queuedBazaarFlips
+    queuedBazaarFlips = []
     
     log(`[BazaarDebug] Processing ${flipsToProcess.length} queued bazaar flip(s)`, 'info')
     

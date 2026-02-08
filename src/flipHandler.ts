@@ -264,6 +264,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 
                 // Handle different item types
                 switch (item) {
+                    case "gold_nugget":
+                        // Already handled above (clicked slot 31), just wait for Confirm Purchase window
+                        break
                     case "bed":
                         printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
                         await initBedSpam(bot, flip, isBed)

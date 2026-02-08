@@ -1,8 +1,10 @@
 import { log, printMcChatToConsole } from './logger'
+import { BazaarFlipRecommendation, MyBot } from '../types/autobuy'
 
 // State management for bazaar flip pausing
 let bazaarFlipsPaused = false
 let pauseTimeoutHandle: NodeJS.Timeout | null = null
+let queuedBazaarFlips: Array<{ bot: MyBot, recommendation: BazaarFlipRecommendation }> = []
 
 const PAUSE_DURATION_MS = 20000 // 20 seconds - pause starts when "flips in 10 seconds" appears, resumes 20 seconds after
 
@@ -39,6 +41,7 @@ export function pauseBazaarFlips(): void {
 
 /**
  * Resume bazaar flips after AH flip window
+ * Processes any queued bazaar flips that came in during the pause
  */
 export function resumeBazaarFlips(): void {
     if (!bazaarFlipsPaused) {
@@ -47,8 +50,16 @@ export function resumeBazaarFlips(): void {
 
     bazaarFlipsPaused = false
     pauseTimeoutHandle = null
-    printMcChatToConsole('§f[§4BAF§f]: §acontinuing bazaar flips now')
-    log('Bazaar flips resumed', 'info')
+    
+    const queueSize = queuedBazaarFlips.length
+    if (queueSize > 0) {
+        printMcChatToConsole(`§f[§4BAF§f]: §acontinuing bazaar flips now (processing ${queueSize} queued flip${queueSize > 1 ? 's' : ''})`)
+        log(`Bazaar flips resumed - processing ${queueSize} queued flip(s)`, 'info')
+        processQueuedBazaarFlips()
+    } else {
+        printMcChatToConsole('§f[§4BAF§f]: §acontinuing bazaar flips now')
+        log('Bazaar flips resumed', 'info')
+    }
 }
 
 /**
@@ -81,4 +92,37 @@ export function isAHFlipIncomingMessage(message: string): boolean {
     ]
 
     return patterns.some(pattern => pattern.test(lowerMessage))
+}
+
+/**
+ * Queue a bazaar flip recommendation to be processed when bazaar flips resume
+ * Called when a bazaar flip comes in while bazaar flips are paused
+ * @param bot The Minecraft bot instance
+ * @param recommendation The bazaar flip recommendation to queue
+ */
+export function queueBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommendation): void {
+    queuedBazaarFlips.push({ bot, recommendation })
+    log(`[BazaarDebug] Queued bazaar flip: ${recommendation.amount}x ${recommendation.itemName} (${queuedBazaarFlips.length} in queue)`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §eQueued bazaar flip: ${recommendation.amount}x ${recommendation.itemName} §7(${queuedBazaarFlips.length} in queue)`)
+}
+
+/**
+ * Process all queued bazaar flips
+ * Called when bazaar flips resume after being paused
+ * Flips are processed in FIFO order (first in, first out)
+ */
+function processQueuedBazaarFlips(): void {
+    // Import here to avoid circular dependency
+    const { handleBazaarFlipRecommendation } = require('./bazaarFlipHandler')
+    
+    const flipsToProcess = [...queuedBazaarFlips]
+    queuedBazaarFlips = [] // Clear the queue
+    
+    log(`[BazaarDebug] Processing ${flipsToProcess.length} queued bazaar flip(s)`, 'info')
+    
+    // Process each queued flip in order
+    for (const { bot, recommendation } of flipsToProcess) {
+        log(`[BazaarDebug] Processing queued flip: ${recommendation.amount}x ${recommendation.itemName}`, 'info')
+        handleBazaarFlipRecommendation(bot, recommendation)
+    }
 }

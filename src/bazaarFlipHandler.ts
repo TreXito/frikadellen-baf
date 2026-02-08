@@ -2,7 +2,7 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
-import { areBazaarFlipsPaused } from './bazaarFlipPauser'
+import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -198,7 +198,8 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
 
     // Check if bazaar flips are paused due to incoming AH flip
     if (areBazaarFlipsPaused()) {
-        log('[BazaarDebug] Bazaar flips are paused due to incoming AH flip', 'warn')
+        log('[BazaarDebug] Bazaar flips are paused due to incoming AH flip, queueing recommendation', 'warn')
+        queueBazaarFlip(bot, recommendation)
         return
     }
 

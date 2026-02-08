@@ -255,7 +255,7 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
     if (!isWebhookConfigured()) {
         return
     }
-    let ingameName = getConfigProperty('INGAME_NAME')
+    const ingameName = getConfigProperty('INGAME_NAME')
     
     const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
     const orderEmoji = isBuyOrder ? '🛒' : '🏷️'

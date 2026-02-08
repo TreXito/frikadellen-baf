@@ -384,61 +384,51 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
             logWindowSlots(window, title)
 
             try {
-                // Handle bazaar pages (search results or item detail)
-                if (title.includes('Bazaar') && currentStep !== 'selectOrderType') {
-                    // Check if this is the item detail page by looking for order creation buttons
-                    let hasOrderButton = findSlotWithName(window, 'Create Buy Order') !== -1 ||
-                                         findSlotWithName(window, 'Create Sell Offer') !== -1
-                    
-                    if (hasOrderButton) {
-                        // Item detail page - find and click the Create Buy Order / Create Sell Offer button
-                        const buttonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-                        const slotToClick = findSlotWithName(window, buttonName)
-                        
-                        if (slotToClick === -1) {
-                            throw new Error(`Could not find "${buttonName}" button in bazaar item detail page`)
-                        }
-                        
-                        log(`[BazaarDebug] On item detail page, clicking "${buttonName}" (slot ${slotToClick})`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
-                        currentStep = 'selectOrderType'
-                        await sleep(200)
-                        await clickWindow(bot, slotToClick).catch(e => {
-                            log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
-                        })
-                    } else if (currentStep === 'initial') {
-                        // Search results page - find and click the matching item
-                        log(`[BazaarDebug] On search results page, looking for item: "${itemName}"`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Search] Looking for §e${itemName}`)
-                        currentStep = 'searchResults'
-                        
-                        let itemSlot = -1
-                        for (let i = 0; i < window.slots.length; i++) {
-                            const slot = window.slots[i]
-                            const name = removeMinecraftColorCodes(
-                                (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                            )
-                            if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
-                                itemSlot = i
-                                log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
-                                printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
-                                break
-                            }
-                        }
-                        
-                        if (itemSlot === -1) {
-                            // Fallback to slot 11 (first search result position)
-                            itemSlot = 11
-                            log(`[BazaarDebug] Item not found by name, using fallback slot ${itemSlot}`, 'warn')
-                            printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
-                        }
-                        await sleep(200)
-                        await clickWindow(bot, itemSlot).catch(e => {
-                            log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
-                        })
-                    }
+                // 1. Item detail page - detected by order buttons, works with ANY window title
+                let hasOrderButton = findSlotWithName(window, 'Create Buy Order') !== -1 ||
+                                     findSlotWithName(window, 'Create Sell Offer') !== -1
+
+                if (hasOrderButton && currentStep !== 'selectOrderType') {
+                    const buttonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
+                    const slotToClick = findSlotWithName(window, buttonName)
+                    if (slotToClick === -1) throw new Error(`Could not find "${buttonName}" button`)
+                    log(`[BazaarDebug] On item detail page, clicking "${buttonName}" (slot ${slotToClick})`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
+                    currentStep = 'selectOrderType'
+                    await sleep(200)
+                    await clickWindow(bot, slotToClick).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
-                // Amount screen - detected by "Custom Amount" slot (buy orders only, sell offers skip this)
+                // 2. Search results page - has "Bazaar" in title
+                else if (title.includes('Bazaar') && currentStep === 'initial') {
+                    // Search results page - find and click the matching item
+                    log(`[BazaarDebug] On search results page, looking for item: "${itemName}"`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Search] Looking for §e${itemName}`)
+                    currentStep = 'searchResults'
+                    
+                    let itemSlot = -1
+                    for (let i = 0; i < window.slots.length; i++) {
+                        const slot = window.slots[i]
+                        const name = removeMinecraftColorCodes(
+                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                        )
+                        if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
+                            itemSlot = i
+                            log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
+                            printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
+                            break
+                        }
+                    }
+                    
+                    if (itemSlot === -1) {
+                        // Fallback to slot 11 (first search result position)
+                        itemSlot = 11
+                        log(`[BazaarDebug] Item not found by name, using fallback slot ${itemSlot}`, 'warn')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
+                    }
+                    await sleep(200)
+                    await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                }
+                // 3. Amount screen
                 else if (findSlotWithName(window, 'Custom Amount') !== -1) {
                     const customAmountSlot = findSlotWithName(window, 'Custom Amount')
                     log(`[BazaarDebug] Setting amount to ${amount} via slot ${customAmountSlot}`, 'info')
@@ -460,11 +450,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Click Custom Amount at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, customAmountSlot).catch(e => {
-                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
-                    })
+                    await clickWindow(bot, customAmountSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
-                // Price screen - detected by "Custom Price" slot (works for both buy and sell)
+                // 4. Price screen
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {
                     const customPriceSlot = findSlotWithName(window, 'Custom Price')
                     log(`[BazaarDebug] Setting price per unit to ${pricePerUnit.toFixed(1)} via slot ${customPriceSlot}`, 'info')
@@ -486,34 +474,22 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Click Custom Price at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, customPriceSlot).catch(e => {
-                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
-                    })
+                    await clickWindow(bot, customPriceSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
-                // Confirm screen - detected by title or confirm button presence after price step
-                else if (title.includes('Confirm') ||
-                         (currentStep === 'setPrice' &&
-                          findSlotWithName(window, 'Cancel') !== -1)) {
-                    // Find the confirm button dynamically - it's usually labeled "Confirm"
-                    let confirmSlot = findSlotWithName(window, 'Confirm')
-                    if (confirmSlot === -1) {
-                        // Fallback: slot 13 is the traditional center slot in confirmation GUIs
-                        confirmSlot = 13
-                        log(`[BazaarDebug] Could not find Confirm button by name, using fallback slot ${confirmSlot}`, 'warn')
-                    }
-                    
-                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot ${confirmSlot}`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b${confirmSlot}`)
+                // 5. Confirm screen - click slot 13
+                else if (currentStep === 'setPrice') {
+                    // After setting price, the next window is always the confirm screen.
+                    // The confirm button is at slot 13. It is labeled "Buy Order" for buys
+                    // and "Sell Offer" for sells (NOT "Confirm").
+                    // Do NOT use findSlotWithName to find it because "Buy Order" would also
+                    // match "Create Buy Order" from step 1 via .includes(). Just use slot 13.
+                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot 13`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b13`)
                     currentStep = 'confirm'
-                    
-                    // Click the confirm button
                     await sleep(200)
-                    await clickWindow(bot, confirmSlot).catch(e => {
-                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
-                    })
+                    await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                     
-                    // Order placed successfully
-                    log(`[BazaarDebug] Order placement complete, cleaning up listener`, 'info')
+                    log(`[BazaarDebug] Order placement complete`, 'info')
                     bot._client.removeListener('open_window', windowListener)
                     await sleep(500)
                     resolve()

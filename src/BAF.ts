@@ -24,6 +24,7 @@ var prompt = require('prompt-sync')()
 initConfigHelper()
 initLogger()
 const version = 'af-2.0.0'
+const GUI_LOG_DELAY_MS = 100
 let _websocket: WebSocket
 let bot: MyBot
 let ingameName = getConfigProperty('INGAME_NAME')
@@ -150,7 +151,7 @@ function setupBotHandlers() {
             } else {
                 log('[GUIDebug] currentWindow is null after open_window packet', 'warn')
             }
-        }, 100)
+        }, GUI_LOG_DELAY_MS)
     }
     const guiCloseLogger = (window) => {
         log(`[GUIDebug] windowClose id=${(window as any)?.id ?? 'unknown'} title="${getWindowTitle(window)}"`, 'info')

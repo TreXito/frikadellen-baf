@@ -28,6 +28,7 @@ let config: Config = {
         PROFIT_PERCENTAGE: 50,
         MIN_PRICE: 10000000
     },
+    AUTO_COOKIE: 24,
     PROXY_ENABLED: false,
     PROXY: undefined,
     PROXY_USERNAME: undefined,
@@ -158,6 +159,18 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             0,
             '',
             '# Duration in hours for listing auctions on the Auction House (default: 24 hours)'
+        )
+    }
+
+    // Add comments for AUTO_COOKIE
+    let autoCookieIndex = lines.findIndex(l => l.startsWith('AUTO_COOKIE = '))
+    if (autoCookieIndex !== -1) {
+        lines.splice(
+            autoCookieIndex,
+            0,
+            '',
+            '# Auto booster cookie: if remaining cookie duration on startup is less than this value (in hours), automatically buy and consume a booster cookie (default: 24 hours)',
+            '# Set to 0 to disable automatic cookie purchasing'
         )
     }
 

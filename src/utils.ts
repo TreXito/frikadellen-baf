@@ -115,3 +115,25 @@ export function formatInventoryForUpload(inventory: any): any[] {
     
     return formattedItems
 }
+
+/**
+ * Extracts lore from a slot item
+ * @param slot The slot item to extract lore from
+ * @returns Array of lore lines or empty array if no lore
+ */
+export function getSlotLore(slot: any): string[] {
+    if (!slot || !slot.nbt) return []
+    
+    try {
+        const lore = slot.nbt.value?.display?.value?.Lore?.value?.value
+        if (lore && Array.isArray(lore)) {
+            return lore.map((line: string) => line.toString())
+        }
+    } catch (e) {
+        // Import log function inline to avoid circular dependencies
+        const { log } = require('./logger')
+        log(`Failed to parse lore from slot: ${e}`, 'debug')
+    }
+    
+    return []
+}

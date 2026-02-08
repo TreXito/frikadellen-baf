@@ -250,3 +250,53 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
         ]
     })
 }
+
+export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, pricePerUnit: number, totalPrice: number, isBuyOrder: boolean) {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    
+    const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
+    const orderEmoji = isBuyOrder ? '🛒' : '🏷️'
+    const orderColor = isBuyOrder ? 0x3498db : 0xe67e22 // Blue for buy, orange for sell
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: `${orderEmoji} Bazaar ${orderType} Placed`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: orderColor,
+                fields: [
+                    {
+                        name: '📦 Amount',
+                        value: `\`\`\`fix\n${amount}x\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💵 Price per Unit',
+                        value: `\`\`\`fix\n${numberWithThousandsSeparators(pricePerUnit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💰 Total Price',
+                        value: `\`\`\`fix\n${numberWithThousandsSeparators(totalPrice)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Order Type',
+                        value: `\`\`\`\n${orderType}\n\`\`\``,
+                        inline: false
+                    }
+                ],
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}

@@ -154,6 +154,7 @@ function setupBotHandlers() {
         }, GUI_LOG_DELAY_MS)
     }
     const guiCloseLogger = (window) => {
+        if (!window) return
         log(`[GUIDebug] windowClose id=${(window as any)?.id ?? 'unknown'} title="${getWindowTitle(window)}"`, 'info')
     }
     bot._client.on('open_window', guiWindowLogger)

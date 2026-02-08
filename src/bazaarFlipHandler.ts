@@ -3,6 +3,7 @@ import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
+import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -490,6 +491,11 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                     
                     log(`[BazaarDebug] Order placement complete`, 'info')
+                    
+                    // Send webhook notification
+                    const totalPrice = pricePerUnit * amount
+                    sendWebhookBazaarOrderPlaced(itemName, amount, pricePerUnit, totalPrice, isBuyOrder)
+                    
                     bot._client.removeListener('open_window', windowListener)
                     await sleep(500)
                     resolve()

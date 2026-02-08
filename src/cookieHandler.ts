@@ -4,6 +4,8 @@ import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getSlotLore, sleep } from './utils'
 
 const COOKIE_PRICE_API = 'https://api.hypixel.net/v2/skyblock/bazaar'
+const DEFAULT_COOKIE_PRICE = 5000000 // 5M coins fallback
+const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
 
 /**
  * Gets the current bazaar price of a booster cookie
@@ -22,10 +24,10 @@ async function getCookiePrice(): Promise<number> {
         }
         
         log('Could not get cookie price from API', 'warn')
-        return 5000000 // Default fallback price
+        return DEFAULT_COOKIE_PRICE
     } catch (error) {
         log(`Error fetching cookie price: ${error}`, 'error')
-        return 5000000 // Default fallback price
+        return DEFAULT_COOKIE_PRICE
     }
 }
 
@@ -201,7 +203,7 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         log(`Cookie price: ${price}, Purse: ${purse}`, 'info')
         
         // Check if cookie is too expensive or we don't have enough coins
-        if (price > 20000000) {
+        if (price > MAX_COOKIE_PRICE) {
             printMcChatToConsole(`§f[§4BAF§f]: §cCookie costs ${Math.round(price / 1000000)}M - too expensive, not buying`)
             log('Cookie too expensive, not buying', 'warn')
             return
@@ -329,7 +331,8 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         
         await sleep(500)
         
-        // Find the cookie in the storage (look for item named "booster_cookie")
+        // Find the cookie in the storage
+        // Booster cookies have the item name 'cookie' in Minecraft 1.8.9
         if (!bot.currentWindow) {
             log('Storage window not available', 'error')
             return
@@ -339,7 +342,29 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         for (const slot of bot.currentWindow.slots) {
             if (slot && slot.name === 'cookie') {
                 cookieSlot = slot.slot
+                log(`Found cookie in slot ${cookieSlot}`, 'debug')
                 break
+            }
+        }
+        
+        if (!cookieSlot) {
+            // Try looking at display names if the item name check failed
+            for (const slot of bot.currentWindow.slots) {
+                if (slot && slot.nbt?.value) {
+                    try {
+                        const nbtValue = slot.nbt.value as any
+                        if (nbtValue.display?.value?.Name?.value) {
+                            const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
+                            if (displayName.includes('booster cookie')) {
+                                cookieSlot = slot.slot
+                                log(`Found cookie by display name in slot ${cookieSlot}`, 'debug')
+                                break
+                            }
+                        }
+                    } catch (e) {
+                        // Skip slots with invalid NBT
+                    }
+                }
             }
         }
         

@@ -15,6 +15,10 @@ const BED_CLICK_DELAY_FALLBACK = 3
 const WINDOW_INTERACTION_DELAY = 500
 const MINEFLAYER_WINDOW_POPULATE_DELAY = 300 // Time for mineflayer to populate bot.currentWindow after open_window packet
 
+// Window title constants
+const WINDOW_TITLE_CONFIRM_PURCHASE = '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}'
+const WINDOW_TITLE_BIN_AUCTION_VIEW = '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}'
+
 let currentFlip: Flip | null = null
 let actionCounter = 1
 let fromCoflSocket = false
@@ -209,7 +213,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 
                 // Only delay for BIN Auction View where we need bot.currentWindow populated
                 // Do NOT delay for Confirm Purchase — speed is critical there
-                if (windowName !== '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
+                if (windowName !== WINDOW_TITLE_CONFIRM_PURCHASE) {
                     await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY) // Wait for mineflayer to populate bot.currentWindow
                     if (!bot.currentWindow) {
                         log(`bot.currentWindow is null after delay for window ${windowName} (ID: ${windowID}), skipping`, 'warn')
@@ -217,7 +221,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     }
                 }
                 
-                if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
+                if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
                     // Skip if we already handled this window type
                     if (handledBinAuction) {
                         log('Already handled BIN Auction View, ignoring duplicate', 'debug')
@@ -352,7 +356,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                     }
-                } else if (windowName === '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
+                } else if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
                     // Skip if we already handled this window type
                     if (handledConfirm) {
                         log('Already handled Confirm Purchase, ignoring duplicate', 'debug')

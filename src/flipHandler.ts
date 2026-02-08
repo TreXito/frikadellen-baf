@@ -6,7 +6,7 @@ import { trackFlipPurchase } from './flipTracker'
 
 // Constants for window interaction
 const CONFIRM_RETRY_DELAY = 50
-const MAX_CONFIRM_ATTEMPTS = 5
+const WINDOW_CONFIRM_TIMEOUT_MS = 5000 // Maximum time to wait for confirm window to close
 const MAX_UNDEFINED_COUNT = 5
 const BED_SPAM_TIMEOUT_MS = 5000
 const BED_CLICKS_WITH_DELAY = 5
@@ -155,9 +155,9 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         return
     }
     
-    // CRITICAL: Clear any stale windowOpen listeners from other operations
-    // This prevents interference from claim/sell handlers that might still be registered
-    bot.removeAllListeners('windowOpen')
+    // Note: Do NOT use bot.removeAllListeners('windowOpen') as it breaks mineflayer's internal handler
+    // The flipHandler uses bot._client.on('open_window') for low-level protocol handling
+    // and properly cleans up its specific listener when done
     
     bot.state = 'purchasing'
     let timeout = setTimeout(() => {
@@ -334,13 +334,21 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 if (!recentlySkipped) {
                     clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                     
-                    // Ensure confirm is clicked even if first click didn't register
+                    // Wait for window to change before cleanup (like TPM-rewrite)
+                    // Keep clicking until the window closes to ensure the click registers
                     await sleep(CONFIRM_RETRY_DELAY)
-                    let attempts = 0
-                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase' && attempts < MAX_CONFIRM_ATTEMPTS) {
+                    const confirmStartTime = Date.now()
+                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                        // Timeout protection to prevent infinite loop
+                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
+                            log('Confirm window timeout - closing window', 'warn')
+                            if (bot.currentWindow) {
+                                bot.closeWindow(bot.currentWindow)
+                            }
+                            break
+                        }
                         clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                         await sleep(CONFIRM_RETRY_DELAY)
-                        attempts++
                     }
                 } else {
                     // Close the window to cancel the purchase when skipping

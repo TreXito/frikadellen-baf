@@ -35,7 +35,7 @@ interface TextMessageData {
 }
 
 interface MyBot extends Bot {
-    state?: 'purchasing' | 'selling' | 'claiming' | 'gracePeriod' | 'runningSequence'
+    state?: 'purchasing' | 'selling' | 'claiming' | 'gracePeriod' | 'runningSequence' | 'bazaar'
     lastViewAuctionCommandForPurchase?: string
     privacySettings?: any
 }

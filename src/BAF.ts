@@ -19,6 +19,7 @@ import { checkAndPauseForAHFlip } from './bazaarFlipPauser'
 import { startWebGui, addWebGuiChatMessage } from './webGui'
 import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
+import { checkAndBuyCookie } from './cookieHandler'
 const WebSocket = require('ws')
 var prompt = require('prompt-sync')()
 initConfigHelper()
@@ -524,6 +525,12 @@ async function onScoreboardChanged() {
         tryToTeleportToIsland(bot, 0)
 
         await sleep(20000)
+        
+        // Check and buy cookie if needed
+        checkAndBuyCookie(bot).catch(err => {
+            log(`Error in checkAndBuyCookie: ${err}`, 'error')
+        })
+        
         // trying to claim sold items if sold while user was offline
         claimSoldItem(bot)
     }

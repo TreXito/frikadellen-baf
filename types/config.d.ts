@@ -28,6 +28,7 @@ interface Config {
     WEB_GUI_PASSWORD: string
     AUCTION_DURATION_HOURS: number
     SKIP: SkipSettings
+    AUTO_COOKIE: number
     PROXY_ENABLED?: boolean
     PROXY?: string
     PROXY_USERNAME?: string

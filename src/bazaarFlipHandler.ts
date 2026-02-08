@@ -223,14 +223,14 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     printMcChatToConsole(`§f[§4BAF§f]: §7Total: §6${recommendation.totalPrice ? recommendation.totalPrice.toFixed(0) : (recommendation.pricePerUnit * recommendation.amount).toFixed(0)} coins`)
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
-    bot.state = 'purchasing'
+    bot.state = 'bazaar'
     let operationTimeout = setTimeout(() => {
-        if (bot.state === 'purchasing') {
+        if (bot.state === 'bazaar') {
             log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
             log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
             printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
             bot.state = null
-            bot.removeAllListeners('windowOpen')
+            // Note: The placeBazaarOrder function will clean up its own listener on timeout
         }
     }, OPERATION_TIMEOUT_MS)
 
@@ -250,15 +250,9 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
         )
 
-        // CRITICAL: Remove all existing windowOpen listeners before setting up the bazaar handler
-        // This prevents old auction house listeners from interfering with bazaar operations
-        // (e.g., claimSoldAuction listener trying to click slot 15 in the bazaar GUI)
-        log('[BazaarDebug] Clearing any existing windowOpen listeners to prevent conflicts', 'info')
-        bot.removeAllListeners('windowOpen')
-
-        // Set up the listener BEFORE opening the bazaar to catch the first window
-        // placeBazaarOrder() synchronously registers the windowOpen event listener,
-        // then returns a Promise that resolves when the order completes
+        // CRITICAL: Set up listener BEFORE opening bazaar to catch the first window
+        // Use bot._client.on('open_window') for low-level protocol handling
+        // Do NOT use bot.removeAllListeners('windowOpen') as that breaks mineflayer's internal handler
         log('[BazaarDebug] Setting up window listener for bazaar order placement', 'info')
         const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
         
@@ -347,8 +341,17 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
             log(`[BazaarDebug] === End Window Slots (${importantSlots.length} items) ===`, 'info')
         }
         
-        const windowListener = async (window) => {
+        // Use low-level open_window event to avoid breaking mineflayer's windowOpen handler
+        const windowListener = async (packet) => {
+            // Wait for mineflayer to process the window and populate bot.currentWindow
             await sleep(300)
+            
+            const window = bot.currentWindow
+            if (!window) {
+                log('[BazaarDebug] WARNING: bot.currentWindow is null after window packet', 'warn')
+                return
+            }
+            
             let title = getWindowTitle(window)
             log(`[BazaarDebug] Window opened: "${title}" at step: ${currentStep}`, 'info')
             
@@ -476,23 +479,24 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Order placed successfully
                     log(`[BazaarDebug] Order placement complete, cleaning up listener`, 'info')
-                    bot.removeListener('windowOpen', windowListener)
+                    bot._client.removeListener('open_window', windowListener)
                     await sleep(500)
                     resolve()
                 }
             } catch (error) {
                 log(`[BazaarDebug] Error in window handler at step ${currentStep}: ${error}`, 'error')
                 printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Failed at step ${currentStep}: ${error}`)
-                bot.removeListener('windowOpen', windowListener)
+                bot._client.removeListener('open_window', windowListener)
                 reject(error)
             }
         }
 
-        bot.addListener('windowOpen', windowListener)
+        // Use low-level open_window event instead of high-level windowOpen
+        bot._client.on('open_window', windowListener)
 
         // Set a timeout for the entire operation
         setTimeout(() => {
-            bot.removeListener('windowOpen', windowListener)
+            bot._client.removeListener('open_window', windowListener)
             reject(new Error(`Bazaar order placement timed out at step: ${currentStep}`))
         }, 20000)
     })

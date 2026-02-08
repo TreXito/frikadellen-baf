@@ -155,9 +155,9 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
         return
     }
     
-    // CRITICAL: Clear any stale windowOpen listeners from other operations
-    // This prevents interference from claim/sell handlers that might still be registered
-    bot.removeAllListeners('windowOpen')
+    // Note: Do NOT use bot.removeAllListeners('windowOpen') as it breaks mineflayer's internal handler
+    // The flipHandler uses bot._client.on('open_window') for low-level protocol handling
+    // and properly cleans up its specific listener when done
     
     bot.state = 'purchasing'
     let timeout = setTimeout(() => {
@@ -334,13 +334,12 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 if (!recentlySkipped) {
                     clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                     
-                    // Ensure confirm is clicked even if first click didn't register
+                    // Wait for window to change before cleanup (like TPM-rewrite)
+                    // Keep clicking until the window closes to ensure the click registers
                     await sleep(CONFIRM_RETRY_DELAY)
-                    let attempts = 0
-                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase' && attempts < MAX_CONFIRM_ATTEMPTS) {
+                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
                         clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                         await sleep(CONFIRM_RETRY_DELAY)
-                        attempts++
                     }
                 } else {
                     // Close the window to cancel the purchase when skipping

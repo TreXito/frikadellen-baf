@@ -6,7 +6,7 @@ import { trackFlipPurchase } from './flipTracker'
 
 // Constants for window interaction
 const CONFIRM_RETRY_DELAY = 50
-const MAX_CONFIRM_ATTEMPTS = 5
+const WINDOW_CONFIRM_TIMEOUT_MS = 5000 // Maximum time to wait for confirm window to close
 const MAX_UNDEFINED_COUNT = 5
 const BED_SPAM_TIMEOUT_MS = 5000
 const BED_CLICKS_WITH_DELAY = 5
@@ -337,7 +337,16 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     // Wait for window to change before cleanup (like TPM-rewrite)
                     // Keep clicking until the window closes to ensure the click registers
                     await sleep(CONFIRM_RETRY_DELAY)
+                    const confirmStartTime = Date.now()
                     while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                        // Timeout protection to prevent infinite loop
+                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
+                            log('Confirm window timeout - closing window', 'warn')
+                            if (bot.currentWindow) {
+                                bot.closeWindow(bot.currentWindow)
+                            }
+                            break
+                        }
                         clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                         await sleep(CONFIRM_RETRY_DELAY)
                     }

@@ -8,6 +8,7 @@ import { areBazaarFlipsPaused } from './bazaarFlipPauser'
 const RETRY_DELAY_MS = 1100
 const OPERATION_TIMEOUT_MS = 20000
 const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
+const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to populate bot.currentWindow
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -344,7 +345,7 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
         // Use low-level open_window event to avoid breaking mineflayer's windowOpen handler
         const windowListener = async (packet) => {
             // Wait for mineflayer to process the window and populate bot.currentWindow
-            await sleep(300)
+            await sleep(MINEFLAYER_WINDOW_PROCESS_DELAY_MS)
             
             const window = bot.currentWindow
             if (!window) {

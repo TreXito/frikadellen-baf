@@ -408,8 +408,31 @@ async function onWebsocketMessage(msg) {
                 log(`Failed to parse bazaar flip data from websocket: ${JSON.stringify(data)}`, 'error')
             }
             break
+        case 'placeOrder':
+            log(`[BazaarDebug] ===== RECEIVED placeOrder MESSAGE =====`, 'info')
+            log(`[BazaarDebug] Raw data type: ${typeof data}`, 'info')
+            log(`[BazaarDebug] Raw data: ${JSON.stringify(data)}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §7[Websocket] Received bazaar flip recommendation`)
+            
+            if (!bot || !bot.username) {
+                log('[BazaarDebug] Bot not initialized, ignoring placeOrder', 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bot not initialized, cannot process recommendation`)
+                break
+            }
+            
+            const placeOrderParsed = typeof data === 'string' ? JSON.parse(data) : data
+            const placeOrderFlip = parseBazaarFlipJson(placeOrderParsed)
+            if (placeOrderFlip) {
+                log(`[BazaarDebug] Successfully parsed placeOrder: ${placeOrderFlip.amount}x ${placeOrderFlip.itemName} at ${placeOrderFlip.pricePerUnit.toFixed(1)} coins (${placeOrderFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
+                handleBazaarFlipRecommendation(bot, placeOrderFlip)
+            } else {
+                log(`[BazaarDebug] ERROR: Failed to parse placeOrder data: ${JSON.stringify(data)}`, 'error')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Failed to parse bazaar flip data`)
+            }
+            break
         case 'bzRecommend':
             log(`[BazaarDebug] ===== RECEIVED bzRecommend MESSAGE =====`, 'info')
+            log(`[BazaarDebug] Raw data type: ${typeof data}`, 'info')
             log(`[BazaarDebug] Raw data: ${JSON.stringify(data)}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[Websocket] Received bazaar flip recommendation`)
             
@@ -419,7 +442,8 @@ async function onWebsocketMessage(msg) {
                 break
             }
             
-            const bzRecommendFlip = parseBazaarFlipJson(JSON.parse(data))
+            const bzRecommendParsed = typeof data === 'string' ? JSON.parse(data) : data
+            const bzRecommendFlip = parseBazaarFlipJson(bzRecommendParsed)
             if (bzRecommendFlip) {
                 log(`[BazaarDebug] Successfully parsed bzRecommend: ${bzRecommendFlip.amount}x ${bzRecommendFlip.itemName} at ${bzRecommendFlip.pricePerUnit.toFixed(1)} coins (${bzRecommendFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
                 handleBazaarFlipRecommendation(bot, bzRecommendFlip)

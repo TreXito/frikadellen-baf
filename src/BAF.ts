@@ -141,15 +141,16 @@ function setupBotHandlers() {
     bot.on('error', log)
 
     // Global GUI logging to track every window the bot sees
-    const guiWindowLogger = async (packet) => {
+    const guiWindowLogger = (packet) => {
         const rawTitle = JSON.stringify(packet?.windowTitle)
         log(`[GUIDebug] open_window id=${packet?.windowId} type=${packet?.windowType} rawTitle=${rawTitle}`, 'info')
-        await sleep(100)
-        if (bot.currentWindow) {
-            log(`[GUIDebug] currentWindow title="${getWindowTitle(bot.currentWindow)}" slots=${bot.currentWindow.slots.length}`, 'info')
-        } else {
-            log('[GUIDebug] currentWindow is null after open_window packet', 'warn')
-        }
+        setTimeout(() => {
+            if (bot.currentWindow) {
+                log(`[GUIDebug] currentWindow title="${getWindowTitle(bot.currentWindow)}" slots=${bot.currentWindow.slots.length}`, 'info')
+            } else {
+                log('[GUIDebug] currentWindow is null after open_window packet', 'warn')
+            }
+        }, 100)
     }
     const guiCloseLogger = (window) => {
         log(`[GUIDebug] windowClose id=${(window as any)?.id ?? 'unknown'} title="${getWindowTitle(window)}"`, 'info')

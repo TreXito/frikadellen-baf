@@ -250,10 +250,11 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             log(`[BazaarDebug] This may cause issues if the item name contains spaces or special characters`, 'warn')
         }
         bazaarOpenTracker = (packet) => {
+            if (bazaarWindowOpened) return
             bazaarWindowOpened = true
             log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
         }
-        bot._client.once('open_window', bazaarOpenTracker)
+        bot._client.on('open_window', bazaarOpenTracker)
         
         printMcChatToConsole(
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`

@@ -18,7 +18,7 @@ const BAZAAR_RETRY_DELAY_MS = 2000
  * 
  * The actual bzRecommend format from Coflnet:
  * { itemName: "Flawed Peridot Gemstone", itemTag: "FLAWED_PERIDOT_GEM", price: 3054.1, amount: 64, isSell: false }
- * Where 'price' is the TOTAL price for the order (not per unit)
+ * Where 'price' is the price PER PIECE (not total for the order)
  * 
  * Also supports:
  * - { itemName: "Item", amount: 4, pricePerUnit: 265000, totalPrice: 1060000, isBuyOrder: true }
@@ -53,7 +53,7 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
 
         // Extract price - handle different field names and meanings
         // 'pricePerUnit' / 'unitPrice' are per-unit prices
-        // 'price' from bzRecommend is the TOTAL price for the whole order
+        // 'price' from Coflnet is the price PER PIECE (not total for the whole order)
         if (data.pricePerUnit || data.unitPrice) {
             pricePerUnit = parseFloat(data.pricePerUnit || data.unitPrice)
             if (!pricePerUnit || isNaN(pricePerUnit)) {
@@ -64,15 +64,15 @@ export function parseBazaarFlipJson(data: any): BazaarFlipRecommendation | null 
             log(`[BazaarDebug] Parsed price per unit from pricePerUnit field: ${pricePerUnit}`, 'info')
             log(`[BazaarDebug] Calculated total price: ${totalPrice}`, 'info')
         } else if (data.price) {
-            // 'price' field is the TOTAL price (e.g., bzRecommend sends total)
-            totalPrice = parseFloat(data.price)
-            if (!totalPrice || isNaN(totalPrice)) {
+            // 'price' field is the price PER PIECE (Coflnet sends per-piece price)
+            pricePerUnit = parseFloat(data.price)
+            if (!pricePerUnit || isNaN(pricePerUnit)) {
                 log('[BazaarDebug] ERROR: Missing or invalid price in bazaar flip JSON data', 'error')
                 return null
             }
-            pricePerUnit = totalPrice / amount
-            log(`[BazaarDebug] Parsed total price from price field: ${totalPrice}`, 'info')
-            log(`[BazaarDebug] Calculated price per unit: ${pricePerUnit.toFixed(1)} (${totalPrice} / ${amount})`, 'info')
+            totalPrice = data.totalPrice ? parseFloat(data.totalPrice) : pricePerUnit * amount
+            log(`[BazaarDebug] Parsed price per unit from price field: ${pricePerUnit}`, 'info')
+            log(`[BazaarDebug] Calculated total price: ${totalPrice.toFixed(1)} (${pricePerUnit} * ${amount})`, 'info')
         } else {
             log('[BazaarDebug] ERROR: Missing price in bazaar flip JSON data', 'error')
             return null

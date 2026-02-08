@@ -2,7 +2,7 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
-import { areBazaarFlipsPaused } from './bazaarFlipPauser'
+import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -198,7 +198,8 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
 
     // Check if bazaar flips are paused due to incoming AH flip
     if (areBazaarFlipsPaused()) {
-        log('[BazaarDebug] Bazaar flips are paused due to incoming AH flip', 'warn')
+        log('[BazaarDebug] Bazaar flips are paused due to incoming AH flip, queueing recommendation', 'warn')
+        queueBazaarFlip(bot, recommendation)
         return
     }
 
@@ -402,7 +403,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
                         currentStep = 'selectOrderType'
                         await sleep(200)
-                        await clickWindow(bot, slotToClick)
+                        await clickWindow(bot, slotToClick).catch(e => {
+                            log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
+                        })
                     } else if (currentStep === 'initial') {
                         // Search results page - find and click the matching item
                         log(`[BazaarDebug] On search results page, looking for item: "${itemName}"`, 'info')
@@ -430,7 +433,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                             printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
                         }
                         await sleep(200)
-                        await clickWindow(bot, itemSlot)
+                        await clickWindow(bot, itemSlot).catch(e => {
+                            log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
+                        })
                     }
                 }
                 // Amount screen - detected by "Custom Amount" slot (buy orders only, sell offers skip this)
@@ -455,7 +460,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Click Custom Amount at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, customAmountSlot)
+                    await clickWindow(bot, customAmountSlot).catch(e => {
+                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
+                    })
                 }
                 // Price screen - detected by "Custom Price" slot (works for both buy and sell)
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {
@@ -479,7 +486,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Click Custom Price at the detected slot
                     await sleep(200)
-                    await clickWindow(bot, customPriceSlot)
+                    await clickWindow(bot, customPriceSlot).catch(e => {
+                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
+                    })
                 }
                 // Confirm screen - detected by title or confirm button presence after price step
                 else if (title.includes('Confirm') ||
@@ -499,7 +508,9 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     
                     // Click the confirm button
                     await sleep(200)
-                    await clickWindow(bot, confirmSlot)
+                    await clickWindow(bot, confirmSlot).catch(e => {
+                        log(`[BazaarDebug] clickWindow error (expected during window transitions): ${e}`, 'debug')
+                    })
                     
                     // Order placed successfully
                     log(`[BazaarDebug] Order placement complete, cleaning up listener`, 'info')

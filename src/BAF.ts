@@ -1,7 +1,7 @@
 import { createBot } from 'mineflayer'
 import { createFastWindowClicker } from './fastWindowClick'
 import { initLogger, log, printMcChatToConsole } from './logger'
-import { clickWindow, isCoflChatMessage, removeMinecraftColorCodes, sleep } from './utils'
+import { clickWindow, getWindowTitle, isCoflChatMessage, removeMinecraftColorCodes, sleep } from './utils'
 import { onWebsocketCreateAuction } from './sellHandler'
 import { tradePerson } from './tradeHandler'
 import { swapProfile } from './swapProfileHandler'
@@ -139,6 +139,23 @@ function setupBotHandlers() {
     
     bot.on('kicked', (reason,_)=>log(reason, 'warn'))
     bot.on('error', log)
+
+    // Global GUI logging to track every window the bot sees
+    const guiWindowLogger = async (packet) => {
+        const rawTitle = JSON.stringify(packet?.windowTitle)
+        log(`[GUIDebug] open_window id=${packet?.windowId} type=${packet?.windowType} rawTitle=${rawTitle}`, 'info')
+        await sleep(100)
+        if (bot.currentWindow) {
+            log(`[GUIDebug] currentWindow title="${getWindowTitle(bot.currentWindow)}" slots=${bot.currentWindow.slots.length}`, 'info')
+        } else {
+            log('[GUIDebug] currentWindow is null after open_window packet', 'warn')
+        }
+    }
+    const guiCloseLogger = (window) => {
+        log(`[GUIDebug] windowClose id=${(window as any)?.id ?? 'unknown'} title="${getWindowTitle(window)}"`, 'info')
+    }
+    bot._client.on('open_window', guiWindowLogger)
+    bot.on('windowClose', guiCloseLogger)
 
     bot.once('login', () => {
         log(`Logged in as ${bot.username}`)
@@ -507,4 +524,3 @@ export async function getCurrentWebsocket(): Promise<WebSocket> {
         resolve(socket)
     })
 }
-

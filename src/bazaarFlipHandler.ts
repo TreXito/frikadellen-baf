@@ -234,6 +234,9 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             // Note: The placeBazaarOrder function will clean up its own listener on timeout
         }
     }, OPERATION_TIMEOUT_MS)
+    let bazaarWindowOpened = false
+    let bazaarRetryTimer: NodeJS.Timeout | null = null
+    let bazaarOpenTracker: ((packet: any) => void) | null = null
 
     try {
         const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
@@ -246,6 +249,11 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             log(`[BazaarDebug] WARNING: itemTag not provided, using itemName "${itemName}" as fallback`, 'warn')
             log(`[BazaarDebug] This may cause issues if the item name contains spaces or special characters`, 'warn')
         }
+        bazaarOpenTracker = (packet) => {
+            bazaarWindowOpened = true
+            log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
+        }
+        bot._client.once('open_window', bazaarOpenTracker)
         
         printMcChatToConsole(
             `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
@@ -265,6 +273,13 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
         log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
+        bazaarRetryTimer = setTimeout(() => {
+            if (!bazaarWindowOpened && bot.state === 'bazaar') {
+                log(`[BazaarDebug] No bazaar GUI opened after initial /bz command, retrying with "/bz ${searchTerm}"`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Bazaar GUI did not open, retrying command...`)
+                bot.chat(`/bz ${searchTerm}`)
+            }
+        }, 2000)
         bot.chat(`/bz ${searchTerm}`)
 
         await orderPromise
@@ -276,6 +291,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${error}`)
     } finally {
         clearTimeout(operationTimeout)
+        if (bazaarRetryTimer) clearTimeout(bazaarRetryTimer)
+        if (bazaarOpenTracker) {
+            bot._client.removeListener('open_window', bazaarOpenTracker)
+        }
         bot.state = null
     }
 }
@@ -502,4 +521,3 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
         }, 20000)
     })
 }
-

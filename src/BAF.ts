@@ -419,7 +419,7 @@ async function onWebsocketMessage(msg) {
                 break
             }
             
-            const bzRecommendFlip = parseBazaarFlipJson(data)
+            const bzRecommendFlip = parseBazaarFlipJson(JSON.parse(data))
             if (bzRecommendFlip) {
                 log(`[BazaarDebug] Successfully parsed bzRecommend: ${bzRecommendFlip.amount}x ${bzRecommendFlip.itemName} at ${bzRecommendFlip.pricePerUnit.toFixed(1)} coins (${bzRecommendFlip.isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
                 handleBazaarFlipRecommendation(bot, bzRecommendFlip)

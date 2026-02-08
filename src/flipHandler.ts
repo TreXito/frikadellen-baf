@@ -5,7 +5,7 @@ import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, rem
 import { trackFlipPurchase } from './flipTracker'
 
 // Constants for window interaction
-const CONFIRM_RETRY_DELAY = 50
+const CONFIRM_RETRY_DELAY = 100
 const WINDOW_CONFIRM_TIMEOUT_MS = 5000 // Maximum time to wait for confirm window to close
 const MAX_UNDEFINED_COUNT = 5
 const BED_SPAM_TIMEOUT_MS = 5000
@@ -13,6 +13,7 @@ const BED_CLICKS_WITH_DELAY = 5
 const BED_CLICKS_DEFAULT = 3
 const BED_CLICK_DELAY_FALLBACK = 3
 const WINDOW_INTERACTION_DELAY = 500
+const MINEFLAYER_WINDOW_POPULATE_DELAY = 300 // Time for mineflayer to populate bot.currentWindow after open_window packet
 
 let currentFlip: Flip | null = null
 let actionCounter = 1
@@ -204,6 +205,12 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
             const windowID = window.windowId
             const windowName = window.windowTitle
             log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
+            
+            await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY) // Wait for mineflayer to populate bot.currentWindow
+            if (!bot.currentWindow) {
+                log(`bot.currentWindow is null after delay for window ${windowName} (ID: ${windowID}), skipping`, 'warn')
+                return
+            }
             
             if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
                 // Skip if we already handled this window type

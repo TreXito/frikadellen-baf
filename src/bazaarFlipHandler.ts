@@ -245,12 +245,12 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
         const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
-        // Use itemTag if available (internal ID like "FLAWED_PERIDOT_GEM"), otherwise fall back to itemName
-        // The /bz command works better with internal IDs especially for items with spaces in names
-        const searchTerm = itemTag || itemName
-        if (!itemTag) {
-            log(`[BazaarDebug] WARNING: itemTag not provided, using itemName "${itemName}" as fallback`, 'warn')
-            log(`[BazaarDebug] This may cause issues if the item name contains spaces or special characters`, 'warn')
+        // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
+        // The /bz command expects display names as shown in Hypixel's bazaar UI
+        const searchTerm = itemName || itemTag
+        if (!itemName && itemTag) {
+            log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
+            log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
         }
         bazaarTracking.openTracker = (packet) => {
             if (bazaarTracking.windowOpened) return

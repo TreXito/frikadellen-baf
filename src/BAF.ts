@@ -9,6 +9,7 @@ import { AutoBuy, addAutoBuyHelpers, onItemWhitelistedMessage, getWhitelistedDat
 import { StateManager } from './stateManager'
 import { SocketWrapper } from './socketWrapper'
 import { claimSoldItem, registerIngameMessageHandler } from './ingameMessageHandler'
+import { setupGlobalAuctionHandler } from './flipHandler'
 import { MyBot, TextMessageData } from '../types/autobuy'
 import { getConfigProperty, initConfigHelper, updatePersistentConfigProperty } from './configHelper'
 import { getSessionId } from './coflSessionManager'
@@ -184,6 +185,10 @@ function setupBotHandlers() {
     }
     bot._client.on('open_window', guiWindowLogger)
     bot.on('windowClose', guiCloseLogger)
+
+    // Global auction window handler - always listens for BIN Auction View windows
+    // This handles auctions opened via AutoBuy's direct /viewauction calls
+    setupGlobalAuctionHandler(bot)
 
     bot.once('login', () => {
         log(`Logged in as ${bot.username}`)

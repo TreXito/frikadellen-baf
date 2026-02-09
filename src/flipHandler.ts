@@ -320,7 +320,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     }
                     
                     log("Purchase confirmed.", 'debug')
-                    // Note: purchaseStartTime cleared in message handler when "You purchased" is detected
+                    // Note: purchaseStartTime cleared in message handler when "Putting coins in escrow..." is detected
                     
                     bot._client.removeListener('open_window', openWindowHandler)
                     ;(bot as any)._bafOpenWindowHandler = null

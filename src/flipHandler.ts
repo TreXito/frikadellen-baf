@@ -91,58 +91,7 @@ function clickSlot(bot: MyBot, slot: number, windowId: number, itemId: number) {
     actionCounter++
 }
 
-/**
- * Determines if a flip should be skipped based on configuration
- */
-function shouldSkipFlip(flip: Flip, profit: number): boolean {
-    const skipSettings = getConfigProperty('SKIP')
-    const useSkipAlways = skipSettings.ALWAYS
-    const skipMinProfit = skipSettings.MIN_PROFIT
-    const skipUser = skipSettings.USER_FINDER
-    const skipSkins = skipSettings.SKINS
-    const skipMinPercent = skipSettings.PROFIT_PERCENTAGE
-    const skipMinPrice = skipSettings.MIN_PRICE
 
-    const finderCheck = flip.finder === 'USER' && skipUser
-    const skinCheck = isSkin(flip.itemName) && skipSkins
-    const profitCheck = profit > skipMinProfit
-    const percentCheck = (flip.profitPerc || 0) > skipMinPercent
-    const priceCheck = flip.startingBid > skipMinPrice
-
-    return useSkipAlways || profitCheck || skinCheck || finderCheck || percentCheck || priceCheck
-}
-
-/**
- * Logs the reason for skipping a flip
- */
-function logSkipReason(flip: Flip, profit: number) {
-    const skipSettings = getConfigProperty('SKIP')
-    const useSkipAlways = skipSettings.ALWAYS
-    
-    if (useSkipAlways) {
-        printMcChatToConsole('§f[§4BAF§f]: §cUsed skip because you have skip always enabled in config')
-        return
-    }
-    
-    let skipReasons = []
-    if (flip.finder === 'USER' && skipSettings.USER_FINDER) {
-        skipReasons.push('it was a user flip')
-    }
-    if (profit > skipSettings.MIN_PROFIT) {
-        skipReasons.push('profit was over ' + numberWithThousandsSeparators(skipSettings.MIN_PROFIT))
-    }
-    if (isSkin(flip.itemName) && skipSettings.SKINS) {
-        skipReasons.push('it was a skin')
-    }
-    if ((flip.profitPerc || 0) > skipSettings.PROFIT_PERCENTAGE) {
-        skipReasons.push('profit percentage was over ' + skipSettings.PROFIT_PERCENTAGE + '%')
-    }
-    if (flip.startingBid > skipSettings.MIN_PRICE) {
-        skipReasons.push('price was over ' + numberWithThousandsSeparators(skipSettings.MIN_PRICE))
-    }
-    
-    printMcChatToConsole(`§f[§4BAF§f]: §aUsed skip because ${skipReasons.join(' and ')}`)
-}
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
     // Check if AH flips are enabled in config
@@ -233,39 +182,23 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     // Send confirm click packet for faster response
                     confirmClick(bot, windowID)
                     
-                    // Calculate profit for skip conditions
-                    const profit = flip.target - flip.startingBid
-                    
-                    // Save fromCoflSocket state before resetting
-                    const isFromCofl = fromCoflSocket
+                    // Reset fromCoflSocket flag
                     fromCoflSocket = false
                     
                     firstGui = Date.now()
                     
-                    // Wait for item to load in slot 31 with minimal delay
-                    // Use a short timeout (50ms) for fast purchasing
+                    // Wait for item to load in slot 31 - fast loading for quick purchases
                     let item = (await itemLoad(bot, 31, false, 50))?.name
-                    
-                    // Check skip conditions AFTER confirming item loaded successfully
-                    // Skip only applies to valid items (not potato/null)
-                    const useSkipOnFlip = item === 'gold_nugget' && shouldSkipFlip(flip, profit) && isFromCofl
                     
                     if (item === 'gold_nugget') {
                         // Click on gold nugget to proceed to confirm window
                         clickSlot(bot, 31, windowID, 371)
                         clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
-                        
-                        // Log skip reason if applicable (but still purchase the flip)
-                        if (useSkipOnFlip) {
-                            recentlySkipped = true
-                            logSkipReason(flip, profit)
-                        } else {
-                            recentlySkipped = false
-                        }
-                    } else {
-                        // Item didn't load properly or is invalid
-                        recentlySkipped = false
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                     }
+                    
+                    // Reset skip tracking (not used for preventing purchases, just for tracking)
+                    recentlySkipped = false
                     
                     // Handle different item types
                     switch (item) {
@@ -289,7 +222,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                         case "feather":
-                            // Double check for potato or gold_block with same timeout
+                            // Double check for potato or gold_block
                             const secondItem = (await itemLoad(bot, 31, true, 50))?.name
                             if (secondItem === 'potato') {
                                 printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
@@ -366,7 +299,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     const confirmAt = Date.now() - firstGui
                     printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
                     
-                    // Always click confirm - skip just means "click faster with less delays"
+                    // Always click confirm to purchase - fast purchasing
                     // Immediately click slot 11 without any delay for fastest confirm time
                     clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
                     

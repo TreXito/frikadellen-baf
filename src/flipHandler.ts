@@ -184,13 +184,15 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     
                     if (item === 'gold_nugget') {
                         // Skip logic: Click both slot 31 and slot 11 in same tick for sub-90ms purchases
+                        // First click: Buy button (slot 31) in BIN Auction View
                         clickSlot(bot, 31, windowID, 371)
                         clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                         
-                        // Immediately click slot 11 (confirm) without waiting for window
+                        // Second click: Confirm button (slot 11) in the next window (Confirm Purchase)
+                        // The Confirm Purchase window will have windowID + 1
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
-                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot 11: ${err}`, 'error'))
+                        clickSlot(bot, 11, windowID + 1, -1) // -1 for empty slot / any item
                     }
                     
                     // Handle different item types

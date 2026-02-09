@@ -184,14 +184,18 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     
                     if (item === 'gold_nugget') {
                         // Skip logic: Click slot 31 and slot 11 in same tick for sub-90ms purchases
-                        // Send purchase click
-                        clickSlot(bot, 31, windowID, 371)
+                        // Both clicks use the same windowID - the server queues the second click and 
+                        // processes it when the Confirm Purchase window opens (which happens server-side
+                        // after the first click). This eliminates client-side window detection delay.
+                        
+                        // Send purchase click (slot 31 = Buy Item Right Now button)
+                        clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                         
-                        // Immediately send confirm click with same windowID
-                        // Server will process this when Confirm Purchase window opens
+                        // Immediately send confirm click (slot 11 = Confirm button in next window)
+                        // Note: "Unknown" matches expected log output format from problem statement
+                        clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay (confirm)
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
-                        clickSlot(bot, 11, windowID, 159) // 159 is green stained hardened clay (confirm button)
                     }
                     
                     // Handle different item types

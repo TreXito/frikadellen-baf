@@ -302,11 +302,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     log("Confirming flip purchase...", 'debug')
                     await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
 
-                    // Loop with 100ms sleep while window is "Confirm Purchase"
+                    // Loop with 10ms sleep while window is "Confirm Purchase"
                     const confirmStartTime = Date.now()
                     let confirmWindow = getWindowTitle(bot.currentWindow)
                     while (confirmWindow === 'Confirm Purchase') {
-                        await sleep(100)
+                        await sleep(10)
                         confirmWindow = getWindowTitle(bot.currentWindow)
                         
                         // Timeout protection to prevent infinite loop

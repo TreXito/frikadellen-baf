@@ -19,10 +19,11 @@ export async function registerIngameMessageHandler(bot: MyBot) {
         if (type == 'chat') {
             printMcChatToConsole(message.toAnsi())
             // Display timing when "Putting coins in escrow..." appears (TPM+ pattern)
+            let buyspeed: number | null = null
             if (text === 'Putting coins in escrow...') {
                 const startTime = getPurchaseStartTime()
                 if (startTime !== null) {
-                    const buyspeed = Date.now() - startTime
+                    buyspeed = Date.now() - startTime
                     // Prevent duplicate messages with same timing
                     if (buyspeed === oldBuyspeed) return
                     oldBuyspeed = buyspeed
@@ -56,7 +57,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     clearCurrentFlip()
                 }
 
-                sendWebhookItemPurchased(itemName, price, whitelistedData, flip)
+                sendWebhookItemPurchased(itemName, price, whitelistedData, flip, buyspeed)
                 setNothingBoughtFor1HourTimeout(wss)
             }
             // Handle auction errors (expired, not found, etc.)

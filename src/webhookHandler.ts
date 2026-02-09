@@ -49,7 +49,7 @@ export function sendWebhookInitialized() {
     })
 }
 
-export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip) {
+export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip, buyspeed?: number | null) {
     if (!isWebhookConfigured()) {
         return
     }
@@ -82,6 +82,15 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                 }
             }
         ]
+    }
+
+    // Add buyspeed if available
+    if (buyspeed !== null && buyspeed !== undefined) {
+        webhookData.embeds[0].fields.push({
+            name: '⚡ Purchase Speed',
+            value: `\`\`\`fix\n${buyspeed}ms\n\`\`\``,
+            inline: true
+        })
     }
 
     if (flip && flip.target) {

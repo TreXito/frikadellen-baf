@@ -6,6 +6,8 @@ import { onWebsocketCreateAuction } from './sellHandler'
 import { tradePerson } from './tradeHandler'
 import { swapProfile } from './swapProfileHandler'
 import { AutoBuy, addAutoBuyHelpers, onItemWhitelistedMessage, getWhitelistedData } from './autoBuy'
+import { StateManager } from './stateManager'
+import { SocketWrapper } from './socketWrapper'
 import { flipHandler } from './flipHandler'
 import { claimSoldItem, registerIngameMessageHandler } from './ingameMessageHandler'
 import { MyBot, TextMessageData } from '../types/autobuy'
@@ -30,6 +32,8 @@ const version = 'af-2.0.0'
 const GUI_LOG_DELAY_MS = 100
 let _websocket: WebSocket
 let bot: MyBot
+let autoBuyInstance: AutoBuy | null = null
+let socketWrapper: SocketWrapper | null = null
 let ingameName = getConfigProperty('INGAME_NAME')
 
 if (!ingameName) {
@@ -133,6 +137,27 @@ function createBotInstance(username: string) {
     bot.setMaxListeners(0)
     bot.state = 'gracePeriod'
     createFastWindowClicker(bot._client)
+    
+    // Add AutoBuy helper methods to bot
+    addAutoBuyHelpers(bot)
+    
+    // Initialize socket wrapper and AutoBuy instance
+    if (!socketWrapper) {
+        socketWrapper = new SocketWrapper()
+    }
+    
+    const stateManager = new StateManager()
+    autoBuyInstance = new AutoBuy(
+        bot,
+        null, // webhook
+        socketWrapper,
+        username,
+        stateManager,
+        null, // relist
+        null  // bank
+    )
+    
+    log('[AutoBuy] Initialized AutoBuy instance with exact logic', 'info')
     
     setupBotHandlers()
 }
@@ -296,7 +321,10 @@ async function onWebsocketMessage(msg) {
     switch (message.type) {
         case 'flip':
             log(message, 'debug')
-            flipHandler(bot, data)
+            // Emit flip event through socket wrapper for AutoBuy class
+            if (socketWrapper) {
+                socketWrapper.emitFlip(data)
+            }
             break
         case 'chatMessage':
             if (data.length > 1 && data[1].text.includes('matched your Whitelist entry:') && !isCoflChatMessage(data[1].text)) {

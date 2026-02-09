@@ -9,6 +9,8 @@ import { trackFlipPurchase } from './flipTracker'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
+// Track last buyspeed to prevent duplicate timing messages
+let oldBuyspeed = -1
 
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
@@ -16,6 +18,18 @@ export async function registerIngameMessageHandler(bot: MyBot) {
         let text = message.getText(null)
         if (type == 'chat') {
             printMcChatToConsole(message.toAnsi())
+            // Display timing when "Putting coins in escrow..." appears (TPM+ pattern)
+            if (text === 'Putting coins in escrow...') {
+                const startTime = getPurchaseStartTime()
+                if (startTime !== null) {
+                    const buyspeed = Date.now() - startTime
+                    // Prevent duplicate messages with same timing
+                    if (buyspeed === oldBuyspeed) return
+                    oldBuyspeed = buyspeed
+                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${buyspeed}ms`)
+                    clearPurchaseStartTime()
+                }
+            }
             if (text.startsWith('You purchased')) {
                 wss.send(
                     JSON.stringify({

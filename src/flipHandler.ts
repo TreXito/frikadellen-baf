@@ -318,13 +318,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             break
                         }
                     }
-
-                    // Calculate total purchase time
-                    const totalPurchaseTime = Date.now() - firstGui
-                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction purchased in ${totalPurchaseTime}ms`)
                     
                     log("Purchase confirmed.", 'debug')
-                    purchaseStartTime = null // Clear the start time
+                    // Note: purchaseStartTime cleared in message handler when "Putting coins in escrow..." is detected
                     
                     bot._client.removeListener('open_window', openWindowHandler)
                     ;(bot as any)._bafOpenWindowHandler = null

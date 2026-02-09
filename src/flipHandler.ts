@@ -474,11 +474,12 @@ export function setupGlobalAuctionHandler(bot: MyBot) {
                     
                     // Second click on slot 31 (required for reliable purchase)
                     clickSlot(bot, 31, windowID, 371)
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now (2nd click)`)
                     
                     // Immediately send confirm click with same windowID - skip logic
                     // Server will process this when Confirm Purchase window opens
                     clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
-                    printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Confirm Purchase`)
                     
                     // Don't wait for Confirm Purchase window - purchases complete via skip logic
                     bot.state = null

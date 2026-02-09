@@ -89,7 +89,7 @@ class AutoBuy {
     constructor(bot: MyBot, webhook: any, socket: any, username: string, state: any, relist: any, bank: any) {
         this.bot = bot
         this.webhook = webhook
-        this.socket = socket.getWs()
+        this.socket = socket.getWs() // Get underlying WebSocket for direct flip event listening
         this.username = username
         this.state = state
         this.relist = relist

@@ -143,7 +143,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
     return new Promise<void>((resolve, reject) => {
         let firstGui: number
         let handledBinAuction = false
-        let handledConfirm = false
         
         // Remove only our previous handler to prevent stacking (not mineflayer's internal handlers)
         if ((bot as any)._bafOpenWindowHandler) {
@@ -156,14 +155,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 const windowName = window.windowTitle
                 log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
                 
-                // Only delay for BIN Auction View where we need bot.currentWindow populated
-                // Do NOT delay for Confirm Purchase — speed is critical there
-                if (windowName !== WINDOW_TITLE_CONFIRM_PURCHASE) {
-                    await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY) // Wait for mineflayer to populate bot.currentWindow
-                    if (!bot.currentWindow) {
-                        log(`bot.currentWindow is null after delay for window ${windowName} (ID: ${windowID}), skipping`, 'warn')
-                        return
-                    }
+                // Wait for mineflayer to populate bot.currentWindow
+                await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY)
+                if (!bot.currentWindow) {
+                    log(`bot.currentWindow is null after delay for window ${windowName} (ID: ${windowID}), skipping`, 'warn')
+                    return
                 }
                 
                 if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
@@ -187,17 +183,26 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     let item = (await itemLoad(bot, 31, false))?.name
                     
                     if (item === 'gold_nugget') {
-                        // Click on gold nugget to proceed to confirm window
+                        // Skip logic: Click both slot 31 and slot 11 in same tick for sub-90ms purchases
                         clickSlot(bot, 31, windowID, 371)
                         clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
+                        
+                        // Immediately click slot 11 (confirm) without waiting for window
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot 11: ${err}`, 'error'))
                     }
                     
                     // Handle different item types
                     switch (item) {
                         case "gold_nugget":
-                            // Already handled above (clicked slot 31), just wait for Confirm Purchase window
-                            break
+                            // Skip logic: Already clicked both slot 31 and 11, clean up and exit
+                            purchaseStartTime = null
+                            bot._client.removeListener('open_window', openWindowHandler)
+                            ;(bot as any)._bafOpenWindowHandler = null
+                            bot.state = null
+                            resolve()
+                            return
                         case "bed":
                             printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
                             await initBedSpam(bot)
@@ -287,46 +292,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                     }
-                } else if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
-                    // Skip if we already handled this window type
-                    if (handledConfirm) {
-                        log('Already handled Confirm Purchase, ignoring duplicate', 'debug')
-                        return
-                    }
-                    handledConfirm = true
-                    
-                    const confirmAt = Date.now() - firstGui
-                    printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
-                    
-                    // TPM+ pattern: Simple click and loop until window closes
-                    log("Confirming flip purchase...", 'debug')
-                    await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
-
-                    // Loop with 1ms sleep while window is "Confirm Purchase" (matches itemLoad pattern)
-                    const confirmStartTime = Date.now()
-                    let confirmWindow = getWindowTitle(bot.currentWindow)
-                    while (confirmWindow === 'Confirm Purchase') {
-                        await sleep(1)
-                        confirmWindow = getWindowTitle(bot.currentWindow)
-                        
-                        // Timeout protection to prevent infinite loop
-                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
-                            log('Confirm window timeout - closing window', 'warn')
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            break
-                        }
-                    }
-                    
-                    log("Purchase confirmed.", 'debug')
-                    // Note: purchaseStartTime cleared in message handler when "Putting coins in escrow..." is detected
-                    
-                    bot._client.removeListener('open_window', openWindowHandler)
-                    ;(bot as any)._bafOpenWindowHandler = null
-                    bot.state = null
-                    resolve()
-                    return
                 }
                 
                 await sleep(WINDOW_INTERACTION_DELAY)

@@ -5,7 +5,7 @@ import { clickWindow, getWindowTitle, isCoflChatMessage, removeMinecraftColorCod
 import { onWebsocketCreateAuction } from './sellHandler'
 import { tradePerson } from './tradeHandler'
 import { swapProfile } from './swapProfileHandler'
-import { flipHandler, onItemWhitelistedMessage } from './flipHandler'
+import { AutoBuy, StateManager, onItemWhitelistedMessage, getWhitelistedData } from './autoBuy'
 import { claimSoldItem, registerIngameMessageHandler } from './ingameMessageHandler'
 import { MyBot, TextMessageData } from '../types/autobuy'
 import { getConfigProperty, initConfigHelper, updatePersistentConfigProperty } from './configHelper'
@@ -21,6 +21,7 @@ import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
 const WebSocket = require('ws')
+const EventEmitter = require('events')
 var prompt = require('prompt-sync')()
 initConfigHelper()
 initLogger()

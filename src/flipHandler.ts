@@ -24,42 +24,42 @@ let actionCounter = 1
 let fromCoflSocket = false
 
 /**
- * Polls the window slot to wait for an item to load
+ * Waits for an item to load in a slot - TPM+ pattern
  * @param bot The bot instance
- * @param slot The slot number to check
- * @param alreadyLoaded Whether to wait for a change in the slot (for feather double-check)
- * @param delay Optional delay override (uses config if not provided)
- * @returns The item in the slot or null if timeout
+ * @param slotIndex The slot number to check
+ * @param checkName Whether to check if item is potato and return null
+ * @returns The item in the slot or null if not found/potato
  */
-async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false, delay?: number): Promise<any> {
-    return new Promise((resolve) => {
-        let index = 1
-        let found = false
-        const first = bot.currentWindow?.slots[slot]?.name
-        const actualDelay = delay ?? (getConfigProperty('FLIP_ACTION_DELAY') || 150)
+async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = false): Promise<any> {
+    try {
+        // Wait for slot to populate with polling
+        let attempts = 0
+        const maxAttempts = 100 // ~100ms timeout total
         
-        const checkCondition = alreadyLoaded 
-            ? (check: any) => check?.name !== first
-            : (check: any) => check !== null && check !== undefined
-        
-        const interval = setInterval(() => {
-            const check = bot.currentWindow?.slots[slot]
-            if (checkCondition(check)) {
-                clearInterval(interval)
-                found = true
-                resolve(check)
-                log(`Found ${check?.name} on index ${index}`, 'debug')
+        while (attempts < maxAttempts) {
+            const item = bot.currentWindow?.slots[slotIndex]
+            if (item && item.name) {
+                // Check if we should skip potato items
+                if (checkName && item.name === "potato") {
+                    log("[AutoBuy] Skipping potato item...", 'debug')
+                    return null
+                }
+                
+                log(`[AutoBuy] Loaded item: ${item.name}`, 'debug')
+                return item
             }
-            index++
-        }, 1)
-
-        setTimeout(() => {
-            if (found) return
-            log(`Failed to find an item in slot ${slot}`, 'debug')
-            clearInterval(interval)
-            resolve(null)
-        }, actualDelay * 3)
-    })
+            
+            // Wait 1ms between checks
+            await sleep(1)
+            attempts++
+        }
+        
+        // Item not found after timeout
+        throw new Error("Item not found.")
+    } catch (error) {
+        log(`[AutoBuy] Error loading item: ${error}`, 'error')
+        return null
+    }
 }
 
 /**
@@ -185,8 +185,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     
                     firstGui = Date.now()
                     
-                    // Wait for item to load in slot 31 - fast loading for quick purchases
-                    let item = (await itemLoad(bot, 31, false, 50))?.name
+                    // Wait for item to load in slot 31 - TPM+ pattern
+                    let item = (await itemLoad(bot, 31, false))?.name
                     
                     if (item === 'gold_nugget') {
                         // Click on gold nugget to proceed to confirm window
@@ -217,8 +217,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                         case "feather":
-                            // Double check for potato or gold_block
-                            const secondItem = (await itemLoad(bot, 31, true, 50))?.name
+                            // Double check for potato or gold_block - check name for potato
+                            const secondItem = (await itemLoad(bot, 31, true))?.name
                             if (secondItem === 'potato') {
                                 printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
                                 if (bot.currentWindow) {
@@ -288,32 +288,30 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     }
                     handledConfirm = true
                     
-                    // Send confirm click packet for faster response
-                    confirmClick(bot, windowID)
-                    
                     const confirmAt = Date.now() - firstGui
                     printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
                     
-                    // Always click confirm to purchase - fast purchasing
-                    // Immediately click slot 11 without any delay for fastest confirm time
-                    clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
-                    
-                    // Wait for window to change before cleanup (like TPM-rewrite)
-                    // Keep clicking until the window closes to ensure the click registers
-                    await sleep(CONFIRM_RETRY_DELAY)
-                    const confirmStartTime = Date.now()
-                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                    // TPM+ pattern: Simple click and loop until window closes
+                    log("[AutoBuy] Confirming flip purchase...", 'debug')
+                    await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
+
+                    // Loop with 100ms sleep while window is "Confirm Purchase"
+                    let confirmWindow = getWindowTitle(bot.currentWindow)
+                    while (confirmWindow === 'Confirm Purchase') {
+                        await sleep(100)
+                        confirmWindow = getWindowTitle(bot.currentWindow)
+                        
                         // Timeout protection to prevent infinite loop
-                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
+                        if (Date.now() - confirmAt > WINDOW_CONFIRM_TIMEOUT_MS) {
                             log('Confirm window timeout - closing window', 'warn')
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
                             }
                             break
                         }
-                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
-                        await sleep(CONFIRM_RETRY_DELAY)
                     }
+
+                    log("[AutoBuy] Purchase confirmed.", 'debug')
                     
                     bot._client.removeListener('open_window', openWindowHandler)
                     ;(bot as any)._bafOpenWindowHandler = null
@@ -341,80 +339,31 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
 /**
  * Handles bed spam clicking for bed flips
  */
+/**
+ * Bed spam prevention - TPM+ pattern
+ * Simple interval checking slot 31 for gold_nugget
+ */
 async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
-    const clickDelay = getConfigProperty('BED_SPAM_CLICK_DELAY') || 5
-    const multipleBedClicksDelay = getConfigProperty('BED_MULTIPLE_CLICKS_DELAY') || 0
-    const bedSpam = getConfigProperty('BED_SPAM') || false
-    
-    let delayUntilBuyStart = isBed
-        ? flip.purchaseAt.getTime() - new Date().getTime() - (multipleBedClicksDelay > 0 ? multipleBedClicksDelay : 0)
-        : 0
-    
-    if (delayUntilBuyStart > 0) {
-        await sleep(delayUntilBuyStart)
-    }
-    
-    if (bedSpam) {
-        // Continuous bed spam until window changes or item changes
-        let undefinedCount = 0
-        const bedSpamInterval = setInterval(() => {
-            const window = bot.currentWindow
-            const item = window?.slots[31]?.name
-            
-            if (item === undefined) {
-                undefinedCount++
-                if (undefinedCount >= MAX_UNDEFINED_COUNT) {
-                    clearInterval(bedSpamInterval)
-                    log('Clearing bed spam due to undefined count', 'debug')
-                }
-                return
-            }
-            
-            if (item === "gold_nugget") {
-                clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
-                return
-            } else if (item === "potato") {
-                if (bot.currentWindow) {
-                    bot.closeWindow(bot.currentWindow)
-                }
-                bot.state = null
-                clearInterval(bedSpamInterval)
-                return
-            }
-            
-            if (getWindowTitle(window) !== 'BIN Auction View' || item !== 'bed') {
-                clearInterval(bedSpamInterval)
-                log('Clearing bed spam', 'debug')
-                return
-            }
-            
-            clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
-        }, clickDelay)
-        
-        // Failsafe timeout
-        setTimeout(() => {
+    const clickInterval = getConfigProperty('BED_SPAM_CLICK_DELAY') || 100
+    log("[AutoBuy] Starting bed spam prevention...", 'debug')
+
+    let failedClicks = 0
+
+    const bedSpamInterval = setInterval(() => {
+        const currentWindow = bot.currentWindow
+        if (!currentWindow || failedClicks >= 5) {
             clearInterval(bedSpamInterval)
-            if (getWindowTitle(bot.currentWindow) === 'BIN Auction View' && bot.state === 'purchasing') {
-                if (bot.currentWindow) {
-                    bot.closeWindow(bot.currentWindow)
-                }
-                bot.state = null
-                printMcChatToConsole('§f[§4BAF§f]: §cBed timing failed, aborted auction')
-            }
-        }, BED_SPAM_TIMEOUT_MS)
-    } else {
-        // Multiple click approach
-        const clicks = multipleBedClicksDelay > 0 ? BED_CLICKS_WITH_DELAY : BED_CLICKS_DEFAULT
-        for (let i = 0; i < clicks; i++) {
-            if (getWindowTitle(bot.currentWindow) === 'BIN Auction View') {
-                clickWindow(bot, 31).catch(err => log(`Error clicking bed: ${err}`, 'error'))
-                log(`Bed click ${i + 1}`, 'debug')
-                await sleep(multipleBedClicksDelay || BED_CLICK_DELAY_FALLBACK)
-            } else {
-                break
-            }
+            log("[AutoBuy] Stopped bed spam prevention.", 'debug')
+            return
         }
-    }
+
+        const slotName = currentWindow.slots[31]?.name
+        if (slotName === "gold_nugget") {
+            clickWindow(bot, 31).catch(err => log(`Error clicking bed slot: ${err}`, 'error'))
+        } else {
+            failedClicks++
+        }
+    }, clickInterval)
 }
 
 // Stores the last 3 whitelist messages so add it to the webhook message for purchased flips

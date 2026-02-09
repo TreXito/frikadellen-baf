@@ -233,46 +233,39 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     // Send confirm click packet for faster response
                     confirmClick(bot, windowID)
                     
-                    // Calculate profit and check skip conditions
+                    // Calculate profit for skip conditions
                     const profit = flip.target - flip.startingBid
-                    const skipSettings = getConfigProperty('SKIP')
-                    const useSkipAlways = skipSettings.ALWAYS
-                    const currentDelay = getConfigProperty('FLIP_ACTION_DELAY')
-
-                    // Enforce minimum FLIP_ACTION_DELAY if ALWAYS skip is enabled
-                    // This prevents timeout issues when checking if item should be skipped
-                    const effectiveDelay = useSkipAlways && currentDelay < 150 ? 150 : currentDelay
-                    if (effectiveDelay !== currentDelay) {
-                        printMcChatToConsole(
-                            `§f[§4BAF§f]: §eUsing 150ms delay (SKIP.ALWAYS requires >= 150ms, config: ${currentDelay}ms)`
-                        )
-                    }
-
-                    // Determine if we should use skip - checked BEFORE clicking
-                    const useSkipOnFlip = shouldSkipFlip(flip, profit) && fromCoflSocket
                     
-                    // Reset fromCoflSocket flag
+                    // Save fromCoflSocket state before resetting
+                    const isFromCofl = fromCoflSocket
                     fromCoflSocket = false
                     
                     firstGui = Date.now()
                     
-                    // Wait for item to load in slot 31
-                    let item = (await itemLoad(bot, 31, false, effectiveDelay))?.name
+                    // Wait for item to load in slot 31 with minimal delay
+                    // Use a short timeout (50ms) for fast purchasing
+                    let item = (await itemLoad(bot, 31, false, 50))?.name
+                    
+                    // Check skip conditions AFTER confirming item loaded successfully
+                    // Skip only applies to valid items (not potato/null)
+                    const useSkipOnFlip = item === 'gold_nugget' && shouldSkipFlip(flip, profit) && isFromCofl
                     
                     if (item === 'gold_nugget') {
-                        // Click on gold nugget first
+                        // Click on gold nugget to proceed to confirm window
                         clickSlot(bot, 31, windowID, 371)
                         clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
                         
-                        // If skip should be used, set flag to skip in next window
+                        // Log skip reason if applicable (but still purchase the flip)
                         if (useSkipOnFlip) {
                             recentlySkipped = true
                             logSkipReason(flip, profit)
-                            return
+                        } else {
+                            recentlySkipped = false
                         }
+                    } else {
+                        // Item didn't load properly or is invalid
+                        recentlySkipped = false
                     }
-                    
-                    recentlySkipped = false
                     
                     // Handle different item types
                     switch (item) {
@@ -296,8 +289,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                         case "feather":
-                            // Double check for potato or gold_block
-                            const secondItem = (await itemLoad(bot, 31, true, effectiveDelay))?.name
+                            // Double check for potato or gold_block with same timeout
+                            const secondItem = (await itemLoad(bot, 31, true, 50))?.name
                             if (secondItem === 'potato') {
                                 printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
                                 if (bot.currentWindow) {
@@ -373,32 +366,25 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     const confirmAt = Date.now() - firstGui
                     printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
                     
-                    // Only click confirm if we didn't skip
-                    if (!recentlySkipped) {
-                        // Immediately click slot 11 without any delay for fastest confirm time
-                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
-                        
-                        // Wait for window to change before cleanup (like TPM-rewrite)
-                        // Keep clicking until the window closes to ensure the click registers
-                        await sleep(CONFIRM_RETRY_DELAY)
-                        const confirmStartTime = Date.now()
-                        while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
-                            // Timeout protection to prevent infinite loop
-                            if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
-                                log('Confirm window timeout - closing window', 'warn')
-                                if (bot.currentWindow) {
-                                    bot.closeWindow(bot.currentWindow)
-                                }
-                                break
+                    // Always click confirm - skip just means "click faster with less delays"
+                    // Immediately click slot 11 without any delay for fastest confirm time
+                    clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
+                    
+                    // Wait for window to change before cleanup (like TPM-rewrite)
+                    // Keep clicking until the window closes to ensure the click registers
+                    await sleep(CONFIRM_RETRY_DELAY)
+                    const confirmStartTime = Date.now()
+                    while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                        // Timeout protection to prevent infinite loop
+                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
+                            log('Confirm window timeout - closing window', 'warn')
+                            if (bot.currentWindow) {
+                                bot.closeWindow(bot.currentWindow)
                             }
-                            clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
-                            await sleep(CONFIRM_RETRY_DELAY)
+                            break
                         }
-                    } else {
-                        // Close the window to cancel the purchase when skipping
-                        if (bot.currentWindow) {
-                            bot.closeWindow(bot.currentWindow)
-                        }
+                        clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
+                        await sleep(CONFIRM_RETRY_DELAY)
                     }
                     
                     bot._client.removeListener('open_window', openWindowHandler)

@@ -197,7 +197,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     switch (item) {
                         case "gold_nugget":
                             // Skip logic: Already clicked both slot 31 and 11, clean up and exit
-                            purchaseStartTime = null
+                            // Note: purchaseStartTime NOT cleared here - message handler will clear it and display timing
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null

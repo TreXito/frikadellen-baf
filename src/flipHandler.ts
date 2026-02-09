@@ -22,7 +22,6 @@ const WINDOW_TITLE_BIN_AUCTION_VIEW = '{"italic":false,"extra":[{"text":"BIN Auc
 let currentFlip: Flip | null = null
 let actionCounter = 1
 let fromCoflSocket = false
-let recentlySkipped = false
 
 /**
  * Polls the window slot to wait for an item to load
@@ -138,7 +137,6 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
 
     // Store flip data for access in open_window handler
     fromCoflSocket = true
-    recentlySkipped = false
     
     await useRegularPurchase(bot, flip, isBed)
     clearTimeout(timeout)
@@ -196,9 +194,6 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                     }
-                    
-                    // Reset skip tracking (not used for preventing purchases, just for tracking)
-                    recentlySkipped = false
                     
                     // Handle different item types
                     switch (item) {

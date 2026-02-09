@@ -81,7 +81,6 @@ class AutoBuy {
     private recentPercent: number = 0
     private recentFinder: number = 0
     private recentPrice: number = 0
-    private recentlySkipped: boolean = false
     private recentName: string | null = null
     private currentOpen: string | null = null
 

@@ -12,6 +12,7 @@ let errorTimeout
 // Track last buyspeed to prevent duplicate timing messages
 let oldBuyspeed = -1
 // Store buyspeed for webhook (set when escrow message arrives, used when purchase message arrives)
+// Note: Race condition is prevented by bot.state locking in flipHandler - only one purchase at a time
 let lastBuyspeed: number | null = null
 
 export async function registerIngameMessageHandler(bot: MyBot) {

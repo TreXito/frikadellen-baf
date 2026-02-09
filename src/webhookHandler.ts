@@ -85,7 +85,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     }
 
     // Add buyspeed if available
-    if (buyspeed !== null && buyspeed !== undefined) {
+    if (buyspeed != null) {
         webhookData.embeds[0].fields.push({
             name: '⚡ Purchase Speed',
             value: `\`\`\`fix\n${buyspeed}ms\n\`\`\``,

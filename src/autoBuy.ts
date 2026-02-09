@@ -1,9 +1,10 @@
 // AutoBuy class - EXACT implementation from problem statement  
 // DO NOT MODIFY CORE LOGIC - changes may lead to bans
 
-import { Flip, FlipWhitelistedData, MyBot } from '../types/autobuy'
+import { Flip, FlipWhitelistedData, FlipQueueAction, MyBot } from '../types/autobuy'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
+import { flipHandler as processFlip } from './flipHandler'
 
 // Extend MyBot interface with AutoBuy helper methods
 declare module '../types/autobuy' {
@@ -112,16 +113,32 @@ class AutoBuy {
 
             console.log(`[AutoBuy] Flip found: ${itemName} with ${profit} profit.`)
 
+            // Build proper Flip object for flipHandler
+            const flip: Flip = {
+                id: data.id,
+                startingBid: data.startingBid,
+                purchaseAt: data.purchaseAt ? new Date(data.purchaseAt) : new Date(),
+                itemName: data.itemName,
+                target: data.target,
+                finder: data.finder,
+                profitPerc: data.profitPerc
+            }
+
             if (!bot.currentWindow) {
-                bot.chat(`/viewauction ${auctionId}`)
+                // Call the actual flip handler that handles auction windows properly
+                processFlip(bot, flip)
             } else {
-                state.queueAdd({
+                const queueAction: FlipQueueAction = {
                     finder: data.finder,
                     profit: profit,
                     itemName: itemName,
                     auctionID: auctionId,
                     startingBid: data.startingBid,
-                }, "buying", 0)
+                    target: data.target,
+                    purchaseAt: data.purchaseAt || new Date().toISOString(),
+                    profitPerc: data.profitPerc
+                }
+                state.queueAdd(queueAction, "buying", 0)
             }
         })
     }
@@ -136,12 +153,7 @@ class AutoBuy {
 
             switch (currentTask.state) {
                 case "buying":
-                    this.openExternalFlip(
-                        currentTask.action.auctionID,
-                        currentTask.action.profit,
-                        currentTask.action.finder,
-                        currentTask.action.itemName
-                    )
+                    this.openExternalFlip(currentTask.action)
                     break
                 case "claiming":
                     this.bot.chat(currentTask.action)
@@ -282,17 +294,29 @@ class AutoBuy {
         return new Promise((resolve) => setTimeout(resolve, ms))
     }
 
-    async openExternalFlip(auctionID: string, profit: number, finder: string, itemName: string) {
-        console.log(`[AutoBuy] Opening external flip: ${itemName}`)
+    async openExternalFlip(action: FlipQueueAction) {
+        console.log(`[AutoBuy] Opening external flip: ${action.itemName}`)
         
         if (this.bot.state) {
             console.log('[AutoBuy] Bot is busy, cannot open flip')
             return
         }
 
-        console.log(`[AutoBuy] Trying to purchase flip: ${itemName} with ${profit} profit`)
+        console.log(`[AutoBuy] Trying to purchase flip: ${action.itemName} with ${action.profit} profit`)
 
-        this.bot.chat(`/viewauction ${auctionID}`)
+        // Reconstruct the Flip object from the queue action data
+        const flip: Flip = {
+            id: action.auctionID,
+            startingBid: action.startingBid,
+            purchaseAt: action.purchaseAt ? new Date(action.purchaseAt) : new Date(),
+            itemName: action.itemName,
+            target: action.target,
+            finder: action.finder,
+            profitPerc: action.profitPerc
+        }
+
+        // Call the actual flip handler that handles auction windows properly
+        processFlip(this.bot, flip)
     }
 }
 

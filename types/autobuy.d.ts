@@ -28,6 +28,17 @@ interface Flip {
     profitPerc?: number
 }
 
+interface FlipQueueAction {
+    auctionID: string
+    itemName: string
+    profit: number
+    startingBid: number
+    target: number
+    purchaseAt: string | number | Date
+    finder?: string
+    profitPerc?: number
+}
+
 interface TextMessageData {
     text: string
     onClick?: string

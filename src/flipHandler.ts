@@ -7,11 +7,7 @@ import { trackFlipPurchase } from './flipTracker'
 // Constants for window interaction
 const CONFIRM_RETRY_DELAY = 100
 const WINDOW_CONFIRM_TIMEOUT_MS = 5000 // Maximum time to wait for confirm window to close
-const MAX_UNDEFINED_COUNT = 5
-const BED_SPAM_TIMEOUT_MS = 5000
-const BED_CLICKS_WITH_DELAY = 5
-const BED_CLICKS_DEFAULT = 3
-const BED_CLICK_DELAY_FALLBACK = 3
+const BED_SPAM_MAX_FAILED_CLICKS = 5 // Max failed clicks before stopping bed spam
 const WINDOW_INTERACTION_DELAY = 500
 const MINEFLAYER_WINDOW_POPULATE_DELAY = 300 // Time for mineflayer to populate bot.currentWindow after open_window packet
 
@@ -202,7 +198,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             break
                         case "bed":
                             printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
-                            await initBedSpam(bot, flip, isBed)
+                            await initBedSpam(bot)
                             break
                         case null:
                         case undefined:
@@ -217,9 +213,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             resolve()
                             return
                         case "feather":
-                            // Double check for potato or gold_block - check name for potato
+                            // Double check for potato or gold_block
+                            // Wait a bit for the item to change, then check again
+                            await sleep(50)
                             const secondItem = (await itemLoad(bot, 31, true))?.name
-                            if (secondItem === 'potato') {
+                            if (secondItem === 'potato' || secondItem === null) {
                                 printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
                                 if (bot.currentWindow) {
                                     bot.closeWindow(bot.currentWindow)
@@ -296,13 +294,14 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
 
                     // Loop with 100ms sleep while window is "Confirm Purchase"
+                    const confirmStartTime = Date.now()
                     let confirmWindow = getWindowTitle(bot.currentWindow)
                     while (confirmWindow === 'Confirm Purchase') {
                         await sleep(100)
                         confirmWindow = getWindowTitle(bot.currentWindow)
                         
                         // Timeout protection to prevent infinite loop
-                        if (Date.now() - confirmAt > WINDOW_CONFIRM_TIMEOUT_MS) {
+                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
                             log('Confirm window timeout - closing window', 'warn')
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
@@ -343,7 +342,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
  * Bed spam prevention - TPM+ pattern
  * Simple interval checking slot 31 for gold_nugget
  */
-async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
+async function initBedSpam(bot: MyBot) {
     const clickInterval = getConfigProperty('BED_SPAM_CLICK_DELAY') || 100
     log("[AutoBuy] Starting bed spam prevention...", 'debug')
 
@@ -351,7 +350,7 @@ async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
 
     const bedSpamInterval = setInterval(() => {
         const currentWindow = bot.currentWindow
-        if (!currentWindow || failedClicks >= 5) {
+        if (!currentWindow || failedClicks >= BED_SPAM_MAX_FAILED_CLICKS) {
             clearInterval(bedSpamInterval)
             log("[AutoBuy] Stopped bed spam prevention.", 'debug')
             return

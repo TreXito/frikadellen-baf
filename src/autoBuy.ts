@@ -110,19 +110,19 @@ class AutoBuy {
             const itemName = data.itemName
             const profit = data.target - data.startingBid
 
-            // Build proper Flip object for flipHandler
-            const flip: Flip = {
-                id: data.id,
-                startingBid: data.startingBid,
-                purchaseAt: data.purchaseAt ? new Date(data.purchaseAt) : new Date(),
-                itemName: data.itemName,
-                target: data.target,
-                finder: data.finder,
-                profitPerc: data.profitPerc
-            }
+            console.log(`[AutoBuy] Flip found: ${itemName} with ${profit} profit.`)
 
             if (!bot.currentWindow) {
-                // Call the actual flip handler that handles auction windows properly
+                // Build Flip object and call processFlip which handles window opening
+                const flip: Flip = {
+                    id: auctionId,
+                    startingBid: data.startingBid,
+                    purchaseAt: data.purchaseAt ? new Date(data.purchaseAt) : new Date(),
+                    itemName: itemName,
+                    target: data.target,
+                    finder: data.finder,
+                    profitPerc: data.profitPerc
+                }
                 processFlip(bot, flip)
             } else {
                 const queueAction: FlipQueueAction = {
@@ -301,7 +301,7 @@ class AutoBuy {
 
         console.log(`[AutoBuy] Trying to purchase flip: ${action.itemName} with ${action.profit} profit`)
 
-        // Reconstruct the Flip object from the queue action data
+        // Reconstruct Flip object and call processFlip which handles window opening
         const flip: Flip = {
             id: action.auctionID,
             startingBid: action.startingBid,
@@ -311,8 +311,6 @@ class AutoBuy {
             finder: action.finder,
             profitPerc: action.profitPerc
         }
-
-        // Call the actual flip handler that handles auction windows properly
         processFlip(this.bot, flip)
     }
 }

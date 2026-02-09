@@ -183,34 +183,22 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     let item = (await itemLoad(bot, 31, false))?.name
                     
                     if (item === 'gold_nugget') {
-                        // Skip logic: Click slot 31 and slot 11 in same tick for sub-90ms purchases
-                        // Both clicks use the same windowID - the server queues the second click and 
-                        // processes it when the Confirm Purchase window opens (which happens server-side
-                        // after the first click). This eliminates client-side window detection delay.
-                        
-                        // Send purchase click (slot 31 = Buy Item Right Now button)
+                        // Double-click slot 31 to purchase (opens Confirm Purchase window)
                         clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                         
-                        // Send second click on slot 31 (required for successful purchase)
-                        // Double-click pattern ensures the purchase command is reliably processed by the server
+                        // Second click on slot 31 (required for reliable purchase)
                         clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         
-                        // Immediately send confirm click (slot 11 = Confirm button in next window)
-                        // Note: "Unknown" matches expected log output format from problem statement
-                        clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay (confirm)
-                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                        // Don't clean up yet - we need to wait for Confirm Purchase window
+                        // The handler will continue and process the Confirm Purchase window
+                        return
                     }
                     
                     // Handle different item types
                     switch (item) {
                         case "gold_nugget":
-                            // Skip logic: Already clicked both slot 31 and 11, clean up and exit
-                            // Note: purchaseStartTime NOT cleared here - message handler will clear it and display timing
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
+                            // This case is handled above - should not reach here
                             return
                         case "bed":
                             printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
@@ -303,6 +291,27 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     }
                 }
                 
+                if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
+                    // This is the confirmation window that opens after clicking slot 31
+                    log('Got Confirm Purchase window, clicking slot 11', 'debug')
+                    
+                    // Skip the 300ms delay for Confirm Purchase window - we just need to click slot 11
+                    // Wait a tiny bit for the window to be ready
+                    await sleep(10)
+                    
+                    // Click the confirm button in slot 11
+                    clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                    
+                    // Clean up and exit
+                    purchaseStartTime = null // Will be cleared by message handler if purchase succeeds
+                    bot._client.removeListener('open_window', openWindowHandler)
+                    ;(bot as any)._bafOpenWindowHandler = null
+                    bot.state = null
+                    resolve()
+                    return
+                }
+                
                 await sleep(WINDOW_INTERACTION_DELAY)
             } catch (error) {
                 log(`Error in flip window handler: ${error}`, 'error')
@@ -390,4 +399,152 @@ export function getPurchaseStartTime(): number | null {
 
 export function clearPurchaseStartTime(): void {
     purchaseStartTime = null
+}
+
+/**
+ * Sets up a global persistent auction window handler
+ * This handles ALL auction windows opened by /viewauction commands, including those from AutoBuy
+ */
+export function setupGlobalAuctionHandler(bot: MyBot) {
+    log('Setting up global auction window handler', 'debug')
+    
+    const globalAuctionHandler = async (window) => {
+        const windowID = window.windowId
+        const windowName = window.windowTitle
+        
+        // Only handle BIN Auction View and Confirm Purchase windows
+        if (windowName !== WINDOW_TITLE_BIN_AUCTION_VIEW && windowName !== WINDOW_TITLE_CONFIRM_PURCHASE) {
+            return
+        }
+        
+        log(`[GlobalHandler] Got auction window: ${windowName}`, 'debug')
+        
+        try {
+            // Wait for mineflayer to populate bot.currentWindow
+            if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
+                await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY)
+            } else {
+                await sleep(10) // Confirm Purchase needs minimal delay
+            }
+            
+            if (!bot.currentWindow) {
+                log(`bot.currentWindow is null after delay for ${windowName}`, 'warn')
+                return
+            }
+            
+            if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
+                // Only handle if bot is not already in a purchasing state
+                if (bot.state === 'purchasing') {
+                    log('Already in purchasing state, skipping BIN Auction View handler', 'debug')
+                    return
+                }
+                
+                bot.state = 'purchasing'
+                purchaseStartTime = Date.now()
+                
+                confirmClick(bot, windowID)
+                
+                // Wait for item to load
+                let item = (await itemLoad(bot, 31, false))?.name
+                
+                if (item === 'gold_nugget') {
+                    const skipLogicEnabled = getConfigProperty('ENABLE_SKIP_LOGIC')
+                    
+                    if (skipLogicEnabled) {
+                        // SKIP LOGIC MODE: Send all clicks in same tick for sub-90ms purchases
+                        // The server queues the slot 11 click and processes it when Confirm Purchase window opens
+                        
+                        // First click on slot 31 (Buy Item Right Now button)
+                        clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
+                        
+                        // Second click on slot 31 (required for reliable purchase)
+                        clickSlot(bot, 31, windowID, 371)
+                        
+                        // Immediately send confirm click with same windowID - skip logic
+                        // Server will process this when Confirm Purchase window opens
+                        clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                        
+                        // Don't wait for Confirm Purchase window - purchases complete via skip logic
+                        bot.state = null
+                        return
+                    } else {
+                        // NORMAL MODE: Double-click slot 31, wait for Confirm Purchase window
+                        // More reliable but slower (~300ms vs sub-90ms)
+                        
+                        // First click on slot 31 (Buy Item Right Now button)
+                        clickSlot(bot, 31, windowID, 371)
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
+                        
+                        // Second click on slot 31 (required for reliable purchase)
+                        clickSlot(bot, 31, windowID, 371)
+                        
+                        // Confirm Purchase window will be handled by the handler below
+                        return
+                    }
+                }
+                
+                // Handle other items (bed, potato, etc.)
+                switch (item) {
+                    case "bed":
+                        printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
+                        await initBedSpam(bot)
+                        break
+                    case null:
+                    case undefined:
+                    case "potato":
+                        printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        purchaseStartTime = null
+                        break
+                    case "gold_block":
+                        // Claim sold item
+                        clickWindow(bot, 31).catch(err => log(`Error clicking claim slot: ${err}`, 'error'))
+                        bot.state = null
+                        purchaseStartTime = null
+                        break
+                    case "poisonous_potato":
+                        printMcChatToConsole(`§f[§4BAF§f]: §cToo poor to buy it :(`)
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        purchaseStartTime = null
+                        break
+                    default:
+                        log(`Unexpected item in slot 31: ${item}`, 'warn')
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                        bot.state = null
+                        purchaseStartTime = null
+                }
+            }
+            
+            if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
+                // NORMAL MODE: Handle Confirm Purchase window
+                // Only used when ENABLE_SKIP_LOGIC is false
+                log('Handling Confirm Purchase window (normal mode)', 'debug')
+                
+                // Click the confirm button with the correct windowID
+                clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                
+                // Reset state after confirming
+                bot.state = null
+                // Don't clear purchaseStartTime here - message handler will do it
+            }
+        } catch (error) {
+            log(`Error in global auction handler: ${error}`, 'error')
+            bot.state = null
+            purchaseStartTime = null
+        }
+    }
+    
+    bot._client.on('open_window', globalAuctionHandler)
+    log('Global auction window handler registered', 'debug')
 }

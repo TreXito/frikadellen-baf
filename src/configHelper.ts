@@ -17,6 +17,7 @@ let config: Config = {
     BED_SPAM_CLICK_DELAY: 5,
     ENABLE_BAZAAR_FLIPS: true,
     ENABLE_AH_FLIPS: true,
+    ENABLE_SKIP_LOGIC: false,
     WEB_GUI_PORT: 8080,
     WEB_GUI_PASSWORD: '',
     AUCTION_DURATION_HOURS: 24,

@@ -24,6 +24,7 @@ interface Config {
     BED_SPAM_CLICK_DELAY: number
     ENABLE_BAZAAR_FLIPS: boolean
     ENABLE_AH_FLIPS: boolean
+    ENABLE_SKIP_LOGIC: boolean
     WEB_GUI_PORT: number
     WEB_GUI_PASSWORD: string
     AUCTION_DURATION_HOURS: number

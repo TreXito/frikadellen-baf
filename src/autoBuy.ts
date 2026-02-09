@@ -4,7 +4,6 @@
 import { Flip, FlipWhitelistedData, FlipQueueAction, MyBot } from '../types/autobuy'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
-import { flipHandler as processFlip } from './flipHandler'
 
 // Extend MyBot interface with AutoBuy helper methods
 declare module '../types/autobuy' {
@@ -90,7 +89,7 @@ class AutoBuy {
     constructor(bot: MyBot, webhook: any, socket: any, username: string, state: any, relist: any, bank: any) {
         this.bot = bot
         this.webhook = webhook
-        this.socket = socket
+        this.socket = socket.getWs()
         this.username = username
         this.state = state
         this.relist = relist
@@ -110,20 +109,10 @@ class AutoBuy {
             const itemName = data.itemName
             const profit = data.target - data.startingBid
 
-            // Build proper Flip object for flipHandler
-            const flip: Flip = {
-                id: data.id,
-                startingBid: data.startingBid,
-                purchaseAt: data.purchaseAt ? new Date(data.purchaseAt) : new Date(),
-                itemName: data.itemName,
-                target: data.target,
-                finder: data.finder,
-                profitPerc: data.profitPerc
-            }
+            console.log(`[AutoBuy] Flip found: ${itemName} with ${profit} profit.`)
 
             if (!bot.currentWindow) {
-                // Call the actual flip handler that handles auction windows properly
-                processFlip(bot, flip)
+                bot.chat(`/viewauction ${auctionId}`)
             } else {
                 const queueAction: FlipQueueAction = {
                     finder: data.finder,
@@ -301,19 +290,8 @@ class AutoBuy {
 
         console.log(`[AutoBuy] Trying to purchase flip: ${action.itemName} with ${action.profit} profit`)
 
-        // Reconstruct the Flip object from the queue action data
-        const flip: Flip = {
-            id: action.auctionID,
-            startingBid: action.startingBid,
-            purchaseAt: action.purchaseAt ? new Date(action.purchaseAt) : new Date(),
-            itemName: action.itemName,
-            target: action.target,
-            finder: action.finder,
-            profitPerc: action.profitPerc
-        }
-
-        // Call the actual flip handler that handles auction windows properly
-        processFlip(this.bot, flip)
+        // Directly call viewauction command
+        this.bot.chat(`/viewauction ${action.auctionID}`)
     }
 }
 

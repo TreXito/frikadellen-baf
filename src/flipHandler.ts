@@ -31,7 +31,7 @@ async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = fals
     try {
         // Wait for slot to populate with polling
         let attempts = 0
-        const maxAttempts = 100 // ~100ms timeout total
+        const maxAttempts = 50 // ~50ms timeout total for fast purchasing
         
         while (attempts < maxAttempts) {
             const item = bot.currentWindow?.slots[slotIndex]

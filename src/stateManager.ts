@@ -21,18 +21,20 @@ export class StateManager {
 
     queueAdd(action: any, state: 'buying' | 'claiming' | 'listing', priority: number) {
         this.queue.push({ state, action, priority })
+        // Sort immediately after adding to maintain sorted order
+        this.queue.sort((a, b) => b.priority - a.priority)
         log(`[StateManager] Added ${state} task to queue (priority: ${priority})`, 'debug')
     }
 
     getHighest(): QueueItem | null {
         if (this.queue.length === 0) return null
-        // Sort by priority and return highest
-        this.queue.sort((a, b) => b.priority - a.priority)
+        // Queue is already sorted by priority (highest first)
         return this.queue[0]
     }
 
     queueRemove() {
         if (this.queue.length > 0) {
+            // Remove the first element (highest priority)
             this.queue.shift()
         }
     }

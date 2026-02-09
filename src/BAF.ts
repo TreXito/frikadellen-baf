@@ -156,8 +156,6 @@ function createBotInstance(username: string) {
         null  // bank
     )
     
-    log('[AutoBuy] Initialized AutoBuy instance with exact logic', 'info')
-    
     setupBotHandlers()
 }
 

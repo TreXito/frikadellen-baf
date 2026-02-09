@@ -110,8 +110,6 @@ class AutoBuy {
             const itemName = data.itemName
             const profit = data.target - data.startingBid
 
-            console.log(`[AutoBuy] Flip found: ${itemName} with ${profit} profit.`)
-
             // Build proper Flip object for flipHandler
             const flip: Flip = {
                 id: data.id,

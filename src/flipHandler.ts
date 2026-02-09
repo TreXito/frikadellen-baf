@@ -37,11 +37,11 @@ async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = fals
             if (item && item.name) {
                 // Check if we should skip potato items
                 if (checkName && item.name === "potato") {
-                    log("[AutoBuy] Skipping potato item...", 'debug')
+                    log("Skipping potato item...", 'debug')
                     return null
                 }
                 
-                log(`[AutoBuy] Loaded item: ${item.name}`, 'debug')
+                log(`Loaded item: ${item.name}`, 'debug')
                 return item
             }
             
@@ -53,7 +53,7 @@ async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = fals
         // Item not found after timeout
         throw new Error("Item not found.")
     } catch (error) {
-        log(`[AutoBuy] Error loading item: ${error}`, 'error')
+        log(`Error loading item: ${error}`, 'error')
         return null
     }
 }
@@ -290,7 +290,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
                     
                     // TPM+ pattern: Simple click and loop until window closes
-                    log("[AutoBuy] Confirming flip purchase...", 'debug')
+                    log("Confirming flip purchase...", 'debug')
                     await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
 
                     // Loop with 100ms sleep while window is "Confirm Purchase"
@@ -310,7 +310,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         }
                     }
 
-                    log("[AutoBuy] Purchase confirmed.", 'debug')
+                    // Calculate total purchase time
+                    const totalPurchaseTime = Date.now() - firstGui
+                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction purchased in ${totalPurchaseTime}ms`)
+                    
+                    log("Purchase confirmed.", 'debug')
                     
                     bot._client.removeListener('open_window', openWindowHandler)
                     ;(bot as any)._bafOpenWindowHandler = null
@@ -344,7 +348,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
  */
 async function initBedSpam(bot: MyBot) {
     const clickInterval = getConfigProperty('BED_SPAM_CLICK_DELAY') || 100
-    log("[AutoBuy] Starting bed spam prevention...", 'debug')
+    log("Starting bed spam prevention...", 'debug')
 
     let failedClicks = 0
 
@@ -352,7 +356,7 @@ async function initBedSpam(bot: MyBot) {
         const currentWindow = bot.currentWindow
         if (!currentWindow || failedClicks >= BED_SPAM_MAX_FAILED_CLICKS) {
             clearInterval(bedSpamInterval)
-            log("[AutoBuy] Stopped bed spam prevention.", 'debug')
+            log("Stopped bed spam prevention.", 'debug')
             return
         }
 

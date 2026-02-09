@@ -29,14 +29,15 @@ let recentlySkipped = false
  * @param bot The bot instance
  * @param slot The slot number to check
  * @param alreadyLoaded Whether to wait for a change in the slot (for feather double-check)
+ * @param delay Optional delay override (uses config if not provided)
  * @returns The item in the slot or null if timeout
  */
-async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false): Promise<any> {
+async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false, delay?: number): Promise<any> {
     return new Promise((resolve) => {
         let index = 1
         let found = false
         const first = bot.currentWindow?.slots[slot]?.name
-        const delay = getConfigProperty('FLIP_ACTION_DELAY') || 150
+        const effectiveDelay = delay ?? (getConfigProperty('FLIP_ACTION_DELAY') || 150)
         
         const checkCondition = alreadyLoaded 
             ? (check: any) => check?.name !== first
@@ -58,7 +59,7 @@ async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false
             log(`Failed to find an item in slot ${slot}`, 'debug')
             clearInterval(interval)
             resolve(null)
-        }, delay * 3)
+        }, effectiveDelay * 3)
     })
 }
 
@@ -238,10 +239,12 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     const useSkipAlways = skipSettings.ALWAYS
                     const currentDelay = getConfigProperty('FLIP_ACTION_DELAY')
 
-                    // Validate FLIP_ACTION_DELAY if ALWAYS skip is enabled
-                    if (useSkipAlways && currentDelay < 150) {
+                    // Enforce minimum FLIP_ACTION_DELAY if ALWAYS skip is enabled
+                    // This prevents timeout issues when checking if item should be skipped
+                    const effectiveDelay = useSkipAlways && currentDelay < 150 ? 150 : currentDelay
+                    if (effectiveDelay !== currentDelay) {
                         printMcChatToConsole(
-                            `§f[§4BAF§f]: §cWarning: SKIP.ALWAYS requires FLIP_ACTION_DELAY >= 150ms (current: ${currentDelay}ms)`
+                            `§f[§4BAF§f]: §eUsing 150ms delay (SKIP.ALWAYS requires >= 150ms, config: ${currentDelay}ms)`
                         )
                     }
 
@@ -254,7 +257,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     firstGui = Date.now()
                     
                     // Wait for item to load in slot 31
-                    let item = (await itemLoad(bot, 31))?.name
+                    let item = (await itemLoad(bot, 31, false, effectiveDelay))?.name
                     
                     if (item === 'gold_nugget') {
                         // Click on gold nugget first
@@ -294,7 +297,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             return
                         case "feather":
                             // Double check for potato or gold_block
-                            const secondItem = (await itemLoad(bot, 31, true))?.name
+                            const secondItem = (await itemLoad(bot, 31, true, effectiveDelay))?.name
                             if (secondItem === 'potato') {
                                 printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
                                 if (bot.currentWindow) {

@@ -11,6 +11,8 @@ import { trackFlipPurchase } from './flipTracker'
 let errorTimeout
 // Track last buyspeed to prevent duplicate timing messages
 let oldBuyspeed = -1
+// Store buyspeed for webhook (set when escrow message arrives, used when purchase message arrives)
+let lastBuyspeed: number | null = null
 
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
@@ -19,15 +21,14 @@ export async function registerIngameMessageHandler(bot: MyBot) {
         if (type == 'chat') {
             printMcChatToConsole(message.toAnsi())
             // Display timing when "Putting coins in escrow..." appears (TPM+ pattern)
-            let buyspeed: number | null = null
             if (text === 'Putting coins in escrow...') {
                 const startTime = getPurchaseStartTime()
                 if (startTime !== null) {
-                    buyspeed = Date.now() - startTime
+                    lastBuyspeed = Date.now() - startTime
                     // Prevent duplicate messages with same timing
-                    if (buyspeed === oldBuyspeed) return
-                    oldBuyspeed = buyspeed
-                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${buyspeed}ms`)
+                    if (lastBuyspeed === oldBuyspeed) return
+                    oldBuyspeed = lastBuyspeed
+                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${lastBuyspeed}ms`)
                     clearPurchaseStartTime()
                 }
             }
@@ -57,7 +58,9 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     clearCurrentFlip()
                 }
 
-                sendWebhookItemPurchased(itemName, price, whitelistedData, flip, buyspeed)
+                sendWebhookItemPurchased(itemName, price, whitelistedData, flip, lastBuyspeed)
+                // Clear buyspeed after using it
+                lastBuyspeed = null
                 setNothingBoughtFor1HourTimeout(wss)
             }
             // Handle auction errors (expired, not found, etc.)

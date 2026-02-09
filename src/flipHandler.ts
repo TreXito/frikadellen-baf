@@ -31,7 +31,7 @@ async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = fals
     try {
         // Wait for slot to populate with polling
         let attempts = 0
-        const maxAttempts = 100 // ~100ms timeout total
+        const maxAttempts = 50 // ~50ms timeout total (50 attempts × 1ms) for fast purchasing
         
         while (attempts < maxAttempts) {
             const item = bot.currentWindow?.slots[slotIndex]
@@ -302,11 +302,11 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     log("Confirming flip purchase...", 'debug')
                     await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
 
-                    // Loop with 10ms sleep while window is "Confirm Purchase"
+                    // Loop with 1ms sleep while window is "Confirm Purchase" (matches itemLoad pattern)
                     const confirmStartTime = Date.now()
                     let confirmWindow = getWindowTitle(bot.currentWindow)
                     while (confirmWindow === 'Confirm Purchase') {
-                        await sleep(10)
+                        await sleep(1)
                         confirmWindow = getWindowTitle(bot.currentWindow)
                         
                         // Timeout protection to prevent infinite loop

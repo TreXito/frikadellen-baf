@@ -17,6 +17,14 @@ export async function registerIngameMessageHandler(bot: MyBot) {
         if (type == 'chat') {
             printMcChatToConsole(message.toAnsi())
             if (text.startsWith('You purchased')) {
+                // Display auction purchase time if we have a start time
+                const startTime = getPurchaseStartTime()
+                if (startTime !== null) {
+                    const totalPurchaseTime = Date.now() - startTime
+                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${totalPurchaseTime}ms`)
+                    clearPurchaseStartTime()
+                }
+                
                 wss.send(
                     JSON.stringify({
                         type: 'uploadTab',

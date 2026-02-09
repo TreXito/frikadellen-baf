@@ -192,7 +192,8 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                         
-                        // Send second click on slot 31 for reliability
+                        // Send second click on slot 31 (required for successful purchase)
+                        // Double-click pattern ensures the purchase command is reliably processed by the server
                         clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         
                         // Immediately send confirm click (slot 11 = Confirm button in next window)

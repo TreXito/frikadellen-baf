@@ -4,7 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { ChatMessage } from 'prismarine-chat'
 import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
-import { getWhitelistedData, getCurrentFlip, clearCurrentFlip } from './flipHandler'
+import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartTime, clearPurchaseStartTime } from './flipHandler'
 import { trackFlipPurchase } from './flipTracker'
 
 // if nothing gets bought for 1 hours, send a report
@@ -44,6 +44,15 @@ export async function registerIngameMessageHandler(bot: MyBot) {
 
                 sendWebhookItemPurchased(itemName, price, whitelistedData, flip)
                 setNothingBoughtFor1HourTimeout(wss)
+            }
+            // Handle auction errors (expired, not found, etc.)
+            if (text.includes('There was an error with the auction house!')) {
+                const startTime = getPurchaseStartTime()
+                if (startTime !== null) {
+                    const totalPurchaseTime = Date.now() - startTime
+                    printMcChatToConsole(`§f[§4BAF§f]: §cAuction failed in ${totalPurchaseTime}ms`)
+                    clearPurchaseStartTime()
+                }
             }
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
                 log('New item sold')

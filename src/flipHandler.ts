@@ -18,6 +18,7 @@ const WINDOW_TITLE_BIN_AUCTION_VIEW = '{"italic":false,"extra":[{"text":"BIN Auc
 let currentFlip: Flip | null = null
 let actionCounter = 1
 let fromCoflSocket = false
+let purchaseStartTime: number | null = null // Track when BIN Auction View opens for timing
 
 /**
  * Waits for an item to load in a slot - TPM+ pattern
@@ -180,6 +181,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     fromCoflSocket = false
                     
                     firstGui = Date.now()
+                    purchaseStartTime = firstGui // Also set global for message handler access
                     
                     // Wait for item to load in slot 31 - TPM+ pattern
                     let item = (await itemLoad(bot, 31, false))?.name
@@ -207,6 +209,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
                             }
+                            purchaseStartTime = null
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null
@@ -222,6 +225,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                                 if (bot.currentWindow) {
                                     bot.closeWindow(bot.currentWindow)
                                 }
+                                purchaseStartTime = null
                                 bot._client.removeListener('open_window', openWindowHandler)
                                 ;(bot as any)._bafOpenWindowHandler = null
                                 bot.state = null
@@ -232,6 +236,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                                 if (bot.currentWindow) {
                                     bot.closeWindow(bot.currentWindow)
                                 }
+                                purchaseStartTime = null
                                 bot._client.removeListener('open_window', openWindowHandler)
                                 ;(bot as any)._bafOpenWindowHandler = null
                                 bot.state = null
@@ -242,6 +247,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         case "gold_block":
                             // Claim sold item
                             clickWindow(bot, 31).catch(err => log(`Error clicking claim slot: ${err}`, 'error'))
+                            purchaseStartTime = null
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null
@@ -252,6 +258,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
                             }
+                            purchaseStartTime = null
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null
@@ -262,6 +269,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
                             }
+                            purchaseStartTime = null
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null
@@ -272,6 +280,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                             if (bot.currentWindow) {
                                 bot.closeWindow(bot.currentWindow)
                             }
+                            purchaseStartTime = null
                             bot._client.removeListener('open_window', openWindowHandler)
                             ;(bot as any)._bafOpenWindowHandler = null
                             bot.state = null
@@ -315,6 +324,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                     printMcChatToConsole(`§f[§4BAF§f]: §aAuction purchased in ${totalPurchaseTime}ms`)
                     
                     log("Purchase confirmed.", 'debug')
+                    purchaseStartTime = null // Clear the start time
                     
                     bot._client.removeListener('open_window', openWindowHandler)
                     ;(bot as any)._bafOpenWindowHandler = null
@@ -326,6 +336,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 await sleep(WINDOW_INTERACTION_DELAY)
             } catch (error) {
                 log(`Error in flip window handler: ${error}`, 'error')
+                purchaseStartTime = null
                 bot._client.removeListener('open_window', openWindowHandler)
                 ;(bot as any)._bafOpenWindowHandler = null
                 bot.state = null
@@ -401,4 +412,12 @@ export function getCurrentFlip(): Flip | null {
 
 export function clearCurrentFlip(): void {
     currentFlip = null
+}
+
+export function getPurchaseStartTime(): number | null {
+    return purchaseStartTime
+}
+
+export function clearPurchaseStartTime(): void {
+    purchaseStartTime = null
 }

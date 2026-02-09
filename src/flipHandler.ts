@@ -192,6 +192,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                         clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                         printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                         
+                        // Send second click on slot 31 for reliability
+                        clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
+                        
                         // Immediately send confirm click (slot 11 = Confirm button in next window)
                         // Note: "Unknown" matches expected log output format from problem statement
                         clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay (confirm)

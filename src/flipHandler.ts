@@ -412,8 +412,8 @@ export function setupGlobalAuctionHandler(bot: MyBot) {
         const windowID = window.windowId
         const windowName = window.windowTitle
         
-        // Only handle auction-related windows
-        if (windowName !== WINDOW_TITLE_BIN_AUCTION_VIEW && windowName !== WINDOW_TITLE_CONFIRM_PURCHASE) {
+        // Only handle BIN Auction View windows (skip logic handles confirmation automatically)
+        if (windowName !== WINDOW_TITLE_BIN_AUCTION_VIEW) {
             return
         }
         
@@ -421,11 +421,7 @@ export function setupGlobalAuctionHandler(bot: MyBot) {
         
         try {
             // Wait for mineflayer to populate bot.currentWindow
-            if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
-                await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY)
-            } else {
-                await sleep(10) // Confirm Purchase needs minimal delay
-            }
+            await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY)
             
             if (!bot.currentWindow) {
                 log(`bot.currentWindow is null after delay for ${windowName}`, 'warn')
@@ -448,14 +444,23 @@ export function setupGlobalAuctionHandler(bot: MyBot) {
                 let item = (await itemLoad(bot, 31, false))?.name
                 
                 if (item === 'gold_nugget') {
-                    // Double-click slot 31 to purchase (opens Confirm Purchase window)
-                    clickSlot(bot, 31, windowID, 371)
+                    // Skip logic: Send all clicks in same tick for sub-90ms purchases
+                    // The server queues the slot 11 click and processes it when Confirm Purchase window opens
+                    
+                    // First click on slot 31 (Buy Item Right Now button)
+                    clickSlot(bot, 31, windowID, 371) // 371 = gold nugget
                     printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
                     
                     // Second click on slot 31 (required for reliable purchase)
                     clickSlot(bot, 31, windowID, 371)
                     
-                    // Confirm Purchase window will be handled by next open_window event
+                    // Immediately send confirm click with same windowID - skip logic
+                    // Server will process this when Confirm Purchase window opens
+                    clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
+                    
+                    // Don't wait for Confirm Purchase window - purchases complete via skip logic
+                    bot.state = null
                     return
                 }
                 
@@ -499,17 +504,8 @@ export function setupGlobalAuctionHandler(bot: MyBot) {
                 }
             }
             
-            if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
-                log('Handling Confirm Purchase window', 'debug')
-                
-                // Click the confirm button
-                clickSlot(bot, 11, windowID, 159) // 159 = green stained hardened clay
-                printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 11 | Item: Unknown`)
-                
-                // Reset state after confirming
-                bot.state = null
-                // Don't clear purchaseStartTime here - message handler will do it
-            }
+            // Note: Confirm Purchase window handling removed - skip logic sends all clicks in same tick
+            // The server processes the slot 11 click when Confirm Purchase window opens server-side
         } catch (error) {
             log(`Error in global auction handler: ${error}`, 'error')
             bot.state = null

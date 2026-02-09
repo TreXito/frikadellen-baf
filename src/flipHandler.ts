@@ -37,7 +37,7 @@ async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false
         let index = 1
         let found = false
         const first = bot.currentWindow?.slots[slot]?.name
-        const effectiveDelay = delay ?? (getConfigProperty('FLIP_ACTION_DELAY') || 150)
+        const actualDelay = delay ?? (getConfigProperty('FLIP_ACTION_DELAY') || 150)
         
         const checkCondition = alreadyLoaded 
             ? (check: any) => check?.name !== first
@@ -59,7 +59,7 @@ async function itemLoad(bot: MyBot, slot: number, alreadyLoaded: boolean = false
             log(`Failed to find an item in slot ${slot}`, 'debug')
             clearInterval(interval)
             resolve(null)
-        }, effectiveDelay * 3)
+        }, actualDelay * 3)
     })
 }
 

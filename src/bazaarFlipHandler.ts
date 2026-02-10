@@ -5,6 +5,7 @@ import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
 import { recordOrder } from './bazaarOrderManager'
+import { enqueueCommand, CommandPriority } from './commandQueue'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -181,12 +182,7 @@ export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendatio
 
 /**
  * Handle a bazaar flip recommendation from Coflnet
- * 
- * This function:
- * 1. Waits if the bot is busy with another operation
- * 2. Opens the bazaar for the recommended item
- * 3. Places a buy/sell order at the recommended price and amount
- * 4. Confirms the order
+ * Queues the operation through the command queue system for proper ordering
  * 
  * @param bot The Minecraft bot instance
  * @param recommendation The parsed bazaar flip recommendation
@@ -205,12 +201,29 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
+    // Queue the bazaar flip with NORMAL priority
+    // This ensures it doesn't interrupt other operations and executes in order
+    const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
+    const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
+    
+    enqueueCommand(
+        commandName,
+        CommandPriority.NORMAL,
+        async () => {
+            await executeBazaarFlip(bot, recommendation)
+        }
+    )
+}
+
+/**
+ * Execute a bazaar flip operation
+ * This is the actual implementation that runs from the queue
+ */
+async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommendation): Promise<void> {
+    // Double-check bot state before execution (queue should handle this, but safety check)
     if (bot.state) {
-        log(`[BazaarDebug] Bot is busy (state: ${bot.state}), will retry in ${RETRY_DELAY_MS}ms`, 'info')
-        setTimeout(() => {
-            handleBazaarFlipRecommendation(bot, recommendation)
-        }, RETRY_DELAY_MS)
-        return
+        log(`[BazaarDebug] Bot is busy (state: ${bot.state}), cannot execute flip`, 'warn')
+        throw new Error(`Bot busy: ${bot.state}`)
     }
 
     log(`[BazaarDebug] ===== STARTING BAZAAR FLIP ORDER =====`, 'info')

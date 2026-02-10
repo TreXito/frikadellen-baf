@@ -5,6 +5,7 @@ import { changeWebsocketURL, getCurrentWebsocket } from './BAF'
 import { claimPurchased } from './ingameMessageHandler'
 import { printMcChatToConsole } from './logger'
 import { sleep } from './utils'
+import { getQueueStatus, clearQueue } from './commandQueue'
 
 let consoleSetupFinished = false
 
@@ -70,6 +71,27 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
                 }
             }
             printMcChatToConsole(`§f[§4BAF§f]: §fFinished claiming.`)
+            return
+        }
+        if (command === 'queue') {
+            const status = getQueueStatus()
+            printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━ Command Queue Status ━━━━━━━`)
+            printMcChatToConsole(`§f[§4BAF§f]: §7Queue depth: §e${status.depth}`)
+            printMcChatToConsole(`§f[§4BAF§f]: §7Processing: §e${status.processing ? 'Yes' : 'No'}`)
+            if (status.commands.length > 0) {
+                printMcChatToConsole(`§f[§4BAF§f]: §7Queued commands:`)
+                status.commands.forEach((cmd, i) => {
+                    printMcChatToConsole(`§f[§4BAF§f]:   §7${i + 1}. §e${cmd}`)
+                })
+            } else {
+                printMcChatToConsole(`§f[§4BAF§f]: §7No commands in queue`)
+            }
+            printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+            return
+        }
+        if (command === 'clearqueue') {
+            clearQueue()
+            printMcChatToConsole(`§f[§4BAF§f]: §aCommand queue cleared`)
             return
         }
 

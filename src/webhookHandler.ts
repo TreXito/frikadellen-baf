@@ -2,6 +2,7 @@ import axios from 'axios'
 import { getConfigProperty } from './configHelper'
 import { FlipWhitelistedData, Flip } from '../types/autobuy'
 import { getFlipData, calculateProfit, formatTimeToSell, removeFlipData } from './flipTracker'
+import { getCoflnetPremiumInfo } from './BAF'
 
 function sendWebhookData(options: Partial<Webhook>): void {
     let data = {
@@ -28,18 +29,42 @@ export function sendWebhookInitialized() {
     let ahEnabled = getConfigProperty('ENABLE_AH_FLIPS')
     let bazaarEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
     
+    // Get Coflnet premium info
+    const coflnetInfo = getCoflnetPremiumInfo()
+    
     let statusParts = [
         `AH Flips: ${ahEnabled ? '✅' : '❌'}`,
         `Bazaar Flips: ${bazaarEnabled ? '✅' : '❌'}`
     ]
+    
+    // Build description with Coflnet info if available
+    let description = `${statusParts.join(' | ')}\n<t:${Math.floor(Date.now() / 1000)}:R>`
+    
+    // Add Coflnet premium info if available
+    if (coflnetInfo.tier && coflnetInfo.expires) {
+        description += `\n\n**Coflnet ${coflnetInfo.tier}** expires ${coflnetInfo.expires}`
+    }
+    
+    // Build fields array
+    const fields: any[] = []
+    
+    // Add connection ID as a separate field for easy copying
+    if (coflnetInfo.connectionId) {
+        fields.push({
+            name: 'Connection ID',
+            value: `\`${coflnetInfo.connectionId}\``,
+            inline: false
+        })
+    }
     
     sendWebhookData({
         content: '',
         embeds: [
             {
                 title: '✓ Started BAF',
-                description: `${statusParts.join(' | ')}\n<t:${Math.floor(Date.now() / 1000)}:R>`,
+                description: description,
                 color: 0x00ff88, // Bright green
+                fields: fields.length > 0 ? fields : undefined,
                 footer: {
                     text: `BAF - ${ingameName}`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`

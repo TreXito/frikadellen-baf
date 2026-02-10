@@ -148,6 +148,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 
                 if (itemName) {
                     log(`[Bazaar] Order claimed: ${itemName} (${isBuyOrder ? 'buy' : 'sell'})`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Order is filled: §e${itemName}`)
                     markOrderClaimed(itemName, isBuyOrder)
                 }
             }
@@ -275,17 +276,8 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
 
                 for (let i = 0; i < window.slots.length; i++) {
                     const item = window.slots[i] as any
-                    if (item?.nbt?.value?.display?.value?.Lore && JSON.stringify(item.nbt.value.display.value.Lore).includes('Sold for')) {
-                        clickSlot = item.slot
-                    }
-
-                    let includesStatus = item?.nbt?.value?.display?.value?.Lore && JSON.stringify(item.nbt.value.display.value.Lore).includes('Status')
-                    let includesSold = item?.nbt?.value?.display?.value?.Lore && JSON.stringify(item.nbt.value.display.value.Lore).includes('Expired!')
-                    if (includesStatus && includesSold) {
-                        log('Found expired auction. Gonna click slot ' + item.slot)
-                        await claimExpiredAuction(bot, item.slot)
-                    }
-
+                    
+                    // Check for "Claim All" cauldron first (highest priority)
                     if (item && item.name === 'cauldron' && (item.nbt as any).value?.display?.value?.Name?.value?.toString().includes('Claim All')) {
                         log(item)
                         log('Found cauldron to claim all sold auctions -> clicking index ' + item.slot)
@@ -295,6 +287,13 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                         bot.state = null
                         resolve(true)
                         return
+                    }
+                    
+                    // Look for sold items (items with "Sold for" in lore)
+                    // Skip expired items - those are handled separately
+                    const loreStr = item?.nbt?.value?.display?.value?.Lore ? JSON.stringify(item.nbt.value.display.value.Lore) : ''
+                    if (loreStr.includes('Sold for') && !loreStr.includes('Expired!')) {
+                        clickSlot = item.slot
                     }
                 }
 

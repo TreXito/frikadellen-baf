@@ -29,6 +29,8 @@ let config: Config = {
         MIN_PRICE: 10000000
     },
     AUTO_COOKIE: 24,
+    BAZAAR_ORDER_CANCEL_MINUTES: 3,
+    BAZAAR_ORDER_CHECK_INTERVAL_SECONDS: 30,
     PROXY_ENABLED: false,
     PROXY: undefined,
     PROXY_USERNAME: undefined,
@@ -171,6 +173,27 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             '',
             '# Auto booster cookie: if remaining cookie duration on startup is less than this value (in hours), automatically buy and consume a booster cookie (default: 24 hours)',
             '# Set to 0 to disable automatic cookie purchasing'
+        )
+    }
+
+    // Add comments for BAZAAR_ORDER_CANCEL_MINUTES
+    let bazaarCancelIndex = lines.findIndex(l => l.startsWith('BAZAAR_ORDER_CANCEL_MINUTES = '))
+    if (bazaarCancelIndex !== -1) {
+        lines.splice(
+            bazaarCancelIndex,
+            0,
+            '',
+            '# Bazaar order management: cancel unfilled orders/offers after this many minutes (default: 3 minutes)'
+        )
+    }
+
+    // Add comments for BAZAAR_ORDER_CHECK_INTERVAL_SECONDS
+    let bazaarCheckIndex = lines.findIndex(l => l.startsWith('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS = '))
+    if (bazaarCheckIndex !== -1) {
+        lines.splice(
+            bazaarCheckIndex,
+            0,
+            '# How often to check for orders to manage (claim filled or cancel stale) in seconds (default: 30 seconds)'
         )
     }
 

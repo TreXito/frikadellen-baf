@@ -4,6 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
+import { recordOrder } from './bazaarOrderManager'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -290,6 +291,9 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
 
         await orderPromise
         
+        // Record the order for tracking (claiming and cancelling)
+        recordOrder(recommendation)
+        
         log('[BazaarDebug] ===== BAZAAR FLIP ORDER COMPLETED =====', 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §aSuccessfully placed bazaar order!`)
     } catch (error) {
@@ -429,8 +433,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     await sleep(200)
                     await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
-                // 3. Amount screen
-                else if (findSlotWithName(window, 'Custom Amount') !== -1) {
+                // 3. Amount screen - ONLY for buy orders (sell offers skip this step)
+                else if (findSlotWithName(window, 'Custom Amount') !== -1 && isBuyOrder) {
                     const customAmountSlot = findSlotWithName(window, 'Custom Amount')
                     log(`[BazaarDebug] Setting amount to ${amount} via slot ${customAmountSlot}`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Amount] Setting to §e${amount}§7 via slot §b${customAmountSlot}`)
@@ -452,6 +456,13 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     // Click Custom Amount at the detected slot
                     await sleep(200)
                     await clickWindow(bot, customAmountSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                }
+                // Safety: If Custom Amount appears for a sell offer, skip it
+                else if (findSlotWithName(window, 'Custom Amount') !== -1 && !isBuyOrder) {
+                    log(`[BazaarDebug] WARNING: Custom Amount screen appeared for sell offer - skipping`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Unexpected amount screen for sell offer - skipping`)
+                    // Don't process this window further, return to wait for next window
+                    return
                 }
                 // 4. Price screen
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {

@@ -1,5 +1,6 @@
 import { log, printMcChatToConsole } from './logger'
 import { BazaarFlipRecommendation, MyBot } from '../types/autobuy'
+import { abortOrderManagement } from './bazaarOrderManager'
 
 // State management for bazaar flip pausing
 let bazaarFlipsPaused = false
@@ -21,12 +22,17 @@ export function areBazaarFlipsPaused(): boolean {
  * Resumes 20 seconds after the message appears
  * Only pauses if both bazaar flips and AH flips are enabled
  */
-export function pauseBazaarFlips(): void {
+export function pauseBazaarFlips(bot?: MyBot): void {
     if (bazaarFlipsPaused) {
         // Already paused, clear existing timer and restart
         if (pauseTimeoutHandle) {
             clearTimeout(pauseTimeoutHandle)
         }
+    }
+
+    // Abort any active order management to prioritize AH flips
+    if (bot) {
+        abortOrderManagement(bot)
     }
 
     bazaarFlipsPaused = true
@@ -66,12 +72,13 @@ export function resumeBazaarFlips(): void {
  * Check if a message indicates an incoming AH flip and pause bazaar flips if needed
  * Only pauses if both bazaar flips and AH flips are enabled
  * @param message The message text to check
+ * @param bot The Minecraft bot instance (optional, used to abort order management)
  */
-export function checkAndPauseForAHFlip(message: string, enableBazaarFlips: boolean, enableAHFlips: boolean): void {
+export function checkAndPauseForAHFlip(message: string, enableBazaarFlips: boolean, enableAHFlips: boolean, bot?: MyBot): void {
     if (isAHFlipIncomingMessage(message)) {
         log('Detected AH flip incoming message', 'info')
         if (enableBazaarFlips && enableAHFlips) {
-            pauseBazaarFlips()
+            pauseBazaarFlips(bot)
         }
     }
 }

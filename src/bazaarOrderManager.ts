@@ -138,15 +138,17 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                                 if (priceMatch) pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
                             }
                             
-                            // Record the order with current timestamp
-                            // Using current time means these orders won't be cancelled until
-                            // they age beyond BAZAAR_ORDER_CANCEL_MINUTES from discovery time
+                            // Record the order with a timestamp from the past so it will be
+                            // cancelled immediately after discovery (since we don't know the actual age)
+                            // Set placedAt to be older than BAZAAR_ORDER_CANCEL_MINUTES
+                            const cancelMinutes = getConfigProperty('BAZAAR_ORDER_CANCEL_MINUTES')
+                            const cancelTimeoutMs = cancelMinutes * 60 * 1000
                             const order: BazaarOrderRecord = {
                                 itemName,
                                 amount: amount || 1,
                                 pricePerUnit: pricePerUnit || 0,
                                 isBuyOrder,
-                                placedAt: Date.now(),
+                                placedAt: Date.now() - cancelTimeoutMs - 1000, // 1 second past cancel threshold
                                 claimed: false,
                                 cancelled: false
                             }
@@ -193,8 +195,10 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
 /**
  * Start the order management timer
  * Checks for orders to claim or cancel periodically
+ * @param bot The bot instance
+ * @param checkImmediately If true, performs an immediate check before starting the timer
  */
-export function startOrderManager(bot: MyBot): void {
+export function startOrderManager(bot: MyBot, checkImmediately: boolean = false): void {
     if (checkTimer) {
         log('[OrderManager] Timer already running', 'debug')
         return
@@ -203,6 +207,15 @@ export function startOrderManager(bot: MyBot): void {
     const intervalSeconds = getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS')
     log(`[OrderManager] Starting order management timer (check every ${intervalSeconds}s)`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Started (checking every §e${intervalSeconds}s§7)`)
+    
+    // Perform immediate check if requested (e.g., after discovering existing orders at startup)
+    if (checkImmediately) {
+        log('[OrderManager] Performing immediate check for stale orders...', 'info')
+        // Use setTimeout to avoid blocking and give command queue time to initialize
+        setTimeout(async () => {
+            await checkOrders(bot)
+        }, 2000) // 2 second delay to ensure command queue is ready
+    }
     
     checkTimer = setInterval(async () => {
         await checkOrders(bot)

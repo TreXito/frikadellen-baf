@@ -446,7 +446,8 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                             
                             await sleep(200)
                             await clickWindow(bot, i).catch(() => {})
-                            // Wait for window to update with order details
+                            // Wait for Hypixel's Bazaar GUI to update window contents with order details
+                            // The window doesn't close/reopen, it just updates in place, so we need to wait
                             await sleep(800)
                             
                             // After clicking, process the updated window contents

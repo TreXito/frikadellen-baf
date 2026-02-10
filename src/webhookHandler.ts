@@ -131,7 +131,8 @@ function formatNumber(num: number): string {
     } else if (num >= 1_000) {
         return (num / 1_000).toFixed(2) + 'K'
     } else {
-        return num.toFixed(0)
+        // For small numbers, preserve decimals if they exist
+        return num % 1 === 0 ? num.toFixed(0) : num.toFixed(2)
     }
 }
 
@@ -195,7 +196,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
             name: '💰 Net Profit',
             value: profit >= 0 
                 ? `\`\`\`diff\n+ ${formatNumber(profit)} coins\n\`\`\`` 
-                : `\`\`\`diff\n- ${formatNumber(Math.abs(profit))} coins\n\`\`\``,
+                : `\`\`\`diff\n- ${formatNumber(-profit)} coins\n\`\`\``,  // Use -profit to get absolute value
             inline: true
         })
         webhookData.embeds[0].fields.push({

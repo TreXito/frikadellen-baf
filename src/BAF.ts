@@ -23,6 +23,7 @@ import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
 import { startOrderManager } from './bazaarOrderManager'
+import { initCommandQueue, enqueueCommand, CommandPriority } from './commandQueue'
 const WebSocket = require('ws')
 const EventEmitter = require('events')
 var prompt = require('prompt-sync')()
@@ -522,6 +523,10 @@ async function onScoreboardChanged() {
         log('Joined SkyBlock')
         initAFKHandler(bot)
         ;(bot as any).AFKHandlerInitialized = true
+        
+        // Initialize command queue immediately after joining SkyBlock
+        initCommandQueue(bot)
+        
         setTimeout(async () => {
             let wss = await getCurrentWebsocket()
             log('Waited for grace period to end. Flips can now be bought.')
@@ -559,10 +564,18 @@ async function onScoreboardChanged() {
 
         await sleep(20000)
         
-        // Check and buy cookie if needed
-        checkAndBuyCookie(bot).catch(err => {
-            log(`Error in checkAndBuyCookie: ${err}`, 'error')
-        })
+        // Queue cookie check with LOW priority - won't interrupt other operations
+        enqueueCommand(
+            'Cookie Check',
+            CommandPriority.LOW,
+            async () => {
+                try {
+                    await checkAndBuyCookie(bot)
+                } catch (err) {
+                    log(`Error in checkAndBuyCookie: ${err}`, 'error')
+                }
+            }
+        )
         
         // trying to claim sold items if sold while user was offline
         claimSoldItem(bot)

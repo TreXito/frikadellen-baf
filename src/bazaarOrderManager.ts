@@ -3,6 +3,7 @@ import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused } from './bazaarFlipPauser'
+import { enqueueCommand, CommandPriority } from './commandQueue'
 
 /**
  * Represents a tracked bazaar order
@@ -253,39 +254,55 @@ async function checkOrders(bot: MyBot): Promise<void> {
     // Only cancel ONE order per cycle (as per requirements)
     const orderToCancel = staleOrders[0]
     const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
-    log(`[OrderManager] Cancelling stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
-    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Cancelling §e${orderToCancel.itemName}§7 (${ageMinutes} min old)`)
-    await cancelOrder(bot, orderToCancel)
+    log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
+    
+    // Queue the cancel operation with LOW priority
+    const commandName = `Cancel Order: ${orderToCancel.itemName}`
+    enqueueCommand(
+        commandName,
+        CommandPriority.LOW,
+        async () => {
+            await cancelOrder(bot, orderToCancel)
+        }
+    )
 }
 
 /**
  * Claim a filled bazaar order via /bz → Manage Orders
  * This is triggered by chat message detection in ingameMessageHandler
- * 
- * Note: If bot is busy, the operation is queued and will retry after 1 second.
- * The return value in this case (false) only indicates the immediate attempt failed,
- * not the final result of the retry.
+ * Queues the claim operation through the command queue
  */
 export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrder?: boolean): Promise<boolean> {
     // Don't claim orders while bazaar flips are paused
     if (areBazaarFlipsPaused()) {
-        log('[OrderManager] Bazaar flips are paused, skipping claim operation', 'info')
+        log('[OrderManager] Bazaar flips are paused, will retry claim later', 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claim delayed - bazaar flips paused`)
         // Queue the claim for when bazaar flips resume
         setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), CLAIM_RETRY_DELAY_MS)
         return false
     }
     
-    // Wait if bot is busy
-    if (bot.state && bot.state !== 'claiming') {
-        log('[OrderManager] Bot is busy, queueing claim operation (will retry in 1s)', 'info')
-        setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), 1000)
-        return false
-    }
+    // Queue the claim operation with LOW priority
+    const commandName = itemName ? `Claim Order: ${itemName}` : 'Claim Filled Orders'
+    enqueueCommand(
+        commandName,
+        CommandPriority.LOW,
+        async () => {
+            await executeClaimFilledOrders(bot, itemName, isBuyOrder)
+        }
+    )
     
+    return true
+}
+
+/**
+ * Execute the claim filled orders operation
+ * This is the actual implementation that runs from the queue
+ */
+async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrder?: boolean): Promise<void> {
     isManagingOrders = true
     
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         let clickedManageOrders = false
         let claimedAny = false
         
@@ -294,7 +311,7 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
             bot.removeListener('windowOpen', windowHandler)
             bot.state = null
             isManagingOrders = false
-            resolve(false)
+            reject(new Error('Claim operation timeout'))
         }, 20000)
         
         const windowHandler = async (window) => {
@@ -368,7 +385,7 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     // Remove fully claimed orders from tracking
                     cleanupTrackedOrders()
                     
-                    resolve(claimedAny)
+                    resolve()
                 }
             } catch (error) {
                 log(`[OrderManager] Error in claim window handler: ${error}`, 'error')
@@ -376,7 +393,7 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                 bot.state = null
                 isManagingOrders = false
                 clearTimeout(timeout)
-                resolve(false)
+                reject(error)
             }
         }
         

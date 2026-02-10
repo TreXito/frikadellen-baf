@@ -137,3 +137,23 @@ export function getSlotLore(slot: any): string[] {
     
     return []
 }
+
+/**
+ * Calculates the auction house fee based on the purchase price
+ * @param price The purchase price of the item
+ * @returns The auction house fee amount
+ * 
+ * Fee structure:
+ * - 1% for items smaller than 10m
+ * - 2% for items smaller than 100m
+ * - 2.5% for items over 100m
+ */
+export function calculateAuctionHouseFee(price: number): number {
+    if (price < 10_000_000) {
+        return price * 0.01 // 1%
+    } else if (price < 100_000_000) {
+        return price * 0.02 // 2%
+    } else {
+        return price * 0.025 // 2.5%
+    }
+}

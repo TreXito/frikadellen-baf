@@ -183,7 +183,7 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             bazaarCancelIndex,
             0,
             '',
-            '# Bazaar order management: cancel unfilled orders/offers after this many minutes (default: 3 minutes)'
+            '# Bazaar order management: cancel unfilled orders/offers after this many minutes (default: 10 minutes)'
         )
     }
 
@@ -193,7 +193,7 @@ function prepareTomlBeforeWrite(tomlString: string): string {
         lines.splice(
             bazaarCheckIndex,
             0,
-            '# How often to check for orders to manage (claim filled or cancel stale) in seconds (default: 30 seconds)'
+            '# How often to check for orders to manage (claim filled or cancel stale) in seconds (default: 120 seconds / 2 minutes)'
         )
     }
 

@@ -65,7 +65,8 @@ export function enqueueCommand(
     priority: CommandPriority,
     execute: () => Promise<void>
 ): string {
-    const id = `cmd_${++commandIdCounter}`
+    commandIdCounter++
+    const id = `cmd_${commandIdCounter}`
     
     const command: QueuedCommand = {
         id,
@@ -159,8 +160,8 @@ async function processQueue(bot: MyBot): Promise<void> {
             log(`[CommandQueue] ERROR in ${command.name}: ${error} (took ${duration}ms)`, 'error')
             printMcChatToConsole(`§f[§4BAF§f]: §c[CommandQueue] Error: ${command.name} failed`)
             
-            // Reset bot state if it got stuck (but not gracePeriod)
-            if (bot.state) {
+            // Reset bot state if it got stuck (won't execute if state is already null)
+            if (bot.state !== null && bot.state !== undefined) {
                 log(`[CommandQueue] Resetting bot state from "${bot.state}" to null after error`, 'warn')
                 bot.state = null
             }

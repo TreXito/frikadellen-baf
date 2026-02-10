@@ -221,7 +221,7 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
  */
 async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommendation): Promise<void> {
     // Double-check bot state before execution (queue should handle this, but safety check)
-    if (bot.state && bot.state !== null) {
+    if (bot.state) {
         log(`[BazaarDebug] Bot is busy (state: ${bot.state}), cannot execute flip`, 'warn')
         throw new Error(`Bot busy: ${bot.state}`)
     }

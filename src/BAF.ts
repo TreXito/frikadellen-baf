@@ -27,7 +27,7 @@ const EventEmitter = require('events')
 var prompt = require('prompt-sync')()
 initConfigHelper()
 initLogger()
-const version = 'af-2.0.0'
+const version = 'af-3.0'
 const GUI_LOG_DELAY_MS = 100
 let _websocket: WebSocket
 let bot: MyBot

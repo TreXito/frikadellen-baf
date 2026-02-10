@@ -119,8 +119,37 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     log('Bazaar order filled, claiming via order manager', 'info')
                 }
                 
+                // Mark as claimed immediately to prevent cancellation attempts
+                if (itemName) {
+                    markOrderClaimed(itemName, isBuyOrder)
+                }
+                
                 // Use the new order manager to claim
                 claimFilledOrders(bot, itemName, isBuyOrder)
+            }
+            
+            // Detect when orders are claimed to mark them as claimed
+            // "[Bazaar] Claimed 4x ☘ Perfect Jade Gemstone worth 47,999,990 coins bought for 11,999,997 each!"
+            // "[Bazaar] Claimed 4x ☘ Perfect Jade Gemstone worth 47,999,990 coins sold for 11,999,997 each!"
+            if (text.includes('[Bazaar]') && text.includes('Claimed ') && text.includes(' coins')) {
+                let itemName = ''
+                let isBuyOrder = false
+                
+                // Detect buy vs sell based on "bought for" vs "sold for"
+                if (text.includes('bought for')) {
+                    isBuyOrder = true
+                    const match = text.match(/Claimed \d+x (.+) worth .+ coins bought for/)
+                    if (match) itemName = match[1].trim()
+                } else if (text.includes('sold for')) {
+                    isBuyOrder = false
+                    const match = text.match(/Claimed \d+x (.+) worth .+ coins sold for/)
+                    if (match) itemName = match[1].trim()
+                }
+                
+                if (itemName) {
+                    log(`[Bazaar] Order claimed: ${itemName} (${isBuyOrder ? 'buy' : 'sell'})`, 'info')
+                    markOrderClaimed(itemName, isBuyOrder)
+                }
             }
         }
     })

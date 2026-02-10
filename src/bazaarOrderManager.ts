@@ -313,6 +313,8 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                 // Order detail view - find and click cancel button
                 if (clickedOrder) {
                     const cancelButtonName = order.isBuyOrder ? 'Cancel Buy Order' : 'Cancel Sell Offer'
+                    let foundCancelButton = false
+                    let foundClaimableOrder = false
                     
                     for (let i = 0; i < window.slots.length; i++) {
                         const slot = window.slots[i]
@@ -320,7 +322,14 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
                         )
                         
+                        // Check if this is a claimable filled order (has item name in it)
+                        if (slot && slot.type && name && name.toLowerCase().includes(order.itemName.toLowerCase()) && 
+                            !name.includes('Cancel') && !name.includes('Go Back')) {
+                            foundClaimableOrder = true
+                        }
+                        
                         if (name && name.includes(cancelButtonName)) {
+                            foundCancelButton = true
                             log(`[OrderManager] Clicking cancel button: slot ${i}`, 'info')
                             await sleep(200)
                             await clickWindow(bot, i).catch(() => {})
@@ -343,13 +352,23 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                         }
                     }
                     
-                    // Cancel button not found
-                    log(`[OrderManager] Cancel button not found for: ${order.itemName}`, 'warn')
-                    bot.removeListener('windowOpen', windowHandler)
-                    bot.state = null
-                    isManagingOrders = false
-                    clearTimeout(timeout)
-                    resolve(false)
+                    // Cancel button not found - check if order is filled
+                    if (!foundCancelButton) {
+                        if (foundClaimableOrder) {
+                            log(`[OrderManager] Order is filled, not stale: ${order.itemName}. Marking as claimed.`, 'info')
+                            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Order is filled: §e${order.itemName}`)
+                            order.claimed = true
+                            cleanupTrackedOrders()
+                        } else {
+                            log(`[OrderManager] Cancel button not found for: ${order.itemName}`, 'warn')
+                        }
+                        
+                        bot.removeListener('windowOpen', windowHandler)
+                        bot.state = null
+                        isManagingOrders = false
+                        clearTimeout(timeout)
+                        resolve(false)
+                    }
                 }
             } catch (error) {
                 log(`[OrderManager] Error in cancel window handler: ${error}`, 'error')

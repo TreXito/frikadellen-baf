@@ -57,7 +57,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     
     const buyPrice = parseFloat(price.replace(/,/g, ''))
     const profit = flip ? flip.target - buyPrice : 0
-    const profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : '0'
+    const profitStr = profit > 0 ? `+${formatNumber(profit)}` : '0'
     const profitPercent = flip && flip.target > 0 && buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0'
     
     let webhookData: any = {
@@ -69,7 +69,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                 fields: [
                     {
                         name: '💰 Purchase Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(buyPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(buyPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
@@ -87,7 +87,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     if (flip && flip.target) {
         webhookData.embeds[0].fields.push({
             name: '🎯 Target Price',
-            value: `\`\`\`fix\n${numberWithThousandsSeparators(flip.target)} coins\n\`\`\``,
+            value: `\`\`\`fix\n${formatNumber(flip.target)} coins\n\`\`\``,
             inline: true
         })
         webhookData.embeds[0].fields.push({
@@ -121,6 +121,23 @@ function numberWithThousandsSeparators(num: number): string {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
+/**
+ * Format a number into a human-readable format with K/M suffixes
+ * Examples: 4723969.8 -> "4.72M", 1500 -> "1.50K", 999 -> "999"
+ */
+function formatNumber(num: number): string {
+    if (num >= 1_000_000) {
+        // Format as millions with 2 decimal places
+        return (num / 1_000_000).toFixed(2) + 'M'
+    } else if (num >= 1_000) {
+        // Format as thousands with 2 decimal places
+        return (num / 1_000).toFixed(2) + 'K'
+    } else {
+        // Format as-is for numbers less than 1000
+        return num.toFixed(0)
+    }
+}
+
 export function sendWebhookItemSold(itemName: string, price: string, purchasedBy: string) {
     if (!isWebhookConfigured()) {
         return
@@ -138,7 +155,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
     if (flipData) {
         profit = calculateProfit(flipData, sellPrice)
         timeToSell = formatTimeToSell(Date.now() - flipData.purchaseTime)
-        profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : `${numberWithThousandsSeparators(profit)}`
+        profitStr = profit > 0 ? `+${formatNumber(profit)}` : `${formatNumber(Math.abs(profit))}`
         auctionId = flipData.auctionId
         removeFlipData(itemName)
     }
@@ -161,7 +178,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
                     },
                     {
                         name: '💵 Sale Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(sellPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(sellPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
@@ -275,12 +292,12 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
                     },
                     {
                         name: '💵 Price per Unit',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(pricePerUnit)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(pricePerUnit)} coins\n\`\`\``,
                         inline: true
                     },
                     {
                         name: '💰 Total Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(totalPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(totalPrice)} coins\n\`\`\``,
                         inline: true
                     },
                     {

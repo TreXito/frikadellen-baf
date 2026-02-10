@@ -444,8 +444,14 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                         }
                     }
                     
-                    // Order not found - might have been filled already
-                    log(`[OrderManager] Order not found in Manage Orders: ${order.itemName}`, 'warn')
+                    // Order not found - might have been filled or already cancelled
+                    log(`[OrderManager] Order not found in Manage Orders: ${order.itemName}, removing from tracking`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Order not found: §e${order.itemName}§7 - removing from tracking`)
+                    
+                    // Mark as cancelled to remove from tracking
+                    order.cancelled = true
+                    cleanupTrackedOrders()
+                    
                     bot.removeListener('windowOpen', windowHandler)
                     bot.state = null
                     isManagingOrders = false

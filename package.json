@@ -8,9 +8,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "postinstall": "patch-package",
-    "build-executables-win": "npm install && tsc && pkg ./build/BAF.js --targets node18-win-x64 --output ./executables/BAF-win",
-    "build-executables-linux": "npm install && tsc && pkg ./build/BAF.js --targets node18-linux-x64 --output ./executables/BAF-linux",
-    "build-executables-macos": "npm install && tsc && pkg ./build/BAF.js --targets node18-macos-x64 --output ./executables/BAF-macos"
+    "build-executables-win": "npm install && tsc && pkg ./build/BAF.js --targets node20-win-x64 --output ./executables/BAF-win",
+    "build-executables-linux": "npm install && tsc && pkg ./build/BAF.js --targets node20-linux-x64 --output ./executables/BAF-linux",
+    "build-executables-macos": "npm install && tsc && pkg ./build/BAF.js --targets node20-macos-x64 --output ./executables/BAF-macos"
   },
   "keywords": [],
   "author": "",
@@ -27,8 +27,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.2.2",
+    "@yao-pkg/pkg": "^5.15.0",
     "patch-package": "^8.0.1",
-    "pkg": "^5.8.1",
     "typescript": "^5.3.3"
   }
 }

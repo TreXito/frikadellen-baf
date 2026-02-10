@@ -34,6 +34,9 @@ const CLAIM_RETRY_DELAY_MS = 5000
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
 const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 
+// Delay before immediate order check to ensure command queue is ready
+const IMMEDIATE_CHECK_DELAY_MS = 2000
+
 /**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
@@ -214,7 +217,7 @@ export function startOrderManager(bot: MyBot, checkImmediately: boolean = false)
         // Use setTimeout to avoid blocking and give command queue time to initialize
         setTimeout(async () => {
             await checkOrders(bot)
-        }, 2000) // 2 second delay to ensure command queue is ready
+        }, IMMEDIATE_CHECK_DELAY_MS)
     }
     
     checkTimer = setInterval(async () => {

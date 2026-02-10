@@ -243,13 +243,15 @@ async function checkOrders(bot: MyBot): Promise<void> {
         return
     }
     
-    log(`[OrderManager] Found ${staleOrders.length} stale orders to cancel`, 'info')
-    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Cancelling §e${staleOrders.length}§7 stale orders...`)
+    log(`[OrderManager] Found ${staleOrders.length} stale order(s) to cancel`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s)...`)
     
-    // Cancel each stale order
-    for (const order of staleOrders) {
-        await cancelOrder(bot, order)
-    }
+    // Only cancel ONE order per cycle (as per requirements)
+    const orderToCancel = staleOrders[0]
+    const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
+    log(`[OrderManager] Cancelling stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Cancelling §e${orderToCancel.itemName}§7 (${ageMinutes} min old)`)
+    await cancelOrder(bot, orderToCancel)
 }
 
 /**
@@ -452,36 +454,69 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     return
                 }
                 
-                // Order detail view - find and click cancel button
+                // Order detail view - first claim any filled items, then cancel if still active
                 if (clickedOrder) {
                     const cancelButtonName = order.isBuyOrder ? 'Cancel Buy Order' : 'Cancel Sell Offer'
-                    let foundCancelButton = false
-                    let foundClaimableOrder = false
+                    let claimableSlot = -1
                     
+                    // Step 1: Find claimable items (items with the order's item name that can be claimed)
                     for (let i = 0; i < window.slots.length; i++) {
                         const slot = window.slots[i]
                         const name = removeMinecraftColorCodes(
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
                         )
                         
-                        // Check if this is a claimable filled order
-                        // Must have the item type (material) and the window title should indicate it's a filled order
-                        // Exclude buttons like "Cancel", "Go Back", etc.
+                        // Check if this is a claimable filled order item
+                        // The item will have the actual item name (e.g., "Flawed Peridot Gemstone")
+                        // and lore indicating it can be claimed
                         if (slot && slot.type && name) {
                             const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
-                            const hasFilledIndicator = lore && lore.some((line: any) => {
+                            const hasClaimIndicator = lore && lore.some((line: any) => {
                                 const loreText = removeMinecraftColorCodes(line.toString())
-                                return loreText.includes('Status: Filled') || loreText.includes('Click to claim')
+                                return loreText.includes('Click to claim') || loreText.includes('Status: Filled')
                             })
                             
-                            if (hasFilledIndicator && name.toLowerCase().includes(order.itemName.toLowerCase())) {
-                                foundClaimableOrder = true
+                            // Match by item name (strip ☘ symbols and color codes for comparison)
+                            const strippedItemName = order.itemName.replace(/[☘]/g, '').trim()
+                            const strippedSlotName = name.replace(/[☘]/g, '').trim()
+                            
+                            if (hasClaimIndicator && strippedSlotName.toLowerCase().includes(strippedItemName.toLowerCase())) {
+                                claimableSlot = i
+                                log(`[OrderManager] Found claimable items at slot ${i}: ${name}`, 'info')
+                                break
                             }
                         }
+                    }
+                    
+                    // Step 2: If there are claimable items, claim them (click repeatedly until claimed)
+                    if (claimableSlot !== -1) {
+                        log(`[OrderManager] Claiming items from slot ${claimableSlot}...`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Claiming items from order...`)
+                        
+                        // Click up to 3 times to claim (handles partial fills)
+                        for (let clickCount = 0; clickCount < 3; clickCount++) {
+                            await sleep(300)
+                            await clickWindow(bot, claimableSlot).catch(err => {
+                                log(`[OrderManager] Claim click ${clickCount + 1} failed (may be normal if fully claimed): ${err}`, 'debug')
+                            })
+                        }
+                        
+                        await sleep(300)
+                        log(`[OrderManager] Claimed items, checking for cancel button...`, 'info')
+                    }
+                    
+                    // Step 3: After claiming (or if nothing to claim), look for cancel button
+                    let foundCancelButton = false
+                    for (let i = 0; i < window.slots.length; i++) {
+                        const slot = window.slots[i]
+                        const name = removeMinecraftColorCodes(
+                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                        )
                         
                         if (name && name.includes(cancelButtonName)) {
                             foundCancelButton = true
                             log(`[OrderManager] Clicking cancel button: slot ${i}`, 'info')
+                            printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancelling remaining order...`)
                             await sleep(200)
                             await clickWindow(bot, i).catch(() => {})
                             
@@ -503,22 +538,22 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                         }
                     }
                     
-                    // Cancel button not found - check if order is filled
+                    // Step 4: If no cancel button found, order was fully filled
                     if (!foundCancelButton) {
-                        if (foundClaimableOrder) {
-                            log(`[OrderManager] Order is filled, not stale: ${order.itemName}. Marking as claimed.`, 'info')
-                            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Order is filled: §e${order.itemName}`)
+                        if (claimableSlot !== -1) {
+                            log(`[OrderManager] Order was fully filled, no cancel needed: ${order.itemName}`, 'info')
+                            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Order was fully filled: §e${order.itemName}`)
                             order.claimed = true
                             cleanupTrackedOrders()
                         } else {
-                            log(`[OrderManager] Cancel button not found for: ${order.itemName}`, 'warn')
+                            log(`[OrderManager] No claimable items or cancel button found for: ${order.itemName}`, 'warn')
                         }
                         
                         bot.removeListener('windowOpen', windowHandler)
                         bot.state = null
                         isManagingOrders = false
                         clearTimeout(timeout)
-                        resolve(false)
+                        resolve(claimableSlot !== -1)
                     }
                 }
             } catch (error) {

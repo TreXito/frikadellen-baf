@@ -461,7 +461,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 else if (findSlotWithName(window, 'Custom Amount') !== -1 && !isBuyOrder) {
                     log(`[BazaarDebug] WARNING: Custom Amount screen appeared for sell offer - skipping`, 'warn')
                     printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Unexpected amount screen for sell offer - skipping`)
-                    // Don't click anything, just wait for the next window
+                    // Don't process this window further, return to wait for next window
+                    return
                 }
                 // 4. Price screen
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {

@@ -122,11 +122,15 @@ async function checkOrders(bot: MyBot): Promise<void> {
 /**
  * Claim a filled bazaar order via /bz → Manage Orders
  * This is triggered by chat message detection in ingameMessageHandler
+ * 
+ * Note: If bot is busy, the operation is queued and will retry after 1 second.
+ * The return value in this case (false) only indicates the immediate attempt failed,
+ * not the final result of the retry.
  */
 export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrder?: boolean): Promise<boolean> {
     // Wait if bot is busy
     if (bot.state && bot.state !== 'claiming') {
-        log('[OrderManager] Bot is busy, queueing claim operation', 'info')
+        log('[OrderManager] Bot is busy, queueing claim operation (will retry in 1s)', 'info')
         setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), 1000)
         return false
     }
@@ -189,7 +193,10 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             try { 
                                 await clickWindow(bot, i)
                                 await sleep(500)
-                            } catch (e) { /* already fully claimed */ }
+                            } catch (e) { 
+                                // Expected: already fully claimed or transaction rejected
+                                log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')
+                            }
                             
                             // Mark as claimed in our tracking
                             const orderType = name.startsWith('BUY ')
@@ -355,7 +362,7 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
         }
         
         bot.removeAllListeners('windowOpen')
-        bot.state = 'cancellingOrders'
+        bot.state = 'bazaar'
         bot.on('windowOpen', windowHandler)
         bot.chat('/bz')
     })

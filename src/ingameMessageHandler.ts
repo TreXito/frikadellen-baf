@@ -107,13 +107,13 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     log('Bazaar buy order filled, claiming via order manager', 'info')
                     isBuyOrder = true
                     // Extract item name: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Buy Order for \d+x (.+?) was filled!/)
+                    const match = text.match(/Buy Order for \d+x (.+) was filled!/)
                     if (match) itemName = match[1].trim()
                 } else if (text.includes('Sell Offer')) {
                     log('Bazaar sell offer filled, claiming via order manager', 'info')
                     isBuyOrder = false
                     // Extract item name: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Sell Offer for \d+x (.+?) was filled!/)
+                    const match = text.match(/Sell Offer for \d+x (.+) was filled!/)
                     if (match) itemName = match[1].trim()
                 } else {
                     log('Bazaar order filled, claiming via order manager', 'info')

@@ -123,19 +123,25 @@ function numberWithThousandsSeparators(num: number): string {
 
 /**
  * Format a number into a human-readable format with K/M suffixes
- * Examples: 4723969.8 -> "4.72M", 1500 -> "1.50K", 999 -> "999"
+ * Examples: 4723969.8 -> "4.72M", 1500 -> "1.50K", 999 -> "999", -4723969.8 -> "-4.72M"
  */
 function formatNumber(num: number): string {
-    if (num >= 1_000_000) {
+    const isNegative = num < 0
+    const absNum = Math.abs(num)
+    
+    let formatted: string
+    if (absNum >= 1_000_000) {
         // Format as millions with 2 decimal places
-        return (num / 1_000_000).toFixed(2) + 'M'
-    } else if (num >= 1_000) {
+        formatted = (absNum / 1_000_000).toFixed(2) + 'M'
+    } else if (absNum >= 1_000) {
         // Format as thousands with 2 decimal places
-        return (num / 1_000).toFixed(2) + 'K'
+        formatted = (absNum / 1_000).toFixed(2) + 'K'
     } else {
         // Format as-is for numbers less than 1000
-        return num.toFixed(0)
+        formatted = absNum.toFixed(0)
     }
+    
+    return isNegative ? '-' + formatted : formatted
 }
 
 export function sendWebhookItemSold(itemName: string, price: string, purchasedBy: string) {

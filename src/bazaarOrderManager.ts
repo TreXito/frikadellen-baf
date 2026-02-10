@@ -77,11 +77,12 @@ export function markOrderClaimed(itemName: string, isBuyOrder: boolean): void {
 /**
  * Discover existing orders on startup
  * Scans Manage Orders to find any existing orders and track/cancel them as needed
+ * @returns The number of orders discovered
  */
-export async function discoverExistingOrders(bot: MyBot): Promise<void> {
+export async function discoverExistingOrders(bot: MyBot): Promise<number> {
     if (bot.state) {
         log('[OrderManager] Bot is busy, cannot discover orders now', 'info')
-        return
+        return 0
     }
     
     log('[OrderManager] Discovering existing orders...', 'info')
@@ -97,7 +98,7 @@ export async function discoverExistingOrders(bot: MyBot): Promise<void> {
             bot.removeListener('windowOpen', windowHandler)
             bot.state = null
             isManagingOrders = false
-            resolve()
+            resolve(0)
         }, 20000)
         
         const windowHandler = async (window) => {
@@ -179,7 +180,7 @@ export async function discoverExistingOrders(bot: MyBot): Promise<void> {
                         printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] No existing orders`)
                     }
                     
-                    resolve()
+                    resolve(foundOrders)
                 }
             } catch (error) {
                 log(`[OrderManager] Error in discovery window handler: ${error}`, 'error')
@@ -187,7 +188,7 @@ export async function discoverExistingOrders(bot: MyBot): Promise<void> {
                 bot.state = null
                 isManagingOrders = false
                 clearTimeout(timeout)
-                resolve()
+                resolve(0)
             }
         }
         

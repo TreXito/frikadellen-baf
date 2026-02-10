@@ -22,7 +22,7 @@ import { startWebGui, addWebGuiChatMessage } from './webGui'
 import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
-import { startOrderManager, discoverExistingOrders, getTrackedOrdersCount } from './bazaarOrderManager'
+import { startOrderManager, discoverExistingOrders } from './bazaarOrderManager'
 import { initCommandQueue, enqueueCommand, CommandPriority } from './commandQueue'
 const WebSocket = require('ws')
 const EventEmitter = require('events')
@@ -570,10 +570,7 @@ async function runStartupWorkflow() {
         log('[Startup] Step 2/4: Discovering existing orders...', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fDiscovering existing orders...')
         try {
-            const beforeCount = getTrackedOrdersCount()
-            await discoverExistingOrders(bot)
-            const afterCount = getTrackedOrdersCount()
-            ordersFound = afterCount - beforeCount
+            ordersFound = await discoverExistingOrders(bot)
             log('[Startup] Order discovery complete', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Order discovery complete')
         } catch (err) {
@@ -591,9 +588,9 @@ async function runStartupWorkflow() {
     log('[Startup] Step 3/4: Claiming sold items...', 'info')
     printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 3/4: §fClaiming sold items...')
     try {
-        claimSoldItem(bot)
-        log('[Startup] Sold items claim initiated', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim initiated')
+        await claimSoldItem(bot)
+        log('[Startup] Sold items claim complete', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim complete')
     } catch (err) {
         log(`[Startup] Claim sold items error: ${err}`, 'error')
         printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Claim sold items error')

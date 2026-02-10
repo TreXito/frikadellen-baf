@@ -29,6 +29,8 @@ interface Config {
     AUCTION_DURATION_HOURS: number
     SKIP: SkipSettings
     AUTO_COOKIE: number
+    BAZAAR_ORDER_CANCEL_MINUTES: number
+    BAZAAR_ORDER_CHECK_INTERVAL_SECONDS: number
     PROXY_ENABLED?: boolean
     PROXY?: string
     PROXY_USERNAME?: string

@@ -22,6 +22,7 @@ import { startWebGui, addWebGuiChatMessage } from './webGui'
 import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
+import { startOrderManager } from './bazaarOrderManager'
 const WebSocket = require('ws')
 const EventEmitter = require('events')
 var prompt = require('prompt-sync')()
@@ -335,7 +336,7 @@ async function onWebsocketMessage(msg) {
                 }
                 
                 // Check if this is an AH flip incoming message and pause if needed
-                checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
+                checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'), bot)
                 
                 // Check if this is a bazaar flip recommendation
                 const bazaarFlip = parseBazaarFlipMessage(da.text)
@@ -372,7 +373,7 @@ async function onWebsocketMessage(msg) {
             }
             
             // Check if this is an AH flip incoming message and pause if needed
-            checkAndPauseForAHFlip(data.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'))
+            checkAndPauseForAHFlip(data.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'), bot)
             
             // Check if this is a bazaar flip recommendation
             const bazaarFlip = parseBazaarFlipMessage(data.text)
@@ -533,6 +534,11 @@ async function onScoreboardChanged() {
                     data: JSON.stringify(bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, '')))
                 })
             )
+            
+            // Start bazaar order manager if bazaar flips are enabled
+            if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+                startOrderManager(bot)
+            }
             
             // Request bazaar flips if enabled
             if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {

@@ -6,6 +6,7 @@ import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
 import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartTime, clearPurchaseStartTime } from './flipHandler'
 import { trackFlipPurchase } from './flipTracker'
+import { claimFilledOrders, markOrderClaimed } from './bazaarOrderManager'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -96,17 +97,30 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     })
                 )
             }
-            // Detect bazaar order filled messages and claim them via bazaar (/bz → Manage Orders)
+            // Detect bazaar order filled messages and claim them via order manager
             // Handles both buy order fills and sell offer fills
             if (text.includes('[Bazaar]') && text.includes('was filled!')) {
+                let itemName = ''
+                let isBuyOrder = false
+                
                 if (text.includes('Buy Order')) {
-                    log('Bazaar buy order filled, claiming via bazaar', 'info')
+                    log('Bazaar buy order filled, claiming via order manager', 'info')
+                    isBuyOrder = true
+                    // Extract item name: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Buy Order for \d+x (.+?) was filled!/)
+                    if (match) itemName = match[1].trim()
                 } else if (text.includes('Sell Offer')) {
-                    log('Bazaar sell offer filled, claiming via bazaar', 'info')
+                    log('Bazaar sell offer filled, claiming via order manager', 'info')
+                    isBuyOrder = false
+                    // Extract item name: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Sell Offer for \d+x (.+?) was filled!/)
+                    if (match) itemName = match[1].trim()
                 } else {
-                    log('Bazaar order filled, claiming via bazaar', 'info')
+                    log('Bazaar order filled, claiming via order manager', 'info')
                 }
-                claimBazaarOrder(bot)
+                
+                // Use the new order manager to claim
+                claimFilledOrders(bot, itemName, isBuyOrder)
             }
         }
     })

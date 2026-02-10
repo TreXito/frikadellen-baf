@@ -29,6 +29,10 @@ let isManagingOrders = false
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
 
+// Constants for claiming filled orders
+const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
+const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
+
 /**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
@@ -499,15 +503,15 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                         log(`[OrderManager] Claiming items from slot ${claimableSlot}...`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Claiming items from order...`)
                         
-                        // Click up to 3 times to claim (handles partial fills)
-                        for (let clickCount = 0; clickCount < 3; clickCount++) {
-                            await sleep(300)
+                        // Click up to MAX_CLAIM_ATTEMPTS times to claim (handles partial fills)
+                        for (let clickCount = 0; clickCount < MAX_CLAIM_ATTEMPTS; clickCount++) {
+                            await sleep(CLAIM_DELAY_MS)
                             await clickWindow(bot, claimableSlot).catch(err => {
                                 log(`[OrderManager] Claim click ${clickCount + 1} failed (may be normal if fully claimed): ${err}`, 'debug')
                             })
                         }
                         
-                        await sleep(300)
+                        await sleep(CLAIM_DELAY_MS)
                         log(`[OrderManager] Claimed items, checking for cancel button...`, 'info')
                     }
                     

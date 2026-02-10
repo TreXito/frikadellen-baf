@@ -69,7 +69,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                 fields: [
                     {
                         name: '💰 Purchase Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(buyPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(buyPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
@@ -87,12 +87,12 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     if (flip && flip.target) {
         webhookData.embeds[0].fields.push({
             name: '🎯 Target Price',
-            value: `\`\`\`fix\n${numberWithThousandsSeparators(flip.target)} coins\n\`\`\``,
+            value: `\`\`\`fix\n${formatNumber(flip.target)} coins\n\`\`\``,
             inline: true
         })
         webhookData.embeds[0].fields.push({
             name: '📈 Expected Profit',
-            value: `\`\`\`diff\n${profitStr} coins (${profitPercent}%)\n\`\`\``,
+            value: `\`\`\`diff\n${profit > 0 ? '+' : ''}${formatNumber(profit)} coins (${profitPercent}%)\n\`\`\``,
             inline: true
         })
     }
@@ -119,6 +119,21 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
 
 function numberWithThousandsSeparators(num: number): string {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/**
+ * Format a number with M/K suffixes for better readability
+ * Examples: 4723969.8 -> "4.72M", 50000 -> "50K", 999 -> "999"
+ */
+function formatNumber(num: number): string {
+    if (num >= 1_000_000) {
+        return (num / 1_000_000).toFixed(2) + 'M'
+    } else if (num >= 1_000) {
+        return (num / 1_000).toFixed(2) + 'K'
+    } else {
+        // For small numbers, preserve decimals if they exist
+        return num % 1 === 0 ? num.toFixed(0) : num.toFixed(2)
+    }
 }
 
 export function sendWebhookItemSold(itemName: string, price: string, purchasedBy: string) {
@@ -161,7 +176,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
                     },
                     {
                         name: '💵 Sale Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(sellPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(sellPrice)} coins\n\`\`\``,
                         inline: true
                     }
                 ],
@@ -180,8 +195,8 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         webhookData.embeds[0].fields.push({
             name: '💰 Net Profit',
             value: profit >= 0 
-                ? `\`\`\`diff\n+ ${profitStr} coins\n\`\`\`` 
-                : `\`\`\`diff\n- ${profitStr.replace('-', '')} coins\n\`\`\``,
+                ? `\`\`\`diff\n+ ${formatNumber(profit)} coins\n\`\`\`` 
+                : `\`\`\`diff\n- ${formatNumber(-profit)} coins\n\`\`\``,  // Use -profit to get absolute value
             inline: true
         })
         webhookData.embeds[0].fields.push({
@@ -216,6 +231,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
+    const listPrice = parseFloat(price.replace(/,/g, ''))
     sendWebhookData({
         embeds: [
             {
@@ -225,7 +241,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
                 fields: [
                     {
                         name: '💵 List Price',
-                        value: `\`\`\`fix\n${price} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(listPrice)} coins\n\`\`\``,
                         inline: true
                     },
                     {
@@ -275,12 +291,12 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
                     },
                     {
                         name: '💵 Price per Unit',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(pricePerUnit)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(pricePerUnit)} coins\n\`\`\``,
                         inline: true
                     },
                     {
                         name: '💰 Total Price',
-                        value: `\`\`\`fix\n${numberWithThousandsSeparators(totalPrice)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatNumber(totalPrice)} coins\n\`\`\``,
                         inline: true
                     },
                     {

@@ -139,8 +139,8 @@ export function getSlotLore(slot: any): string[] {
 }
 
 /**
- * Calculates the auction house fee based on the purchase price
- * @param price The purchase price of the item
+ * Calculates the auction house fee based on the sale/target price
+ * @param price The sale or target price of the item
  * @returns The auction house fee amount
  * 
  * Fee structure:

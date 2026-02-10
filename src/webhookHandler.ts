@@ -82,6 +82,9 @@ export function sendWebhookStartupComplete(ordersFound?: number) {
     let ahEnabled = getConfigProperty('ENABLE_AH_FLIPS')
     let bazaarEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
     
+    // Get Coflnet premium info
+    const coflnetInfo = getCoflnetPremiumInfo()
+    
     const fields: any[] = [
         {
             name: '1️⃣ Cookie Check',
@@ -102,18 +105,35 @@ export function sendWebhookStartupComplete(ordersFound?: number) {
         }
     ]
     
+    // Add connection ID as a separate field for easy copying
+    if (coflnetInfo.connectionId) {
+        fields.push({
+            name: 'Connection ID',
+            value: `\`${coflnetInfo.connectionId}\``,
+            inline: false
+        })
+    }
+    
     // Add status info
     let statusParts = [
         `AH Flips: ${ahEnabled ? '✅ Enabled' : '❌ Disabled'}`,
         `Bazaar Flips: ${bazaarEnabled ? '✅ Enabled' : '❌ Disabled'}`
     ]
     
+    // Build description with Coflnet info if available
+    let description = `Ready to accept flips!\n\n${statusParts.join('\n')}`
+    
+    // Add Coflnet premium info if available
+    if (coflnetInfo.tier && coflnetInfo.expires) {
+        description += `\n\n**Coflnet ${coflnetInfo.tier}** expires ${coflnetInfo.expires}`
+    }
+    
     sendWebhookData({
         content: '',
         embeds: [
             {
                 title: '🚀 Startup Workflow Complete',
-                description: `Ready to accept flips!\n\n${statusParts.join('\n')}`,
+                description: description,
                 color: 0x2ecc71, // Success green
                 fields: fields,
                 footer: {

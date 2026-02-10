@@ -2,6 +2,7 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
+import { areBazaarFlipsPaused } from './bazaarFlipPauser'
 
 /**
  * Represents a tracked bazaar order
@@ -57,6 +58,129 @@ export function markOrderClaimed(itemName: string, isBuyOrder: boolean): void {
 }
 
 /**
+ * Discover existing orders on startup
+ * Scans Manage Orders to find any existing orders and track/cancel them as needed
+ */
+export async function discoverExistingOrders(bot: MyBot): Promise<void> {
+    if (bot.state) {
+        log('[OrderManager] Bot is busy, cannot discover orders now', 'info')
+        return
+    }
+    
+    log('[OrderManager] Discovering existing orders...', 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Checking for existing orders...`)
+    
+    isManagingOrders = true
+    
+    return new Promise((resolve) => {
+        let clickedManageOrders = false
+        
+        const timeout = setTimeout(() => {
+            log('[OrderManager] Order discovery timed out (20 seconds)', 'warn')
+            bot.removeListener('windowOpen', windowHandler)
+            bot.state = null
+            isManagingOrders = false
+            resolve()
+        }, 20000)
+        
+        const windowHandler = async (window) => {
+            try {
+                await sleep(300)
+                const title = getWindowTitle(window)
+                log(`[OrderManager] Discovery window: ${title}`, 'debug')
+                
+                // Main bazaar page - click Manage Orders (slot 50)
+                if (title.includes('Bazaar') && !clickedManageOrders) {
+                    clickedManageOrders = true
+                    log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
+                    await sleep(200)
+                    await clickWindow(bot, 50).catch(err => log(`[OrderManager] Error clicking Manage Orders: ${err}`, 'error'))
+                    return
+                }
+                
+                // Orders view - scan all orders
+                if (clickedManageOrders) {
+                    let foundOrders = 0
+                    
+                    for (let i = 0; i < window.slots.length; i++) {
+                        const slot = window.slots[i]
+                        const name = removeMinecraftColorCodes(
+                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                        )
+                        
+                        // Find orders (BUY or SELL items)
+                        if (name && (name.startsWith('BUY ') || name.startsWith('SELL '))) {
+                            const isBuyOrder = name.startsWith('BUY ')
+                            const itemName = name.replace(/^(BUY|SELL) /, '')
+                            
+                            // Parse lore to get order details
+                            const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                            let amount = 0
+                            let pricePerUnit = 0
+                            
+                            if (lore) {
+                                const loreText = lore.map((line: any) => removeMinecraftColorCodes(line.toString())).join('\n')
+                                
+                                // Extract amount and price from lore
+                                const amountMatch = loreText.match(/(\d+)x/)
+                                const priceMatch = loreText.match(/([\d,]+) coins/)
+                                
+                                if (amountMatch) amount = parseInt(amountMatch[1])
+                                if (priceMatch) pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
+                            }
+                            
+                            // Record the order with current timestamp
+                            // This ensures old orders will be cancelled on the next check
+                            const order: BazaarOrderRecord = {
+                                itemName,
+                                amount: amount || 1,
+                                pricePerUnit: pricePerUnit || 0,
+                                isBuyOrder,
+                                placedAt: Date.now(), // Use current time so they're not immediately cancelled
+                                claimed: false,
+                                cancelled: false
+                            }
+                            
+                            trackedOrders.push(order)
+                            foundOrders++
+                            
+                            log(`[OrderManager] Found existing order: ${name}`, 'info')
+                        }
+                    }
+                    
+                    bot.removeListener('windowOpen', windowHandler)
+                    bot.state = null
+                    isManagingOrders = false
+                    clearTimeout(timeout)
+                    
+                    if (foundOrders > 0) {
+                        log(`[OrderManager] Discovered ${foundOrders} existing orders`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Found ${foundOrders} existing order(s)`)
+                    } else {
+                        log('[OrderManager] No existing orders found', 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] No existing orders`)
+                    }
+                    
+                    resolve()
+                }
+            } catch (error) {
+                log(`[OrderManager] Error in discovery window handler: ${error}`, 'error')
+                bot.removeListener('windowOpen', windowHandler)
+                bot.state = null
+                isManagingOrders = false
+                clearTimeout(timeout)
+                resolve()
+            }
+        }
+        
+        bot.removeAllListeners('windowOpen')
+        bot.state = 'bazaar'
+        bot.on('windowOpen', windowHandler)
+        bot.chat('/bz')
+    })
+}
+
+/**
  * Start the order management timer
  * Checks for orders to claim or cancel periodically
  */
@@ -69,6 +193,11 @@ export function startOrderManager(bot: MyBot): void {
     const intervalSeconds = getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS')
     log(`[OrderManager] Starting order management timer (check every ${intervalSeconds}s)`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Started (checking every §e${intervalSeconds}s§7)`)
+    
+    // Discover existing orders before starting the timer
+    discoverExistingOrders(bot).then(() => {
+        log('[OrderManager] Starting periodic checks', 'info')
+    })
     
     checkTimer = setInterval(async () => {
         await checkOrders(bot)
@@ -128,6 +257,15 @@ async function checkOrders(bot: MyBot): Promise<void> {
  * not the final result of the retry.
  */
 export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrder?: boolean): Promise<boolean> {
+    // Don't claim orders while bazaar flips are paused
+    if (areBazaarFlipsPaused()) {
+        log('[OrderManager] Bazaar flips are paused, skipping claim operation', 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claim delayed - bazaar flips paused`)
+        // Queue the claim for when bazaar flips resume
+        setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), 5000)
+        return false
+    }
+    
     // Wait if bot is busy
     if (bot.state && bot.state !== 'claiming') {
         log('[OrderManager] Bot is busy, queueing claim operation (will retry in 1s)', 'info')

@@ -155,7 +155,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
     if (flipData) {
         profit = calculateProfit(flipData, sellPrice)
         timeToSell = formatTimeToSell(Date.now() - flipData.purchaseTime)
-        profitStr = profit > 0 ? `+${formatNumber(profit)}` : `${formatNumber(Math.abs(profit))}`
+        profitStr = profit > 0 ? `+${formatNumber(profit)}` : `${formatNumber(profit)}`
         auctionId = flipData.auctionId
         removeFlipData(itemName)
     }

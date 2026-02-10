@@ -34,6 +34,12 @@ const CLAIM_RETRY_DELAY_MS = 5000
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
 const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 
+// Delay before immediate order check to ensure command queue is ready
+const IMMEDIATE_CHECK_DELAY_MS = 2000
+
+// Delay after clicking an order in Manage Orders for window content to update
+const WINDOW_UPDATE_DELAY_MS = 800
+
 /**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
@@ -138,15 +144,17 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                                 if (priceMatch) pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
                             }
                             
-                            // Record the order with current timestamp
-                            // Using current time means these orders won't be cancelled until
-                            // they age beyond BAZAAR_ORDER_CANCEL_MINUTES from discovery time
+                            // Record the order with a timestamp from the past so it will be
+                            // cancelled immediately after discovery (since we don't know the actual age)
+                            // Set placedAt to be older than BAZAAR_ORDER_CANCEL_MINUTES
+                            const cancelMinutes = getConfigProperty('BAZAAR_ORDER_CANCEL_MINUTES')
+                            const cancelTimeoutMs = cancelMinutes * 60 * 1000
                             const order: BazaarOrderRecord = {
                                 itemName,
                                 amount: amount || 1,
                                 pricePerUnit: pricePerUnit || 0,
                                 isBuyOrder,
-                                placedAt: Date.now(),
+                                placedAt: Date.now() - cancelTimeoutMs - 1000, // 1 second past cancel threshold
                                 claimed: false,
                                 cancelled: false
                             }
@@ -193,8 +201,10 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
 /**
  * Start the order management timer
  * Checks for orders to claim or cancel periodically
+ * @param bot The bot instance
+ * @param checkImmediately If true, performs an immediate check before starting the timer
  */
-export function startOrderManager(bot: MyBot): void {
+export function startOrderManager(bot: MyBot, checkImmediately: boolean = false): void {
     if (checkTimer) {
         log('[OrderManager] Timer already running', 'debug')
         return
@@ -203,6 +213,15 @@ export function startOrderManager(bot: MyBot): void {
     const intervalSeconds = getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS')
     log(`[OrderManager] Starting order management timer (check every ${intervalSeconds}s)`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Started (checking every §e${intervalSeconds}s§7)`)
+    
+    // Perform immediate check if requested (e.g., after discovering existing orders at startup)
+    if (checkImmediately) {
+        log('[OrderManager] Performing immediate check for stale orders...', 'info')
+        // Use setTimeout to avoid blocking and give command queue time to initialize
+        setTimeout(async () => {
+            await checkOrders(bot)
+        }, IMMEDIATE_CHECK_DELAY_MS)
+    }
     
     checkTimer = setInterval(async () => {
         await checkOrders(bot)
@@ -440,6 +459,129 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
             resolve(false)
         }, 20000)
         
+        // Helper function to process order details after clicking on an order
+        // This is needed because clicking an order doesn't open a new window, it just updates the current one
+        const processOrderDetails = async () => {
+            try {
+                const window = bot.currentWindow
+                if (!window) {
+                    log('[OrderManager] ERROR: bot.currentWindow is null when processing order details', 'error')
+                    bot._client.removeListener('open_window', windowListener)
+                    bot.state = null
+                    isManagingOrders = false
+                    clearTimeout(timeout)
+                    resolve(false)
+                    return
+                }
+                
+                cancelStep = 'done' // Mark as done to prevent window listener from processing
+                
+                const title = getWindowTitle(window)
+                log(`[OrderManager] Processing order details from currentWindow: "${title}"`, 'debug')
+                
+                // First, check for claimable items
+                let claimableSlot = -1
+                for (let i = 0; i < window.slots.length; i++) {
+                    const slot = window.slots[i]
+                    const name = removeMinecraftColorCodes(
+                        (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                    )
+                    
+                    if (slot && slot.type && name) {
+                        const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                        const hasClaimIndicator = lore && lore.some((line: any) => {
+                            const loreText = removeMinecraftColorCodes(line.toString())
+                            return loreText.includes('Click to claim') || loreText.includes('Status: Filled')
+                        })
+                        
+                        // Strip special characters like ☘ when comparing
+                        const strippedItemName = order.itemName.replace(/[☘]/g, '').trim()
+                        const strippedSlotName = name.replace(/[☘]/g, '').trim()
+                        
+                        if (hasClaimIndicator && strippedSlotName.toLowerCase().includes(strippedItemName.toLowerCase())) {
+                            claimableSlot = i
+                            log(`[OrderManager] Found claimable items at slot ${i}: ${name}`, 'info')
+                            break
+                        }
+                    }
+                }
+                
+                // If there are claimable items, claim them
+                if (claimableSlot !== -1) {
+                    log(`[OrderManager] Claiming items from slot ${claimableSlot}...`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Claiming filled items...`)
+                    
+                    // Click up to MAX_CLAIM_ATTEMPTS times to claim (handles partial fills)
+                    for (let clickCount = 0; clickCount < MAX_CLAIM_ATTEMPTS; clickCount++) {
+                        await sleep(CLAIM_DELAY_MS)
+                        await clickWindow(bot, claimableSlot).catch(err => {
+                            log(`[OrderManager] Claim click ${clickCount + 1} failed: ${err}`, 'debug')
+                        })
+                    }
+                    
+                    await sleep(CLAIM_DELAY_MS)
+                    log(`[OrderManager] Claimed items, checking for cancel button...`, 'info')
+                    await sleep(300)
+                }
+                
+                // Now look for the cancel button
+                const cancelButtonName = order.isBuyOrder ? 'Cancel Buy Order' : 'Cancel Sell Offer'
+                const cancelSlot = findSlotWithName(window, cancelButtonName)
+                
+                if (cancelSlot === -1) {
+                    // No cancel button - order was fully filled
+                    if (claimableSlot !== -1) {
+                        log(`[OrderManager] Order fully filled, no cancel button found: ${order.itemName}`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Order fully filled: §e${order.itemName}`)
+                        order.claimed = true
+                    } else {
+                        log(`[OrderManager] No cancel button or claimable items found for: ${order.itemName}`, 'warn')
+                    }
+                    
+                    cleanupTrackedOrders()
+                    
+                    bot._client.removeListener('open_window', windowListener)
+                    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                    bot.state = null
+                    isManagingOrders = false
+                    clearTimeout(timeout)
+                    resolve(claimableSlot !== -1)
+                    return
+                }
+                
+                // Click cancel button
+                log(`[OrderManager] Clicking cancel button at slot ${cancelSlot}`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancelling remaining order...`)
+                await sleep(200)
+                await clickWindow(bot, cancelSlot).catch(e => log(`[OrderManager] clickWindow error: ${e}`, 'debug'))
+                
+                // Wait for server to process, then clean up
+                await sleep(500)
+                
+                // Mark as cancelled
+                order.cancelled = true
+                log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy' : 'sell'} order: ${order.itemName}`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancelled order: §e${order.itemName}`)
+                
+                cleanupTrackedOrders()
+                
+                bot._client.removeListener('open_window', windowListener)
+                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                bot.state = null
+                isManagingOrders = false
+                clearTimeout(timeout)
+                resolve(true)
+            } catch (error) {
+                log(`[OrderManager] Error in processOrderDetails: ${error}`, 'error')
+                bot._client.removeListener('open_window', windowListener)
+                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                bot.state = null
+                isManagingOrders = false
+                clearTimeout(timeout)
+                resolve(false)
+            }
+        }
+        
         const windowListener = async (packet: any) => {
             try {
                 // Wait for mineflayer to process the window and populate bot.currentWindow
@@ -511,8 +653,16 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     cancelStep = 'waitForOrderDetail'
                     await sleep(200)
                     await clickWindow(bot, orderSlot).catch(e => log(`[OrderManager] clickWindow error: ${e}`, 'debug'))
+                    
+                    // After clicking order, the window content updates but no new window event fires
+                    // Need to manually process the order details from bot.currentWindow
+                    await sleep(WINDOW_UPDATE_DELAY_MS) // Wait for window to update
+                    await processOrderDetails()
+                    return // Exit after processing details
                 }
                 else if (cancelStep === 'waitForOrderDetail') {
+                    // Fallback: This should not be reached since we process details immediately after clicking
+                    // However, kept as safety in case window event fires unexpectedly
                     // Step 3: Order detail window opened - look for claimable items, then cancel button
                     
                     // First, check for claimable items

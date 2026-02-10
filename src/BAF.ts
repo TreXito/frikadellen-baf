@@ -606,7 +606,8 @@ async function runStartupWorkflow() {
     
     // Start bazaar order manager if bazaar flips are enabled
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        startOrderManager(bot)
+        // Pass true to trigger immediate check if orders were discovered at startup
+        startOrderManager(bot, ordersFound > 0)
     }
     
     // Request bazaar flips if enabled

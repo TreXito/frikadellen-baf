@@ -31,7 +31,8 @@ export function removeFlipData(itemName: string): void {
 }
 
 export function calculateProfit(flipData: FlipData, sellPrice: number): number {
-    const auctionHouseFee = calculateAuctionHouseFee(flipData.buyPrice)
+    // Fee is calculated based on sell price since that's when the fee is charged
+    const auctionHouseFee = calculateAuctionHouseFee(sellPrice)
     return sellPrice - flipData.buyPrice - auctionHouseFee
 }
 

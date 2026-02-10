@@ -3,6 +3,7 @@ import { getConfigProperty } from './configHelper'
 import { FlipWhitelistedData, Flip } from '../types/autobuy'
 import { getFlipData, calculateProfit, formatTimeToSell, removeFlipData } from './flipTracker'
 import { getCoflnetPremiumInfo } from './BAF'
+import { calculateAuctionHouseFee } from './utils'
 
 function sendWebhookData(options: Partial<Webhook>): void {
     let data = {
@@ -153,7 +154,9 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     let ingameName = getConfigProperty('INGAME_NAME')
     
     const buyPrice = parseFloat(price.replace(/,/g, ''))
-    const profit = flip ? flip.target - buyPrice : 0
+    // Fee is calculated based on target price since that's when the item is resold
+    const auctionHouseFee = flip ? calculateAuctionHouseFee(flip.target) : 0
+    const profit = flip ? flip.target - buyPrice - auctionHouseFee : 0
     const profitStr = profit > 0 ? `+${numberWithThousandsSeparators(profit)}` : '0'
     const profitPercent = flip && flip.target > 0 && buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0'
     

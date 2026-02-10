@@ -1,4 +1,5 @@
 import { Flip } from '../types/autobuy'
+import { calculateAuctionHouseFee } from './utils'
 
 // Store active flips with purchase time
 const activeFlips: Map<string, FlipData> = new Map()
@@ -30,7 +31,9 @@ export function removeFlipData(itemName: string): void {
 }
 
 export function calculateProfit(flipData: FlipData, sellPrice: number): number {
-    return sellPrice - flipData.buyPrice
+    // Fee is calculated based on sell price since that's when the fee is charged
+    const auctionHouseFee = calculateAuctionHouseFee(sellPrice)
+    return sellPrice - flipData.buyPrice - auctionHouseFee
 }
 
 export function calculateTimeToSell(flipData: FlipData): number {

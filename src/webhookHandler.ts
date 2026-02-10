@@ -74,6 +74,58 @@ export function sendWebhookInitialized() {
     })
 }
 
+export function sendWebhookStartupComplete(ordersFound?: number) {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    let ingameName = getConfigProperty('INGAME_NAME')
+    let ahEnabled = getConfigProperty('ENABLE_AH_FLIPS')
+    let bazaarEnabled = getConfigProperty('ENABLE_BAZAAR_FLIPS')
+    
+    const fields: any[] = [
+        {
+            name: '1️⃣ Cookie Check',
+            value: '```✓ Complete```',
+            inline: true
+        },
+        {
+            name: '2️⃣ Order Discovery',
+            value: bazaarEnabled 
+                ? `\`\`\`✓ ${ordersFound !== undefined ? `Found ${ordersFound} order(s)` : 'Complete'}\`\`\``
+                : '```- Skipped (Bazaar disabled)```',
+            inline: true
+        },
+        {
+            name: '3️⃣ Claim Items',
+            value: '```✓ Complete```',
+            inline: true
+        }
+    ]
+    
+    // Add status info
+    let statusParts = [
+        `AH Flips: ${ahEnabled ? '✅ Enabled' : '❌ Disabled'}`,
+        `Bazaar Flips: ${bazaarEnabled ? '✅ Enabled' : '❌ Disabled'}`
+    ]
+    
+    sendWebhookData({
+        content: '',
+        embeds: [
+            {
+                title: '🚀 Startup Workflow Complete',
+                description: `Ready to accept flips!\n\n${statusParts.join('\n')}`,
+                color: 0x2ecc71, // Success green
+                fields: fields,
+                footer: {
+                    text: `BAF - ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                },
+                timestamp: new Date().toISOString()
+            }
+        ]
+    })
+}
+
 export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip) {
     if (!isWebhookConfigured()) {
         return

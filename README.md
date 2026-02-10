@@ -5,7 +5,7 @@ https://www.discord.gg/eYRBsaECzY
 
 BAF (Bazaar Auction Flipper) for Hypixel Skyblock
 Note: This code is a headless (no user interface) Minecraft client and has features sending custom packages to the server to compete with other macroers. This is against the Hypixel Terms of Service.
-Hypixel currently doesn't ban for doing so but has all the rights to start doing it without notice so use this with caution.
+Hypixel can ban for doing so.
 
 ## Releases
 

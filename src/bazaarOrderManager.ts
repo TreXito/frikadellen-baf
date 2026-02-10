@@ -36,6 +36,8 @@ const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 
 /**
  * Get the number of tracked orders
+ * Used by the startup workflow to report how many existing orders were discovered
+ * @returns The count of currently tracked orders
  */
 export function getTrackedOrdersCount(): number {
     return trackedOrders.length

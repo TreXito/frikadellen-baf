@@ -22,7 +22,7 @@ import { startWebGui, addWebGuiChatMessage } from './webGui'
 import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
-import { startOrderManager } from './bazaarOrderManager'
+import { startOrderManager, discoverExistingOrders, getTrackedOrdersCount } from './bazaarOrderManager'
 import { initCommandQueue, enqueueCommand, CommandPriority } from './commandQueue'
 const WebSocket = require('ws')
 const EventEmitter = require('events')
@@ -570,10 +570,9 @@ async function runStartupWorkflow() {
         log('[Startup] Step 2/4: Discovering existing orders...', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fDiscovering existing orders...')
         try {
-            const bazaarOrderManager = require('./bazaarOrderManager')
-            const beforeCount = bazaarOrderManager.getTrackedOrdersCount ? bazaarOrderManager.getTrackedOrdersCount() : 0
-            await bazaarOrderManager.discoverExistingOrders(bot)
-            const afterCount = bazaarOrderManager.getTrackedOrdersCount ? bazaarOrderManager.getTrackedOrdersCount() : 0
+            const beforeCount = getTrackedOrdersCount()
+            await discoverExistingOrders(bot)
+            const afterCount = getTrackedOrdersCount()
             ordersFound = afterCount - beforeCount
             log('[Startup] Order discovery complete', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Order discovery complete')
@@ -608,7 +607,6 @@ async function runStartupWorkflow() {
     
     // Start bazaar order manager if bazaar flips are enabled
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        const { startOrderManager } = require('./bazaarOrderManager')
         startOrderManager(bot)
     }
     

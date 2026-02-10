@@ -37,6 +37,9 @@ const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 // Delay before immediate order check to ensure command queue is ready
 const IMMEDIATE_CHECK_DELAY_MS = 2000
 
+// Delay after clicking an order in Manage Orders for window content to update
+const WINDOW_UPDATE_DELAY_MS = 800
+
 /**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
@@ -653,12 +656,13 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     
                     // After clicking order, the window content updates but no new window event fires
                     // Need to manually process the order details from bot.currentWindow
-                    await sleep(800) // Wait for window to update
+                    await sleep(WINDOW_UPDATE_DELAY_MS) // Wait for window to update
                     await processOrderDetails()
                     return // Exit after processing details
                 }
                 else if (cancelStep === 'waitForOrderDetail') {
-                    // This should not be reached anymore since we process details immediately after clicking
+                    // Fallback: This should not be reached since we process details immediately after clicking
+                    // However, kept as safety in case window event fires unexpectedly
                     // Step 3: Order detail window opened - look for claimable items, then cancel button
                     
                     // First, check for claimable items

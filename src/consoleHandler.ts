@@ -6,6 +6,7 @@ import { claimPurchased } from './ingameMessageHandler'
 import { printMcChatToConsole } from './logger'
 import { sleep } from './utils'
 import { getQueueStatus, clearQueue } from './commandQueue'
+import { handleSellBazaarCommand } from './sellBazaar'
 
 let consoleSetupFinished = false
 
@@ -92,6 +93,10 @@ export async function handleCommand(bot: MyBot, data: string, fromServer: boolea
         if (command === 'clearqueue') {
             clearQueue()
             printMcChatToConsole(`§f[§4BAF§f]: §aCommand queue cleared`)
+            return
+        }
+        if (command === 'sellbz') {
+            handleSellBazaarCommand(bot)
             return
         }
 

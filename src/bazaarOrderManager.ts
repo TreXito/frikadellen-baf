@@ -35,15 +35,6 @@ const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to
 const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 
 /**
- * Get the number of tracked orders
- * Used by the startup workflow to report how many existing orders were discovered
- * @returns The count of currently tracked orders
- */
-export function getTrackedOrdersCount(): number {
-    return trackedOrders.length
-}
-
-/**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
  */

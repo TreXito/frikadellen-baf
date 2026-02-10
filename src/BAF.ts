@@ -541,7 +541,6 @@ async function onWebsocketMessage(msg) {
  * Order: Cookie check → Discover orders → Execute orders → Start accepting flips
  */
 async function runStartupWorkflow() {
-    const wss = await getCurrentWebsocket()
     let ordersFound = 0
     
     log('========================================', 'info')
@@ -601,6 +600,9 @@ async function runStartupWorkflow() {
     // Step 4: Ready to accept flips
     log('[Startup] Step 4/4: Starting flip acceptance...', 'info')
     printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 4/4: §fStarting flip acceptance...')
+    
+    // Get websocket for requesting flips
+    const wss = await getCurrentWebsocket()
     
     // Start bazaar order manager if bazaar flips are enabled
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {

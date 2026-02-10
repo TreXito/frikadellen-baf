@@ -37,6 +37,11 @@ let autoBuyInstance: AutoBuy | null = null
 let socketWrapper: SocketWrapper | null = null
 let ingameName = getConfigProperty('INGAME_NAME')
 
+// Store Coflnet premium information
+let coflnetPremiumTier: string | null = null
+let coflnetPremiumExpires: string | null = null
+let coflnetConnectionId: string | null = null
+
 if (!ingameName) {
     ingameName = prompt('Enter your ingame name: ')
     updatePersistentConfigProperty('INGAME_NAME', ingameName)
@@ -336,6 +341,13 @@ async function onWebsocketMessage(msg) {
                     log(message, 'debug')
                 }
                 
+                // Extract Coflnet connection ID
+                const connectionIdMatch = da.text.match(/Your connection id is ([a-f0-9]{32})/)
+                if (connectionIdMatch) {
+                    coflnetConnectionId = connectionIdMatch[1]
+                    log(`[Coflnet] Connection ID: ${coflnetConnectionId}`, 'info')
+                }
+                
                 // Check if this is an AH flip incoming message and pause if needed
                 checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'), bot)
                 
@@ -371,6 +383,15 @@ async function onWebsocketMessage(msg) {
             let isCoflChat = isCoflChatMessage(data.text)
             if (!isCoflChat) {
                 log(message, 'debug')
+            }
+            
+            // Extract Coflnet premium tier and expiration date
+            // Message format: "You have Premium until 2026-Feb-10 08:55 UTC"
+            const premiumMatch = data.text.match(/You have (.+?) until (.+?)(?:\\n|$)/)
+            if (premiumMatch) {
+                coflnetPremiumTier = premiumMatch[1].trim()
+                coflnetPremiumExpires = premiumMatch[2].trim()
+                log(`[Coflnet] Premium: ${coflnetPremiumTier} until ${coflnetPremiumExpires}`, 'info')
             }
             
             // Check if this is an AH flip incoming message and pause if needed
@@ -603,4 +624,16 @@ export async function getCurrentWebsocket(): Promise<WebSocket> {
         let socket = await getCurrentWebsocket()
         resolve(socket)
     })
+}
+
+/**
+ * Get stored Coflnet premium information
+ * Returns null values if not yet received from Coflnet
+ */
+export function getCoflnetPremiumInfo() {
+    return {
+        tier: coflnetPremiumTier,
+        expires: coflnetPremiumExpires,
+        connectionId: coflnetConnectionId
+    }
 }

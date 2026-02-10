@@ -9,6 +9,12 @@ const ITEM_SELL_DELAY_MS = 500
 const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300
 const MAX_CLAIM_ATTEMPTS = 3
 const CLAIM_DELAY_MS = 300
+const BAZAAR_FIRST_RESULT_SLOT = 11
+
+// Sign text format constants (for custom price entry)
+const SIGN_TEXT_LINE2 = '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}'
+const SIGN_TEXT_LINE3 = '{"italic":false,"extra":[""],"text":""}'
+const SIGN_TEXT_LINE4 = '{"italic":false,"extra":[""],"text":""}'
 
 /**
  * Represents a bazaar item to sell
@@ -377,7 +383,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                     }
 
                     if (itemSlot === -1) {
-                        itemSlot = 11 // Fallback to first result
+                        itemSlot = BAZAAR_FIRST_RESULT_SLOT // Fallback to first result slot
                     }
 
                     log(`[SellBZ] Clicking item at slot ${itemSlot}`, 'debug')
@@ -398,9 +404,9 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },
                             text1: `"${item.pricePerUnit.toFixed(1)}"`,
-                            text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
-                            text3: '{"italic":false,"extra":[""],"text":""}',
-                            text4: '{"italic":false,"extra":[""],"text":""}'
+                            text2: SIGN_TEXT_LINE2,
+                            text3: SIGN_TEXT_LINE3,
+                            text4: SIGN_TEXT_LINE4
                         })
                     })
 
@@ -440,7 +446,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
 /**
  * Helper: Find a slot by display name substring
  */
-function findSlotWithName(window, searchName: string): number {
+function findSlotWithName(window: any, searchName: string): number {
     for (let i = 0; i < window.slots.length; i++) {
         const slot = window.slots[i]
         if (!slot) continue

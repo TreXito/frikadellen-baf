@@ -451,7 +451,7 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                 
                 const window = bot.currentWindow
                 if (!window) {
-                    log('[OrderManager] WARNING: bot.currentWindow is null after window packet', 'warn')
+                    log('[OrderManager] WARNING: bot.currentWindow is null after window packet, skipping this window event', 'warn')
                     return
                 }
                 

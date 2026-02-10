@@ -26,6 +26,9 @@ let checkTimer: NodeJS.Timeout | null = null
 // Flag to track if we're currently managing orders
 let isManagingOrders = false
 
+// Retry delay for claim operations when bazaar flips are paused (5 seconds)
+const CLAIM_RETRY_DELAY_MS = 5000
+
 /**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
@@ -130,13 +133,14 @@ export async function discoverExistingOrders(bot: MyBot): Promise<void> {
                             }
                             
                             // Record the order with current timestamp
-                            // This ensures old orders will be cancelled on the next check
+                            // Using current time means these orders won't be cancelled until
+                            // they age beyond BAZAAR_ORDER_CANCEL_MINUTES from discovery time
                             const order: BazaarOrderRecord = {
                                 itemName,
                                 amount: amount || 1,
                                 pricePerUnit: pricePerUnit || 0,
                                 isBuyOrder,
-                                placedAt: Date.now(), // Use current time so they're not immediately cancelled
+                                placedAt: Date.now(),
                                 claimed: false,
                                 cancelled: false
                             }
@@ -262,7 +266,7 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         log('[OrderManager] Bazaar flips are paused, skipping claim operation', 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claim delayed - bazaar flips paused`)
         // Queue the claim for when bazaar flips resume
-        setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), 5000)
+        setTimeout(() => claimFilledOrders(bot, itemName, isBuyOrder), CLAIM_RETRY_DELAY_MS)
         return false
     }
     
@@ -460,10 +464,19 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
                         )
                         
-                        // Check if this is a claimable filled order (has item name in it)
-                        if (slot && slot.type && name && name.toLowerCase().includes(order.itemName.toLowerCase()) && 
-                            !name.includes('Cancel') && !name.includes('Go Back')) {
-                            foundClaimableOrder = true
+                        // Check if this is a claimable filled order
+                        // Must have the item type (material) and the window title should indicate it's a filled order
+                        // Exclude buttons like "Cancel", "Go Back", etc.
+                        if (slot && slot.type && name) {
+                            const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                            const hasFilledIndicator = lore && lore.some((line: any) => {
+                                const loreText = removeMinecraftColorCodes(line.toString())
+                                return loreText.includes('Status: Filled') || loreText.includes('Click to claim')
+                            })
+                            
+                            if (hasFilledIndicator && name.toLowerCase().includes(order.itemName.toLowerCase())) {
+                                foundClaimableOrder = true
+                            }
                         }
                         
                         if (name && name.includes(cancelButtonName)) {

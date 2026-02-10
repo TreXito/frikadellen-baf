@@ -35,6 +35,13 @@ const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to
 const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 
 /**
+ * Get the number of tracked orders
+ */
+export function getTrackedOrdersCount(): number {
+    return trackedOrders.length
+}
+
+/**
  * Record a bazaar order that was successfully placed
  * Called by handleBazaarFlipRecommendation after order placement
  */
@@ -202,11 +209,6 @@ export function startOrderManager(bot: MyBot): void {
     const intervalSeconds = getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS')
     log(`[OrderManager] Starting order management timer (check every ${intervalSeconds}s)`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Started (checking every §e${intervalSeconds}s§7)`)
-    
-    // Discover existing orders before starting the timer
-    discoverExistingOrders(bot).then(() => {
-        log('[OrderManager] Starting periodic checks', 'info')
-    })
     
     checkTimer = setInterval(async () => {
         await checkOrders(bot)

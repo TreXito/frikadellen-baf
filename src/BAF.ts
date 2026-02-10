@@ -12,7 +12,7 @@ import { claimSoldItem, registerIngameMessageHandler } from './ingameMessageHand
 import { MyBot, TextMessageData } from '../types/autobuy'
 import { getConfigProperty, initConfigHelper, updatePersistentConfigProperty } from './configHelper'
 import { getSessionId } from './coflSessionManager'
-import { sendWebhookInitialized } from './webhookHandler'
+import { sendWebhookInitialized, sendWebhookStartupComplete } from './webhookHandler'
 import { handleCommand, setupConsoleInterface } from './consoleHandler'
 import { initAFKHandler, tryToTeleportToIsland } from './AFKHandler'
 import { runSequence } from './sequenceRunner'
@@ -536,6 +536,105 @@ async function onWebsocketMessage(msg) {
     }
 }
 
+/**
+ * Runs the startup workflow after joining SkyBlock
+ * Order: Cookie check → Discover orders → Execute orders → Start accepting flips
+ */
+async function runStartupWorkflow() {
+    const wss = await getCurrentWebsocket()
+    let ordersFound = 0
+    
+    log('========================================', 'info')
+    log('Starting BAF Startup Workflow', 'info')
+    log('========================================', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    printMcChatToConsole('§f[§4BAF§f]: §6Starting BAF Startup Workflow')
+    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    
+    // Step 1: Check and buy cookie if needed
+    log('[Startup] Step 1/4: Checking cookie status...', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 1/4: §fChecking cookie status...')
+    try {
+        await checkAndBuyCookie(bot)
+        log('[Startup] Cookie check complete', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Cookie check complete')
+    } catch (err) {
+        log(`[Startup] Cookie check error: ${err}`, 'error')
+        printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Cookie check error')
+    }
+    
+    await sleep(1000)
+    
+    // Step 2: Discover existing orders (if bazaar flips enabled)
+    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+        log('[Startup] Step 2/4: Discovering existing orders...', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fDiscovering existing orders...')
+        try {
+            const bazaarOrderManager = require('./bazaarOrderManager')
+            const beforeCount = bazaarOrderManager.getTrackedOrdersCount ? bazaarOrderManager.getTrackedOrdersCount() : 0
+            await bazaarOrderManager.discoverExistingOrders(bot)
+            const afterCount = bazaarOrderManager.getTrackedOrdersCount ? bazaarOrderManager.getTrackedOrdersCount() : 0
+            ordersFound = afterCount - beforeCount
+            log('[Startup] Order discovery complete', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Order discovery complete')
+        } catch (err) {
+            log(`[Startup] Order discovery error: ${err}`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Order discovery error')
+        }
+    } else {
+        log('[Startup] Step 2/4: Skipping order discovery (Bazaar flips disabled)', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §7Skipped (Bazaar flips disabled)')
+    }
+    
+    await sleep(1000)
+    
+    // Step 3: Claim sold items from offline sales
+    log('[Startup] Step 3/4: Claiming sold items...', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 3/4: §fClaiming sold items...')
+    try {
+        claimSoldItem(bot)
+        log('[Startup] Sold items claim initiated', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim initiated')
+    } catch (err) {
+        log(`[Startup] Claim sold items error: ${err}`, 'error')
+        printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Claim sold items error')
+    }
+    
+    await sleep(2000)
+    
+    // Step 4: Ready to accept flips
+    log('[Startup] Step 4/4: Starting flip acceptance...', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 4/4: §fStarting flip acceptance...')
+    
+    // Start bazaar order manager if bazaar flips are enabled
+    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+        const { startOrderManager } = require('./bazaarOrderManager')
+        startOrderManager(bot)
+    }
+    
+    // Request bazaar flips if enabled
+    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+        await sleep(1000)
+        log('[Startup] Requesting bazaar flip recommendations...', 'info')
+        wss.send(
+            JSON.stringify({
+                type: 'getbazaarflips',
+                data: JSON.stringify('')
+            })
+        )
+    }
+    
+    log('========================================', 'info')
+    log('Startup Workflow Complete - Ready!', 'info')
+    log('========================================', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    printMcChatToConsole('§f[§4BAF§f]: §a§lStartup Workflow Complete - Ready!')
+    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    
+    // Send webhook notification about startup complete
+    sendWebhookStartupComplete(ordersFound)
+}
+
 async function onScoreboardChanged() {
     if (
         bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, '')).find(e => e.includes('Purse:') || e.includes('Piggy:'))
@@ -561,45 +660,11 @@ async function onScoreboardChanged() {
                 })
             )
             
-            // Start bazaar order manager if bazaar flips are enabled
-            if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-                startOrderManager(bot)
-            }
-            
-            // Request bazaar flips if enabled
-            if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-                // Wait for the server connection to stabilize before requesting flips
-                // This ensures the websocket is ready to handle the command and response
-                await sleep(1000)
-                log('Requesting bazaar flip recommendations...')
-                wss.send(
-                    JSON.stringify({
-                        type: 'getbazaarflips',
-                        data: JSON.stringify('')
-                    })
-                )
-            }
+            // Run the startup workflow
+            await runStartupWorkflow()
         }, 5500)
         await sleep(2500)
         tryToTeleportToIsland(bot, 0)
-
-        await sleep(20000)
-        
-        // Queue cookie check with LOW priority - won't interrupt other operations
-        enqueueCommand(
-            'Cookie Check',
-            CommandPriority.LOW,
-            async () => {
-                try {
-                    await checkAndBuyCookie(bot)
-                } catch (err) {
-                    log(`Error in checkAndBuyCookie: ${err}`, 'error')
-                }
-            }
-        )
-        
-        // trying to claim sold items if sold while user was offline
-        claimSoldItem(bot)
     }
 }
 

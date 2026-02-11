@@ -760,7 +760,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
         await clickWindow(bot, cancelSlot).catch(() => {})
-        await sleep(200)
+        await sleep(300) // Transaction processing time
         
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)

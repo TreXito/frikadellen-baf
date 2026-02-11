@@ -4,7 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
-import { recordOrder, getOrderCounts } from './bazaarOrderManager'
+import { recordOrder, canPlaceOrder } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
@@ -203,20 +203,11 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
-    // Feature 3: Check order slot limits (14 total, 7 buy orders max)
-    const { totalOrders, buyOrders } = getOrderCounts()
-    
-    if (totalOrders >= 14) {
-        log('[BAF]: Cannot place order - 14/14 order slots used', 'warn')
-        printMcChatToConsole('§f[§4BAF§f]: §cCannot place order - 14/14 order slots used')
-        // TODO: Could trigger claim/cancel cycle here to free up slots
-        return
-    }
-    
-    if (recommendation.isBuyOrder && buyOrders >= 7) {
-        log('[BAF]: Cannot place buy order - 7/7 buy order slots used', 'warn')
-        printMcChatToConsole('§f[§4BAF§f]: §cCannot place buy order - 7/7 buy order slots used')
-        // TODO: Could trigger claim/cancel cycle here to free up slots
+    // Check if we can place the order (dynamic slot checking)
+    const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
+    if (!orderCheck.canPlace) {
+        log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
+        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
         return
     }
 
@@ -420,6 +411,47 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
             log(`[BazaarDebug] === End Window Slots (${importantSlots.length} items) ===`, 'info')
         }
         
+        // Helper: Check for red error messages in window
+        const checkForBazaarErrors = (win): string | null => {
+            for (let i = 0; i < win.slots.length; i++) {
+                const slot = win.slots[i]
+                if (!slot || !slot.nbt) continue
+                
+                // Check display name for red text (§c)
+                const rawName = (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                if (rawName.includes('§c')) {
+                    const cleanName = removeMinecraftColorCodes(rawName)
+                    // Check if it's an error related to order limits
+                    if (cleanName.toLowerCase().includes('order') || 
+                        cleanName.toLowerCase().includes('limit') ||
+                        cleanName.toLowerCase().includes('error') ||
+                        cleanName.toLowerCase().includes('cannot')) {
+                        log(`[BazaarDebug] Detected red error message: ${cleanName}`, 'warn')
+                        return cleanName
+                    }
+                }
+                
+                // Also check lore for red text errors
+                const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                if (lore && Array.isArray(lore)) {
+                    for (const loreLine of lore) {
+                        const rawLoreLine = loreLine.toString()
+                        if (rawLoreLine.includes('§c')) {
+                            const cleanLine = removeMinecraftColorCodes(rawLoreLine)
+                            if (cleanLine.toLowerCase().includes('order') || 
+                                cleanLine.toLowerCase().includes('limit') ||
+                                cleanLine.toLowerCase().includes('error') ||
+                                cleanLine.toLowerCase().includes('cannot')) {
+                                log(`[BazaarDebug] Detected red error in lore: ${cleanLine}`, 'warn')
+                                return cleanLine
+                            }
+                        }
+                    }
+                }
+            }
+            return null
+        }
+        
         // Use low-level open_window event to avoid breaking mineflayer's windowOpen handler
         const windowListener = async (packet) => {
             // Wait for mineflayer to process the window and populate bot.currentWindow
@@ -436,6 +468,18 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
             
             // Log all slots in this window for debugging
             logWindowSlots(window, title)
+            
+            // Check for red error messages from bazaar
+            const errorMessage = checkForBazaarErrors(window)
+            if (errorMessage) {
+                log(`[BazaarDebug] Bazaar error detected: ${errorMessage}`, 'error')
+                printMcChatToConsole(`§f[§4BAF§f]: §cBazaar error: ${errorMessage}`)
+                printMcChatToConsole(`§f[§4BAF§f]: §cAbandoning order placement due to bazaar error`)
+                bot._client.removeListener('open_window', windowListener)
+                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                reject(new Error(`Bazaar error: ${errorMessage}`))
+                return
+            }
 
             try {
                 // 1. Item detail page - detected by order buttons, works with ANY window title

@@ -4,6 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused } from './bazaarFlipPauser'
 import { enqueueCommand, CommandPriority } from './commandQueue'
+import { sendWebhookBazaarOrderCancelled, sendWebhookBazaarOrderClaimed } from './webhookHandler'
 
 /**
  * Represents a tracked bazaar order
@@ -31,6 +32,14 @@ let checkTimer: NodeJS.Timeout | null = null
 
 // Flag to track if we're currently managing orders
 let isManagingOrders = false
+
+// Dynamic order slot limits (defaults to Hypixel's known limits, updated when errors occur)
+let maxTotalOrders = 14
+let maxBuyOrders = 7
+
+// Flag to track if we hit a limit (to avoid spamming attempts)
+let orderLimitReached = false
+let buyOrderLimitReached = false
 
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
@@ -131,14 +140,52 @@ function parseLoreForOrderDetails(lore: any[]): { filled: number, totalAmount: n
 
 /**
  * Feature 3: Count current orders
- * @returns Object with total order count and buy order count
+ * @returns Object with total order count, buy order count, and limits
  */
-export function getOrderCounts(): { totalOrders: number, buyOrders: number } {
+export function getOrderCounts(): { totalOrders: number, buyOrders: number, maxTotalOrders: number, maxBuyOrders: number } {
     const activeOrders = trackedOrders.filter(o => !o.claimed && !o.cancelled)
     const buyOrders = activeOrders.filter(o => o.isBuyOrder).length
     return {
         totalOrders: activeOrders.length,
-        buyOrders
+        buyOrders,
+        maxTotalOrders,
+        maxBuyOrders
+    }
+}
+
+/**
+ * Check if we can place a new order based on current counts
+ * @param isBuyOrder Whether the order is a buy order
+ * @returns Object with canPlace flag and reason if false
+ */
+export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?: string } {
+    const { totalOrders, buyOrders } = getOrderCounts()
+    
+    if (totalOrders >= maxTotalOrders) {
+        return { canPlace: false, reason: `Total order slots full (${totalOrders}/${maxTotalOrders})` }
+    }
+    
+    if (isBuyOrder && buyOrders >= maxBuyOrders) {
+        return { canPlace: false, reason: `Buy order slots full (${buyOrders}/${maxBuyOrders})` }
+    }
+    
+    return { canPlace: true }
+}
+
+/**
+ * Reset order limit flags when an order is claimed or cancelled
+ * This allows the bot to try placing orders again after freeing up a slot
+ */
+export function resetOrderLimitFlags(): void {
+    const wasTotalLimitReached = orderLimitReached
+    const wasBuyLimitReached = buyOrderLimitReached
+    
+    orderLimitReached = false
+    buyOrderLimitReached = false
+    
+    if (wasTotalLimitReached || wasBuyLimitReached) {
+        log('[OrderManager] Order limit flags reset - slots are now available', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[OrderManager] Order slots freed up!')
     }
 }
 
@@ -170,6 +217,7 @@ export function markOrderClaimed(itemName: string, isBuyOrder: boolean): void {
     if (order) {
         order.claimed = true
         log(`[OrderManager] Marked ${order.isBuyOrder ? 'buy' : 'sell'} order as claimed: ${order.itemName}`, 'info')
+        resetOrderLimitFlags() // Reset flags when order is claimed
     }
 }
 
@@ -486,6 +534,19 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                 if (!matchesType || !matchesItem) continue
                             }
                             
+                            // Parse lore to get order details for webhook
+                            const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                            let orderAmount = 0
+                            let pricePerUnit = 0
+                            
+                            if (lore) {
+                                const parsedLore = parseLoreForOrderDetails(lore)
+                                if (parsedLore) {
+                                    orderAmount = parsedLore.totalAmount
+                                    pricePerUnit = parsedLore.pricePerUnit
+                                }
+                            }
+                            
                             log(`[OrderManager] Claiming order: slot ${i}, item: ${name}`, 'info')
                             printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claiming §e${name}`)
                             
@@ -506,6 +567,14 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             const orderType = name.startsWith('BUY ')
                             const extractedName = name.replace(/^(BUY|SELL) /, '')
                             markOrderClaimed(extractedName, orderType)
+                            
+                            // Send webhook notification
+                            sendWebhookBazaarOrderClaimed(
+                                extractedName,
+                                orderAmount || 0,
+                                pricePerUnit,
+                                orderType
+                            )
                         }
                     }
                     
@@ -672,6 +741,18 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
         
+        // Send webhook notification
+        const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+        sendWebhookBazaarOrderCancelled(
+            order.itemName,
+            order.amount,
+            order.pricePerUnit,
+            order.isBuyOrder,
+            ageMinutes,
+            order.filled || 0,
+            order.totalAmount || order.amount
+        )
+        
         // Close window and clean up
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         order.cancelled = true
@@ -698,6 +779,7 @@ function cleanupTrackedOrders(): void {
     
     if (removed > 0) {
         log(`[OrderManager] Cleaned up ${removed} completed orders. Now tracking ${trackedOrders.length} orders`, 'info')
+        resetOrderLimitFlags() // Reset flags when orders are cleaned up
     }
 }
 

@@ -353,7 +353,7 @@ async function checkOrders(bot: MyBot): Promise<void> {
     const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
     log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
     
-    // Queue the cancel operation with LOW priority and mark as interruptible
+    // Queue the cancel operation with LOW priority (not time-sensitive, maintenance task)
     const commandName = `Cancel Order: ${orderToCancel.itemName}`
     enqueueCommand(
         commandName,
@@ -380,7 +380,7 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         return false
     }
     
-    // Queue the claim operation with LOW priority and mark as interruptible
+    // Queue the claim operation with LOW priority (not time-sensitive, maintenance task)
     const commandName = itemName ? `Claim Order: ${itemName}` : 'Claim Filled Orders'
     enqueueCommand(
         commandName,

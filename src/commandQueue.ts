@@ -6,7 +6,7 @@ import { log, printMcChatToConsole } from './logger'
  * Lower numbers = higher priority
  */
 export enum CommandPriority {
-    CRITICAL = 1, // Emergency operations, AFK responses, AH flips (time-sensitive)
+    CRITICAL = 1, // Emergency operations, AFK responses (AH flips achieve priority via interruption)
     HIGH = 2,     // Cookie checks, order management
     NORMAL = 3,   // Bazaar flips
     LOW = 4       // Maintenance
@@ -243,14 +243,13 @@ export function interruptCurrentCommand(bot: MyBot): boolean {
         queuedAt: Date.now()
     }
     
-    // Insert at front of queue with same priority
-    let insertIndex = 0
+    // Insert at appropriate position in queue based on priority
+    // Within same priority, maintain FIFO order
+    let insertIndex = commandQueue.length // Default to end of queue
     for (let i = 0; i < commandQueue.length; i++) {
         if (commandQueue[i].priority > requeued.priority) {
             insertIndex = i
             break
-        } else if (i === commandQueue.length - 1) {
-            insertIndex = commandQueue.length
         }
     }
     

@@ -41,10 +41,10 @@ Implemented an **interruptible command queue system**:
 
 #### 1. Command Priority Levels
 ```typescript
-CRITICAL = 1  // AH flips (via interruption)
-HIGH = 2      // Reserved for future high-priority ops
-NORMAL = 3    // Bazaar flips, sellbz
-LOW = 4       // Order cancellation, claiming, maintenance
+CRITICAL = 1  // Emergency operations, AFK responses (AH flips achieve priority via interruption)
+HIGH = 2      // Cookie checks (reserved for high-priority maintenance)
+NORMAL = 3    // Bazaar flips, sellbz (profit-making operations)
+LOW = 4       // Order cancellation, claiming (non-time-sensitive maintenance)
 ```
 
 #### 2. Interruptible Flag

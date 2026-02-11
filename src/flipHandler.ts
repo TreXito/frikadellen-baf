@@ -53,39 +53,50 @@ function logSkipReason(flip: Flip, profit: number) {
  * Waits for an item to load in a slot - TPM+ pattern
  * @param bot The bot instance
  * @param slotIndex The slot number to check
- * @param checkName Whether to check if item is potato and return null
- * @returns The item in the slot or null if not found/potato
+ * @param alreadyLoaded If true, waits for item to CHANGE from current value
+ * @returns The item in the slot or null if not found
  */
-async function itemLoad(bot: MyBot, slotIndex: number, checkName: boolean = false): Promise<any> {
-    try {
-        // Wait for slot to populate with polling
-        let attempts = 0
-        const maxAttempts = 100 // ~100ms timeout total
-        
-        while (attempts < maxAttempts) {
-            const item = bot.currentWindow?.slots[slotIndex]
-            if (item && item.name) {
-                // Check if we should skip potato items
-                if (checkName && item.name === "potato") {
-                    log("Skipping potato item...", 'debug')
-                    return null
+async function itemLoad(bot: MyBot, slotIndex: number, alreadyLoaded: boolean = false): Promise<any> {
+    return new Promise((resolve) => {
+        let index = 1
+        let found = false
+        const delay = getConfigProperty('FLIP_ACTION_DELAY') || 150
+
+        // Record current item for change detection
+        const first = bot.currentWindow?.slots[slotIndex]?.name
+
+        const interval = alreadyLoaded
+            ? setInterval(() => {
+                // Wait for item to CHANGE from what it was
+                const check = bot.currentWindow?.slots[slotIndex]
+                if (check?.name !== first) {
+                    clearInterval(interval)
+                    found = true
+                    resolve(check)
+                    log(`Found ${check?.name} on index ${index} (changed from ${first})`, 'debug')
                 }
-                
-                log(`Loaded item: ${item.name}`, 'debug')
-                return item
-            }
-            
-            // Wait 1ms between checks
-            await sleep(1)
-            attempts++
-        }
-        
-        // Item not found after timeout
-        throw new Error("Item not found.")
-    } catch (error) {
-        log(`Error loading item: ${error}`, 'error')
-        return null
-    }
+                index++
+            }, 1)
+            : setInterval(() => {
+                // Wait for any item to appear
+                const check = bot.currentWindow?.slots[slotIndex]
+                if (check && check.name) {
+                    clearInterval(interval)
+                    found = true
+                    resolve(check)
+                    log(`Found ${check.name} on index ${index}`, 'debug')
+                }
+                index++
+            }, 1)
+
+        // Timeout
+        setTimeout(() => {
+            if (found) return
+            log(`Failed to find item in slot ${slotIndex}`, 'debug')
+            clearInterval(interval)
+            resolve(null)
+        }, delay * 3)
+    })
 }
 
 /**

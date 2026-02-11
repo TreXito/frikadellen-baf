@@ -1,5 +1,4 @@
-Join the official Discord server:
-https://www.discord.gg/eYRBsaECzY
+Join the official [Discord Server](https://discord.gg/42DvX6T9jh):
 
 # BAF
 

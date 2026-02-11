@@ -43,7 +43,7 @@ const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 const IMMEDIATE_CHECK_DELAY_MS = 2000
 
 // Delay after clicking an order in Manage Orders for window content to update
-const WINDOW_UPDATE_DELAY_MS = 800
+const WINDOW_UPDATE_DELAY_MS = 600
 
 /**
  * Feature 2: Parse order lore to extract fill status and details
@@ -353,14 +353,15 @@ async function checkOrders(bot: MyBot): Promise<void> {
     const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
     log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
     
-    // Queue the cancel operation with LOW priority
+    // Queue the cancel operation with LOW priority (not time-sensitive, maintenance task)
     const commandName = `Cancel Order: ${orderToCancel.itemName}`
     enqueueCommand(
         commandName,
         CommandPriority.LOW,
         async () => {
             await cancelOrder(bot, orderToCancel)
-        }
+        },
+        true // interruptible - can be interrupted by AH flips
     )
 }
 
@@ -379,14 +380,15 @@ export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         return false
     }
     
-    // Queue the claim operation with LOW priority
+    // Queue the claim operation with LOW priority (not time-sensitive, maintenance task)
     const commandName = itemName ? `Claim Order: ${itemName}` : 'Claim Filled Orders'
     enqueueCommand(
         commandName,
         CommandPriority.LOW,
         async () => {
             await executeClaimFilledOrders(bot, itemName, isBuyOrder)
-        }
+        },
+        true // interruptible - can be interrupted by AH flips
     )
     
     return true
@@ -626,18 +628,10 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     return
                 }
                 
-                // Now look for the cancel button at slot 13
-                // According to Feature 1, Cancel Order button should be at slot 13
-                const cancelSlot = 13
-                const cancelSlotItem = currentWindow.slots[cancelSlot]
-                const cancelSlotName = removeMinecraftColorCodes(
-                    (cancelSlotItem?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                )
+                // Find the Cancel Order button using findSlotWithName
+                const cancelSlot = findSlotWithName(currentWindow, 'Cancel Order')
                 
-                log(`[OrderManager] Checking slot 13 for Cancel button: "${cancelSlotName}"`, 'debug')
-                
-                // Check if slot 13 has "Cancel Order" or "Cancel" in the name
-                if (!cancelSlotName || !cancelSlotName.toLowerCase().includes('cancel')) {
+                if (cancelSlot === -1) {
                     // No cancel button - order was fully filled
                     if (claimableSlot !== -1) {
                         log(`[OrderManager] Order fully filled, no cancel button found: ${order.itemName}`, 'info')
@@ -658,8 +652,8 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     return
                 }
                 
-                // Click cancel button at slot 13
-                log(`[OrderManager] Clicking cancel button at slot 13: "${cancelSlotName}"`, 'info')
+                // Click cancel button
+                log(`[OrderManager] Clicking cancel button at slot ${cancelSlot}`, 'info')
                 printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancelling remaining order...`)
                 await sleep(200)
                 await clickWindow(bot, cancelSlot).catch(e => log(`[OrderManager] clickWindow error: ${e}`, 'debug'))

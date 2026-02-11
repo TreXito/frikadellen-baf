@@ -630,11 +630,12 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         if (orderSlot === -1) {
             log(`[OrderManager] Order not found in Manage Orders: ${searchPrefix} ${order.itemName}`, 'info')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            // Order not found - may have been filled/cancelled elsewhere
             order.cancelled = true
             cleanupTrackedOrders()
             bot.state = null
             isManagingOrders = false
-            return true // Order is gone, remove from tracking
+            return true
         }
         
         // Step 4: Click the order slot — SAME WINDOW UPDATES, NO NEW WINDOW
@@ -651,21 +652,17 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        // Try to claim first — click any claimable slot (may need multiple clicks)
-        // After clicking order, the detail view may show claimable items
-        // Just proceed to find Cancel Order
-        
         const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
         
         if (cancelSlot === -1) {
-            // No cancel button — order is fully filled, just needs claiming
+            // No cancel button — order is fully filled
             log(`[OrderManager] No Cancel Order button — order may be fully filled`, 'info')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             order.claimed = true
             cleanupTrackedOrders()
             bot.state = null
             isManagingOrders = false
-            return true // Remove from tracking
+            return true
         }
         
         // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES

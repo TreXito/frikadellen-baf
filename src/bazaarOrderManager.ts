@@ -4,6 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused } from './bazaarFlipPauser'
 import { enqueueCommand, CommandPriority } from './commandQueue'
+import { sendWebhookBazaarOrderCancelled, sendWebhookBazaarOrderClaimed } from './webhookHandler'
 
 /**
  * Represents a tracked bazaar order
@@ -32,6 +33,14 @@ let checkTimer: NodeJS.Timeout | null = null
 // Flag to track if we're currently managing orders
 let isManagingOrders = false
 
+// Dynamic order slot limits (defaults to Hypixel's known limits, updated when errors occur)
+let maxTotalOrders = 14
+let maxBuyOrders = 7
+
+// Flag to track if we hit a limit (to avoid spamming attempts)
+let orderLimitReached = false
+let buyOrderLimitReached = false
+
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
 
@@ -44,6 +53,9 @@ const IMMEDIATE_CHECK_DELAY_MS = 2000
 
 // Delay after clicking an order in Manage Orders for window content to update
 const WINDOW_UPDATE_DELAY_MS = 600
+
+// Delay between batch order cancellations (to avoid overwhelming the server)
+const BATCH_CANCEL_DELAY_MS = 1000
 
 /**
  * Helper: Extract display name from slot NBT data
@@ -131,14 +143,52 @@ function parseLoreForOrderDetails(lore: any[]): { filled: number, totalAmount: n
 
 /**
  * Feature 3: Count current orders
- * @returns Object with total order count and buy order count
+ * @returns Object with total order count, buy order count, and limits
  */
-export function getOrderCounts(): { totalOrders: number, buyOrders: number } {
+export function getOrderCounts(): { totalOrders: number, buyOrders: number, maxTotalOrders: number, maxBuyOrders: number } {
     const activeOrders = trackedOrders.filter(o => !o.claimed && !o.cancelled)
     const buyOrders = activeOrders.filter(o => o.isBuyOrder).length
     return {
         totalOrders: activeOrders.length,
-        buyOrders
+        buyOrders,
+        maxTotalOrders,
+        maxBuyOrders
+    }
+}
+
+/**
+ * Check if we can place a new order based on current counts
+ * @param isBuyOrder Whether the order is a buy order
+ * @returns Object with canPlace flag and reason if false
+ */
+export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?: string } {
+    const { totalOrders, buyOrders } = getOrderCounts()
+    
+    if (totalOrders >= maxTotalOrders) {
+        return { canPlace: false, reason: `Total order slots full (${totalOrders}/${maxTotalOrders})` }
+    }
+    
+    if (isBuyOrder && buyOrders >= maxBuyOrders) {
+        return { canPlace: false, reason: `Buy order slots full (${buyOrders}/${maxBuyOrders})` }
+    }
+    
+    return { canPlace: true }
+}
+
+/**
+ * Reset order limit flags when an order is claimed or cancelled
+ * This allows the bot to try placing orders again after freeing up a slot
+ */
+export function resetOrderLimitFlags(): void {
+    const wasTotalLimitReached = orderLimitReached
+    const wasBuyLimitReached = buyOrderLimitReached
+    
+    orderLimitReached = false
+    buyOrderLimitReached = false
+    
+    if (wasTotalLimitReached || wasBuyLimitReached) {
+        log('[OrderManager] Order limit flags reset - slots are now available', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[OrderManager] Order slots freed up!')
     }
 }
 
@@ -170,6 +220,7 @@ export function markOrderClaimed(itemName: string, isBuyOrder: boolean): void {
     if (order) {
         order.claimed = true
         log(`[OrderManager] Marked ${order.isBuyOrder ? 'buy' : 'sell'} order as claimed: ${order.itemName}`, 'info')
+        resetOrderLimitFlags() // Reset flags when order is claimed
     }
 }
 
@@ -360,6 +411,7 @@ export function stopOrderManager(): void {
 
 /**
  * Check for orders that need to be cancelled due to timeout
+ * Cancels ALL stale orders at once by queueing them with delays
  */
 async function checkOrders(bot: MyBot): Promise<void> {
     if (isManagingOrders) {
@@ -372,7 +424,7 @@ async function checkOrders(bot: MyBot): Promise<void> {
     const now = Date.now()
     
     // Find stale orders that need cancelling
-    // Feature 2: Skip orders that are fully filled (isFullyFilled = true)
+    // Skip orders that are fully filled (isFullyFilled = true)
     const staleOrders = trackedOrders.filter(order => {
         const age = now - order.placedAt
         const isStale = !order.claimed && !order.cancelled && age > cancelTimeoutMs
@@ -386,23 +438,26 @@ async function checkOrders(bot: MyBot): Promise<void> {
     }
     
     log(`[OrderManager] Found ${staleOrders.length} stale order(s) to cancel`, 'info')
-    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s)...`)
+    printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s) - cancelling all`)
     
-    // Only cancel ONE order per cycle (as per requirements)
-    const orderToCancel = staleOrders[0]
-    const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
-    log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
-    
-    // Queue the cancel operation with LOW priority (not time-sensitive, maintenance task)
-    const commandName = `Cancel Order: ${orderToCancel.itemName}`
-    enqueueCommand(
-        commandName,
-        CommandPriority.LOW,
-        async () => {
-            await cancelSingleOrder(bot, orderToCancel)
-        },
-        true // interruptible - can be interrupted by AH flips
-    )
+    // Cancel ALL stale orders at once
+    staleOrders.forEach((orderToCancel, index) => {
+        const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
+        log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
+        
+        // Add a delay between operations to avoid overwhelming the command queue
+        setTimeout(() => {
+            const commandName = `Cancel Order: ${orderToCancel.itemName}`
+            enqueueCommand(
+                commandName,
+                CommandPriority.LOW,
+                async () => {
+                    await cancelSingleOrder(bot, orderToCancel)
+                },
+                true // interruptible - can be interrupted by AH flips
+            )
+        }, index * BATCH_CANCEL_DELAY_MS)
+    })
 }
 
 /**
@@ -486,6 +541,19 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                 if (!matchesType || !matchesItem) continue
                             }
                             
+                            // Parse lore to get order details for webhook
+                            const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                            let orderAmount = 0
+                            let pricePerUnit = 0
+                            
+                            if (lore) {
+                                const parsedLore = parseLoreForOrderDetails(lore)
+                                if (parsedLore) {
+                                    orderAmount = parsedLore.totalAmount
+                                    pricePerUnit = parsedLore.pricePerUnit
+                                }
+                            }
+                            
                             log(`[OrderManager] Claiming order: slot ${i}, item: ${name}`, 'info')
                             printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claiming §e${name}`)
                             
@@ -506,6 +574,19 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             const orderType = name.startsWith('BUY ')
                             const extractedName = name.replace(/^(BUY|SELL) /, '')
                             markOrderClaimed(extractedName, orderType)
+                            
+                            // Send webhook notification only if we have valid order details
+                            if (orderAmount > 0 && pricePerUnit > 0) {
+                                sendWebhookBazaarOrderClaimed(
+                                    extractedName,
+                                    orderAmount,
+                                    pricePerUnit,
+                                    orderType
+                                )
+                            } else {
+                                // Expected behavior when lore parsing fails - log at info level
+                                log(`[OrderManager] Webhook skipped - order details not available from lore (amount: ${orderAmount}, price: ${pricePerUnit})`, 'info')
+                            }
                         }
                     }
                     
@@ -672,6 +753,18 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
         
+        // Send webhook notification
+        const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+        sendWebhookBazaarOrderCancelled(
+            order.itemName,
+            order.amount,
+            order.pricePerUnit,
+            order.isBuyOrder,
+            ageMinutes,
+            order.filled || 0,
+            order.totalAmount || order.amount
+        )
+        
         // Close window and clean up
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         order.cancelled = true
@@ -698,6 +791,7 @@ function cleanupTrackedOrders(): void {
     
     if (removed > 0) {
         log(`[OrderManager] Cleaned up ${removed} completed orders. Now tracking ${trackedOrders.length} orders`, 'info')
+        resetOrderLimitFlags() // Reset flags when orders are cleaned up
     }
 }
 

@@ -425,3 +425,129 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
         ]
     })
 }
+
+export function sendWebhookBazaarOrderCancelled(
+    itemName: string,
+    amount: number,
+    pricePerUnit: number,
+    isBuyOrder: boolean,
+    ageMinutes: number,
+    filled: number,
+    totalAmount: number,
+    reason: string = 'Stale order (exceeded time limit)'
+) {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    
+    const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
+    const orderEmoji = '🚫'
+    const orderColor = 0xe67e22 // Orange for cancellation
+    const fillPercentage = totalAmount > 0 ? ((filled / totalAmount) * 100).toFixed(1) : '0'
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: `${orderEmoji} Bazaar ${orderType} Cancelled`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: orderColor,
+                fields: [
+                    {
+                        name: '📦 Amount',
+                        value: `\`\`\`fix\n${amount}x\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💵 Price per Unit',
+                        value: `\`\`\`fix\n${formatNumber(pricePerUnit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '⏱️ Order Age',
+                        value: `\`\`\`\n${ageMinutes} minutes\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Fill Status',
+                        value: `\`\`\`\n${filled}/${totalAmount} (${fillPercentage}%)\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📋 Order Type',
+                        value: `\`\`\`\n${orderType}\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '❓ Reason',
+                        value: `\`\`\`\n${reason}\n\`\`\``,
+                        inline: true
+                    }
+                ],
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}
+
+export function sendWebhookBazaarOrderClaimed(
+    itemName: string,
+    amount: number,
+    pricePerUnit: number,
+    isBuyOrder: boolean
+) {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    
+    const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
+    const orderEmoji = '✅'
+    const orderColor = 0x2ecc71 // Green for successful claim
+    const totalValue = amount * pricePerUnit
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: `${orderEmoji} Bazaar ${orderType} Claimed`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: orderColor,
+                fields: [
+                    {
+                        name: '📦 Amount',
+                        value: `\`\`\`fix\n${amount}x\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💵 Price per Unit',
+                        value: `\`\`\`fix\n${formatNumber(pricePerUnit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💰 Total Value',
+                        value: `\`\`\`fix\n${formatNumber(totalValue)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Order Type',
+                        value: `\`\`\`\n${orderType}\n\`\`\``,
+                        inline: false
+                    }
+                ],
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName}`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}

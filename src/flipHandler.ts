@@ -177,12 +177,13 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
         }
 
         const openWindowHandler = async (window) => {
-            const windowID = window.windowId
-            const nextWindowID = windowID === 100 ? 1 : windowID + 1
-            const windowName = window.windowTitle
+            try {
+                const windowID = window.windowId
+                const nextWindowID = windowID === 100 ? 1 : windowID + 1
+                const windowName = window.windowTitle
 
-            // CRITICAL: Send confirmClick for EVERY window, BEFORE any processing
-            confirmClick(bot, windowID)
+                // CRITICAL: Send confirmClick for EVERY window, BEFORE any processing
+                confirmClick(bot, windowID)
 
             // ============ BIN Auction View ============
             if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
@@ -193,6 +194,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 fromCoflSocket = false
 
                 firstGui = Date.now()
+                purchaseStartTime = Date.now()
 
                 // Wait for item to load in slot 31
                 let item = (await itemLoad(bot, 31))?.name
@@ -292,7 +294,7 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 // Safety retry loop: runs REGARDLESS of recentlySkipped
                 // If skip pre-click worked, window is already gone and loop doesn't execute
                 // If skip pre-click failed (packet lost), this catches it
-                while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                while (bot.currentWindow && getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
                     clickWindow(bot, 11).catch(() => {})
                     await sleep(250) // 5 ticks
                 }
@@ -306,6 +308,10 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
                 cleanup()
                 return
+            }
+            } catch (error) {
+                log(`Error in flip window handler: ${error}`, 'error')
+                cleanup()
             }
         }
 

@@ -236,8 +236,8 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
-    // Queue the bazaar flip with NORMAL priority
-    // This ensures it doesn't interrupt other operations and executes in order
+    // Queue the bazaar flip with NORMAL priority and mark as interruptible
+    // This ensures it doesn't interrupt other operations but can be interrupted by AH flips
     const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
@@ -246,7 +246,8 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         CommandPriority.NORMAL,
         async () => {
             await executeBazaarFlip(bot, recommendation)
-        }
+        },
+        true // interruptible - can be interrupted by AH flips
     )
 }
 

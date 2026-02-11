@@ -476,13 +476,14 @@ export function handleSellBazaarCommand(bot: MyBot): void {
         return
     }
 
-    // Enqueue the command with NORMAL priority
+    // Enqueue the command with NORMAL priority and mark as interruptible
     enqueueCommand(
         'Sell Bazaar Items',
         CommandPriority.NORMAL,
         async () => {
             await executeSellBazaar(bot)
-        }
+        },
+        true // interruptible - can be interrupted by AH flips
     )
 
     printMcChatToConsole(`§f[§4BAF§f]: §7[SellBZ] Command queued`)

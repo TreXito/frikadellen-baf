@@ -140,10 +140,23 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
     currentFlip = flip // Store current flip for tracking
 
     if (bot.state) {
-        setTimeout(() => {
-            flipHandler(bot, flip)
-        }, 1100)
-        return
+        // Check if we can interrupt the current operation
+        const { canInterruptCurrentCommand, interruptCurrentCommand } = require('./commandQueue')
+        
+        if (canInterruptCurrentCommand()) {
+            // Interrupt the current bazaar operation to prioritize AH flip
+            log('[FlipHandler] Interrupting current operation for AH flip', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §eInterrupting bazaar operation for AH flip')
+            interruptCurrentCommand(bot)
+            // bot.state should now be null, continue immediately
+        } else {
+            // Can't interrupt, wait and retry
+            log(`[FlipHandler] Bot busy with non-interruptible operation (state: ${bot.state}), retrying in 1.1s`, 'debug')
+            setTimeout(() => {
+                flipHandler(bot, flip)
+            }, 1100)
+            return
+        }
     }
     
     // Note: Do NOT use bot.removeAllListeners('windowOpen') as it breaks mineflayer's internal handler

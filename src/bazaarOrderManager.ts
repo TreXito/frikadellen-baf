@@ -52,10 +52,10 @@ const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 const IMMEDIATE_CHECK_DELAY_MS = 2000
 
 // Delay after clicking an order in Manage Orders for window content to update
-const WINDOW_UPDATE_DELAY_MS = 600
+const WINDOW_UPDATE_DELAY_MS = 300
 
 // Delay between batch order cancellations (to avoid overwhelming the server)
-const BATCH_CANCEL_DELAY_MS = 1000
+const BATCH_CANCEL_DELAY_MS = 500
 
 /**
  * Helper: Extract display name from slot NBT data
@@ -419,6 +419,12 @@ async function checkOrders(bot: MyBot): Promise<void> {
         return
     }
     
+    // Don't check orders during grace period (bot still initializing)
+    if (bot.state === 'gracePeriod') {
+        log('[OrderManager] Skipping order check during grace period', 'debug')
+        return
+    }
+    
     const cancelMinutes = getConfigProperty('BAZAAR_ORDER_CANCEL_MINUTES')
     const cancelTimeoutMs = cancelMinutes * 60 * 1000
     const now = Date.now()
@@ -466,6 +472,12 @@ async function checkOrders(bot: MyBot): Promise<void> {
  * Queues the claim operation through the command queue
  */
 export async function claimFilledOrders(bot: MyBot, itemName?: string, isBuyOrder?: boolean): Promise<boolean> {
+    // Don't claim orders during grace period
+    if (bot.state === 'gracePeriod') {
+        log('[OrderManager] Skipping claim during grace period', 'debug')
+        return false
+    }
+    
     // Don't claim orders while bazaar flips are paused
     if (areBazaarFlipsPaused()) {
         log('[OrderManager] Bazaar flips are paused, will retry claim later', 'info')
@@ -510,7 +522,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         
         const windowHandler = async (window) => {
             try {
-                await sleep(300)
+                await sleep(150)
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Claim window: ${title}`, 'debug')
                 
@@ -519,7 +531,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     clickedManageOrders = true
                     log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Opening Manage Orders...`)
-                    await sleep(200)
+                    await sleep(100)
                     await clickWindow(bot, 50).catch(err => log(`[OrderManager] Error clicking Manage Orders: ${err}`, 'error'))
                     return
                 }
@@ -559,12 +571,12 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             
                             await clickWindow(bot, i).catch(() => {})
                             claimedAny = true
-                            await sleep(500)
+                            await sleep(200)
                             
                             // Click again for partial claims (may fail if already fully claimed)
                             try { 
                                 await clickWindow(bot, i)
-                                await sleep(500)
+                                await sleep(200)
                             } catch (e) { 
                                 // Expected: already fully claimed or transaction rejected
                                 log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')
@@ -654,7 +666,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        await sleep(300) // let mineflayer populate bot.currentWindow
+        await sleep(150) // let mineflayer populate bot.currentWindow
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after /bz', 'warn')
@@ -686,7 +698,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        await sleep(300)
+        await sleep(150)
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
@@ -723,7 +735,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         await clickWindow(bot, orderSlot).catch(() => {})
         
         // CRITICAL: Just wait. Do NOT listen for open_window. The window updates in-place.
-        await sleep(600)
+        await sleep(WINDOW_UPDATE_DELAY_MS)
         
         // Step 5: Now check the SAME bot.currentWindow for "Cancel Order"
         if (!bot.currentWindow) {
@@ -748,7 +760,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
         await clickWindow(bot, cancelSlot).catch(() => {})
-        await sleep(500)
+        await sleep(200)
         
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)

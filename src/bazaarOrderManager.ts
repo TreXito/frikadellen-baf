@@ -57,6 +57,12 @@ const WINDOW_UPDATE_DELAY_MS = 600
 // Threshold for aggressive order checking - if we have this many or more stale orders, check more frequently
 const AGGRESSIVE_CHECK_THRESHOLD = 5
 
+// Maximum number of orders to cancel at once in aggressive mode
+const MAX_AGGRESSIVE_CANCEL_COUNT = 3
+
+// Minimum interval for aggressive order checking (seconds)
+const MIN_AGGRESSIVE_CHECK_INTERVAL_SECONDS = 30
+
 // Delay between batch order cancellations (to avoid overwhelming the server)
 const BATCH_CANCEL_DELAY_MS = 1000
 
@@ -446,7 +452,7 @@ async function checkOrders(bot: MyBot): Promise<void> {
     // If we have many stale orders (>= AGGRESSIVE_CHECK_THRESHOLD), cancel multiple at once
     // Otherwise, just cancel one per cycle
     const ordersToCancel = staleOrders.length >= AGGRESSIVE_CHECK_THRESHOLD 
-        ? staleOrders.slice(0, 3) // Cancel up to 3 at a time when backlog is high
+        ? staleOrders.slice(0, MAX_AGGRESSIVE_CANCEL_COUNT) // Cancel up to MAX_AGGRESSIVE_CANCEL_COUNT at a time when backlog is high
         : [staleOrders[0]] // Cancel one at a time normally
     
     if (ordersToCancel.length > 1) {
@@ -475,7 +481,7 @@ async function checkOrders(bot: MyBot): Promise<void> {
     
     // If we have many stale orders, schedule an extra check sooner
     if (staleOrders.length >= AGGRESSIVE_CHECK_THRESHOLD) {
-        const reducedInterval = Math.max(30, getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS') / 2)
+        const reducedInterval = Math.max(MIN_AGGRESSIVE_CHECK_INTERVAL_SECONDS, getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS') / 2)
         log(`[OrderManager] Scheduling next check in ${reducedInterval}s due to backlog`, 'info')
         setTimeout(() => checkOrders(bot), reducedInterval * 1000)
     }
@@ -605,7 +611,8 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                     orderType
                                 )
                             } else {
-                                log(`[OrderManager] Skipping webhook - incomplete order details (amount: ${orderAmount}, price: ${pricePerUnit})`, 'warn')
+                                // Expected behavior when lore parsing fails - log at info level
+                                log(`[OrderManager] Webhook skipped - order details not available from lore (amount: ${orderAmount}, price: ${pricePerUnit})`, 'info')
                             }
                         }
                     }

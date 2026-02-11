@@ -412,7 +412,8 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
         }
         
         // Helper: Check for red error messages in window
-        const checkForBazaarErrors = (win): string | null => {
+        // Window type is from bot.currentWindow (mineflayer Window type)
+        const checkForBazaarErrors = (win: any): string | null => {
             // Known bazaar error patterns that should abort order placement
             const knownErrorPatterns = [
                 'cannot place any more',

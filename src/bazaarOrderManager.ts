@@ -571,12 +571,12 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             
                             await clickWindow(bot, i).catch(() => {})
                             claimedAny = true
-                            await sleep(400)
+                            await sleep(400) // Transaction processing time
                             
                             // Click again for partial claims (may fail if already fully claimed)
                             try { 
                                 await clickWindow(bot, i)
-                                await sleep(400)
+                                await sleep(400) // Transaction processing time
                             } catch (e) { 
                                 // Expected: already fully claimed or transaction rejected
                                 log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')

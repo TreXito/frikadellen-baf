@@ -433,7 +433,8 @@ export function sendWebhookBazaarOrderCancelled(
     isBuyOrder: boolean,
     ageMinutes: number,
     filled: number,
-    totalAmount: number
+    totalAmount: number,
+    reason: string = 'Stale order (exceeded time limit)'
 ) {
     if (!isWebhookConfigured()) {
         return
@@ -479,7 +480,7 @@ export function sendWebhookBazaarOrderCancelled(
                     },
                     {
                         name: '❓ Reason',
-                        value: `\`\`\`\nStale order (exceeded time limit)\n\`\`\``,
+                        value: `\`\`\`\n${reason}\n\`\`\``,
                         inline: true
                     }
                 ],

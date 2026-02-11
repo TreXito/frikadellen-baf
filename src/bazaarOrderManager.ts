@@ -568,13 +568,17 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             const extractedName = name.replace(/^(BUY|SELL) /, '')
                             markOrderClaimed(extractedName, orderType)
                             
-                            // Send webhook notification
-                            sendWebhookBazaarOrderClaimed(
-                                extractedName,
-                                orderAmount || 0,
-                                pricePerUnit,
-                                orderType
-                            )
+                            // Send webhook notification only if we have valid order details
+                            if (orderAmount > 0 && pricePerUnit > 0) {
+                                sendWebhookBazaarOrderClaimed(
+                                    extractedName,
+                                    orderAmount,
+                                    pricePerUnit,
+                                    orderType
+                                )
+                            } else {
+                                log(`[OrderManager] Skipping webhook - incomplete order details (amount: ${orderAmount}, price: ${pricePerUnit})`, 'warn')
+                            }
                         }
                     }
                     

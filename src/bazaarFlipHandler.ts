@@ -413,6 +413,17 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
         
         // Helper: Check for red error messages in window
         const checkForBazaarErrors = (win): string | null => {
+            // Known bazaar error patterns that should abort order placement
+            const knownErrorPatterns = [
+                'cannot place any more',
+                'order limit',
+                'insufficient',
+                'not enough',
+                'maximum orders',
+                'buy order limit',
+                'sell offer limit'
+            ]
+            
             for (let i = 0; i < win.slots.length; i++) {
                 const slot = win.slots[i]
                 if (!slot || !slot.nbt) continue
@@ -420,14 +431,14 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                 // Check display name for red text (§c)
                 const rawName = (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
                 if (rawName.includes('§c')) {
-                    const cleanName = removeMinecraftColorCodes(rawName)
-                    // Check if it's an error related to order limits
-                    if (cleanName.toLowerCase().includes('order') || 
-                        cleanName.toLowerCase().includes('limit') ||
-                        cleanName.toLowerCase().includes('error') ||
-                        cleanName.toLowerCase().includes('cannot')) {
-                        log(`[BazaarDebug] Detected red error message: ${cleanName}`, 'warn')
-                        return cleanName
+                    const cleanName = removeMinecraftColorCodes(rawName).toLowerCase()
+                    // Check if it matches known error patterns
+                    for (const pattern of knownErrorPatterns) {
+                        if (cleanName.includes(pattern)) {
+                            const fullCleanName = removeMinecraftColorCodes(rawName)
+                            log(`[BazaarDebug] Detected bazaar error message: ${fullCleanName}`, 'warn')
+                            return fullCleanName
+                        }
                     }
                 }
                 
@@ -437,13 +448,14 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
                     for (const loreLine of lore) {
                         const rawLoreLine = loreLine.toString()
                         if (rawLoreLine.includes('§c')) {
-                            const cleanLine = removeMinecraftColorCodes(rawLoreLine)
-                            if (cleanLine.toLowerCase().includes('order') || 
-                                cleanLine.toLowerCase().includes('limit') ||
-                                cleanLine.toLowerCase().includes('error') ||
-                                cleanLine.toLowerCase().includes('cannot')) {
-                                log(`[BazaarDebug] Detected red error in lore: ${cleanLine}`, 'warn')
-                                return cleanLine
+                            const cleanLine = removeMinecraftColorCodes(rawLoreLine).toLowerCase()
+                            // Check if it matches known error patterns
+                            for (const pattern of knownErrorPatterns) {
+                                if (cleanLine.includes(pattern)) {
+                                    const fullCleanLine = removeMinecraftColorCodes(rawLoreLine)
+                                    log(`[BazaarDebug] Detected bazaar error in lore: ${fullCleanLine}`, 'warn')
+                                    return fullCleanLine
+                                }
                             }
                         }
                     }

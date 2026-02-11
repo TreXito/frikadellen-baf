@@ -16,6 +16,11 @@ interface BazaarOrderRecord {
     placedAt: number // Date.now()
     claimed: boolean
     cancelled: boolean
+    // Feature 2: Lore-based order details
+    filled?: number // How many have been filled
+    totalAmount?: number // Total amount ordered (same as amount, but parsed from lore)
+    fillPercentage?: number // Percentage filled (0-100)
+    isFullyFilled?: boolean // True if 100% filled
 }
 
 // Internal list of tracked orders
@@ -39,6 +44,63 @@ const IMMEDIATE_CHECK_DELAY_MS = 2000
 
 // Delay after clicking an order in Manage Orders for window content to update
 const WINDOW_UPDATE_DELAY_MS = 800
+
+/**
+ * Feature 2: Parse order lore to extract fill status and details
+ * Lore format example:
+ * - "Order amount: 64x"
+ * - "Filled: 26/64 (40.6%)"
+ * - "Price per unit: 490.0 coins"
+ */
+function parseLoreForOrderDetails(lore: any[]): { filled: number, totalAmount: number, fillPercentage: number, pricePerUnit: number } | null {
+    if (!lore || !Array.isArray(lore)) return null
+    
+    const loreText = lore.map((line: any) => removeMinecraftColorCodes(line.toString())).join('\n')
+    
+    let filled = 0
+    let totalAmount = 0
+    let fillPercentage = 0
+    let pricePerUnit = 0
+    
+    // Parse "Filled: 26/64 (40.6%)" or "Filled: 64/64 (100%)"
+    const filledMatch = loreText.match(/Filled:\s*(\d+)\/(\d+)\s*\((\d+(?:\.\d+)?)%\)/)
+    if (filledMatch) {
+        filled = parseInt(filledMatch[1], 10)
+        totalAmount = parseInt(filledMatch[2], 10)
+        fillPercentage = parseFloat(filledMatch[3])
+    }
+    
+    // Parse "Order amount: 64x"
+    const amountMatch = loreText.match(/Order amount:\s*(\d+)x/)
+    if (amountMatch && totalAmount === 0) {
+        totalAmount = parseInt(amountMatch[1], 10)
+    }
+    
+    // Parse "Price per unit: 490.0 coins"
+    const priceMatch = loreText.match(/Price per unit:\s*([\d,]+(?:\.\d+)?)\s*coins/)
+    if (priceMatch) {
+        pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
+    }
+    
+    if (totalAmount > 0) {
+        return { filled, totalAmount, fillPercentage, pricePerUnit }
+    }
+    
+    return null
+}
+
+/**
+ * Feature 3: Count current orders
+ * @returns Object with total order count and buy order count
+ */
+export function getOrderCounts(): { totalOrders: number, buyOrders: number } {
+    const activeOrders = trackedOrders.filter(o => !o.claimed && !o.cancelled)
+    const buyOrders = activeOrders.filter(o => o.isBuyOrder).length
+    return {
+        totalOrders: activeOrders.length,
+        buyOrders
+    }
+}
 
 /**
  * Record a bazaar order that was successfully placed
@@ -128,20 +190,32 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                             const isBuyOrder = name.startsWith('BUY ')
                             const itemName = name.replace(/^(BUY|SELL) /, '')
                             
-                            // Parse lore to get order details
+                            // Feature 2: Parse lore to get order details
                             const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
                             let amount = 0
                             let pricePerUnit = 0
+                            let filled = 0
+                            let totalAmount = 0
+                            let fillPercentage = 0
+                            let isFullyFilled = false
                             
                             if (lore) {
-                                const loreText = lore.map((line: any) => removeMinecraftColorCodes(line.toString())).join('\n')
-                                
-                                // Extract amount and price from lore
-                                const amountMatch = loreText.match(/(\d+)x/)
-                                const priceMatch = loreText.match(/([\d,]+) coins/)
-                                
-                                if (amountMatch) amount = parseInt(amountMatch[1])
-                                if (priceMatch) pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
+                                const parsedLore = parseLoreForOrderDetails(lore)
+                                if (parsedLore) {
+                                    filled = parsedLore.filled
+                                    totalAmount = parsedLore.totalAmount
+                                    fillPercentage = parsedLore.fillPercentage
+                                    pricePerUnit = parsedLore.pricePerUnit
+                                    isFullyFilled = fillPercentage >= 100
+                                    amount = totalAmount
+                                } else {
+                                    // Fallback to old parsing if new format fails
+                                    const loreText = lore.map((line: any) => removeMinecraftColorCodes(line.toString())).join('\n')
+                                    const amountMatch = loreText.match(/(\d+)x/)
+                                    const priceMatch = loreText.match(/([\d,]+) coins/)
+                                    if (amountMatch) amount = parseInt(amountMatch[1])
+                                    if (priceMatch) pricePerUnit = parseFloat(priceMatch[1].replace(/,/g, ''))
+                                }
                             }
                             
                             // Record the order with a timestamp from the past so it will be
@@ -156,13 +230,18 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                                 isBuyOrder,
                                 placedAt: Date.now() - cancelTimeoutMs - 1000, // 1 second past cancel threshold
                                 claimed: false,
-                                cancelled: false
+                                cancelled: false,
+                                // Feature 2: Add lore-based details
+                                filled,
+                                totalAmount,
+                                fillPercentage,
+                                isFullyFilled
                             }
                             
                             trackedOrders.push(order)
                             foundOrders++
                             
-                            log(`[OrderManager] Found existing order: ${name}`, 'info')
+                            log(`[OrderManager] Found existing order: ${name} (${fillPercentage.toFixed(1)}% filled)`, 'info')
                         }
                     }
                     
@@ -253,9 +332,12 @@ async function checkOrders(bot: MyBot): Promise<void> {
     const now = Date.now()
     
     // Find stale orders that need cancelling
+    // Feature 2: Skip orders that are fully filled (isFullyFilled = true)
     const staleOrders = trackedOrders.filter(order => {
         const age = now - order.placedAt
-        return !order.claimed && !order.cancelled && age > cancelTimeoutMs
+        const isStale = !order.claimed && !order.cancelled && age > cancelTimeoutMs
+        const isNotFullyFilled = !order.isFullyFilled
+        return isStale && isNotFullyFilled
     })
     
     if (staleOrders.length === 0) {
@@ -479,7 +561,7 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Processing order details from currentWindow: "${title}"`, 'debug')
                 
-                // First, check for claimable items
+                // First pass: Check for claimable items and claim them
                 let claimableSlot = -1
                 for (let i = 0; i < window.slots.length; i++) {
                     const slot = window.slots[i]
@@ -511,24 +593,51 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     log(`[OrderManager] Claiming items from slot ${claimableSlot}...`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Claiming filled items...`)
                     
-                    // Click up to MAX_CLAIM_ATTEMPTS times to claim (handles partial fills)
-                    for (let clickCount = 0; clickCount < MAX_CLAIM_ATTEMPTS; clickCount++) {
-                        await sleep(CLAIM_DELAY_MS)
-                        await clickWindow(bot, claimableSlot).catch(err => {
-                            log(`[OrderManager] Claim click ${clickCount + 1} failed: ${err}`, 'debug')
-                        })
-                    }
-                    
-                    await sleep(CLAIM_DELAY_MS)
-                    log(`[OrderManager] Claimed items, checking for cancel button...`, 'info')
+                    // Click the order slot to claim
                     await sleep(300)
+                    await clickWindow(bot, claimableSlot).catch(err => {
+                        log(`[OrderManager] Claim click failed: ${err}`, 'debug')
+                    })
+                    
+                    // Wait for server to process claim
+                    await sleep(500)
+                    
+                    // According to Feature 1: Click the same slot again if needed (for partial fills)
+                    // The window may still have unclaimed/unfilled portions
+                    log(`[OrderManager] Clicking order slot again to ensure all claims are done...`, 'debug')
+                    await clickWindow(bot, claimableSlot).catch(err => {
+                        log(`[OrderManager] Second claim click failed: ${err}`, 'debug')
+                    })
+                    
+                    // Wait for window to refresh after all claims are done
+                    await sleep(500)
+                    log(`[OrderManager] All claims processed, checking for cancel button...`, 'info')
                 }
                 
-                // Now look for the cancel button
-                const cancelButtonName = order.isBuyOrder ? 'Cancel Buy Order' : 'Cancel Sell Offer'
-                const cancelSlot = findSlotWithName(window, cancelButtonName)
+                // Re-check current window for the cancel button (window may have refreshed after claiming)
+                const currentWindow = bot.currentWindow
+                if (!currentWindow) {
+                    log('[OrderManager] ERROR: bot.currentWindow is null after claiming', 'error')
+                    bot._client.removeListener('open_window', windowListener)
+                    bot.state = null
+                    isManagingOrders = false
+                    clearTimeout(timeout)
+                    resolve(claimableSlot !== -1)
+                    return
+                }
                 
-                if (cancelSlot === -1) {
+                // Now look for the cancel button at slot 13
+                // According to Feature 1, Cancel Order button should be at slot 13
+                const cancelSlot = 13
+                const cancelSlotItem = currentWindow.slots[cancelSlot]
+                const cancelSlotName = removeMinecraftColorCodes(
+                    (cancelSlotItem?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                )
+                
+                log(`[OrderManager] Checking slot 13 for Cancel button: "${cancelSlotName}"`, 'debug')
+                
+                // Check if slot 13 has "Cancel Order" or "Cancel" in the name
+                if (!cancelSlotName || !cancelSlotName.toLowerCase().includes('cancel')) {
                     // No cancel button - order was fully filled
                     if (claimableSlot !== -1) {
                         log(`[OrderManager] Order fully filled, no cancel button found: ${order.itemName}`, 'info')
@@ -549,8 +658,8 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     return
                 }
                 
-                // Click cancel button
-                log(`[OrderManager] Clicking cancel button at slot ${cancelSlot}`, 'info')
+                // Click cancel button at slot 13
+                log(`[OrderManager] Clicking cancel button at slot 13: "${cancelSlotName}"`, 'info')
                 printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancelling remaining order...`)
                 await sleep(200)
                 await clickWindow(bot, cancelSlot).catch(e => log(`[OrderManager] clickWindow error: ${e}`, 'debug'))

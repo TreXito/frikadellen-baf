@@ -42,6 +42,12 @@ let coflnetPremiumTier: string | null = null
 let coflnetPremiumExpires: string | null = null
 let coflnetConnectionId: string | null = null
 
+// Store current purse amount (Feature 6)
+let currentPurse: number = 0
+
+// Bazaar flip request interval (Feature 5)
+let bazaarFlipRequestInterval: NodeJS.Timeout | null = null
+
 if (!ingameName) {
     ingameName = prompt('Enter your ingame name: ')
     updatePersistentConfigProperty('INGAME_NAME', ingameName)
@@ -608,9 +614,12 @@ async function runStartupWorkflow() {
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
         // Pass true to trigger immediate check if orders were discovered at startup
         startOrderManager(bot, ordersFound > 0)
+        
+        // Start auto-requesting bazaar flips every 5 minutes (Feature 5)
+        startBazaarFlipRequests(wss)
     }
     
-    // Request bazaar flips if enabled
+    // Request bazaar flips if enabled (initial request)
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
         await sleep(1000)
         log('[Startup] Requesting bazaar flip recommendations...', 'info')
@@ -651,10 +660,15 @@ async function onScoreboardChanged() {
             bot.state = null
             bot.removeAllListeners('scoreboardTitleChanged')
 
+            const scoreboardData = bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, ''))
+            
+            // Parse purse from scoreboard (Feature 6)
+            parsePurseFromScoreboard(scoreboardData)
+            
             wss.send(
                 JSON.stringify({
                     type: 'uploadScoreboard',
-                    data: JSON.stringify(bot.scoreboard.sidebar.items.map(item => item.displayName.getText(null).replace(item.name, '')))
+                    data: JSON.stringify(scoreboardData)
                 })
             )
             
@@ -678,6 +692,43 @@ export function changeWebsocketURL(newURL: string) {
     connectWebsocket(newURL)
 }
 
+/**
+ * Start auto-requesting bazaar flips every 5 minutes (Feature 5)
+ */
+function startBazaarFlipRequests(wss: WebSocket): void {
+    // Clear existing interval if any
+    if (bazaarFlipRequestInterval) {
+        clearInterval(bazaarFlipRequestInterval)
+    }
+    
+    log('[BazaarFlips] Starting auto-request timer (every 5 minutes)', 'info')
+    printMcChatToConsole('§f[§4BAF§f]: §7[BazaarFlips] Auto-request enabled (every §e5 minutes§7)')
+    
+    bazaarFlipRequestInterval = setInterval(() => {
+        // Only request if bazaar flips are enabled and bot is idle
+        if (getConfigProperty('ENABLE_BAZAAR_FLIPS') && bot.state === null) {
+            log('[BazaarFlips] Auto-requesting bazaar flips...', 'info')
+            wss.send(
+                JSON.stringify({
+                    type: 'getbazaarflips',
+                    data: JSON.stringify('')
+                })
+            )
+        }
+    }, 5 * 60 * 1000) // 5 minutes
+}
+
+/**
+ * Stop auto-requesting bazaar flips (Feature 5)
+ */
+export function stopBazaarFlipRequests(): void {
+    if (bazaarFlipRequestInterval) {
+        clearInterval(bazaarFlipRequestInterval)
+        bazaarFlipRequestInterval = null
+        log('[BazaarFlips] Stopped auto-request timer', 'info')
+    }
+}
+
 export async function getCurrentWebsocket(): Promise<WebSocket> {
     if (_websocket.readyState === WebSocket.OPEN) {
         return _websocket
@@ -699,4 +750,37 @@ export function getCoflnetPremiumInfo() {
         expires: coflnetPremiumExpires,
         connectionId: coflnetConnectionId
     }
+}
+
+/**
+ * Parse purse amount from scoreboard data (Feature 6)
+ * Scoreboard line format: "Purse: 1,151,612,206" or "Purse: 1,151,612,206 (+5)"
+ */
+function parsePurseFromScoreboard(scoreboardLines: string[]): void {
+    for (const line of scoreboardLines) {
+        const cleanLine = removeMinecraftColorCodes(line)
+        if (cleanLine.includes('Purse:')) {
+            // Extract the number: "Purse: 1,151,612,206 (+5)" or "Purse: 1,151,612,206"
+            const match = cleanLine.match(/Purse:\s*([\d,]+)/)
+            if (match) {
+                const purseStr = match[1].replace(/,/g, '')
+                currentPurse = parseInt(purseStr, 10)
+                if (!isNaN(currentPurse)) {
+                    log(`[Purse] Current purse: ${currentPurse.toLocaleString()} coins`, 'info')
+                } else {
+                    log(`[Purse] Failed to parse purse amount: ${match[1]}`, 'warn')
+                    currentPurse = 0
+                }
+            }
+            break
+        }
+    }
+}
+
+/**
+ * Get current purse amount (Feature 6)
+ * Returns 0 if purse has not been parsed yet
+ */
+export function getCurrentPurse(): number {
+    return currentPurse
 }

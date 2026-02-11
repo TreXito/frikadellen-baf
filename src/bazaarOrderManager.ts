@@ -551,103 +551,144 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
  * 3. Order detail view → claim items (if any), then click cancel button
  */
 async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolean> {
-    // Step 1: Open /bz — this opens a NEW window
-    bot.chat('/bz')
-    
-    // Wait for the bazaar window to open
-    const bazaarWindow = await waitForNewWindow(bot, 5000)
-    if (!bazaarWindow) {
-        log('[OrderManager] Bazaar window did not open', 'warn')
+    // Wait if bot is busy
+    if (bot.state) {
+        log('[OrderManager] Bot is busy, cannot cancel order now', 'info')
         return false
     }
     
-    await sleep(300) // let mineflayer populate bot.currentWindow
+    isManagingOrders = true
+    bot.state = 'bazaar'
     
-    if (!bot.currentWindow) {
-        log('[OrderManager] bot.currentWindow is null after /bz', 'warn')
-        return false
-    }
-    
-    // Step 2: Click "Manage Orders" — this opens a NEW window
-    const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-    if (manageSlot === -1) {
-        log('[OrderManager] Could not find Manage Orders button', 'warn')
-        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return false
-    }
-    
-    // Register listener BEFORE clicking
-    const manageWindow = waitForNewWindow(bot, 5000)
-    await clickWindow(bot, manageSlot).catch(() => {})
-    
-    const manageResult = await manageWindow
-    if (!manageResult) {
-        log('[OrderManager] Manage Orders window did not open', 'warn')
-        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return false
-    }
-    
-    await sleep(300)
-    
-    if (!bot.currentWindow) {
-        log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
-        return false
-    }
-    
-    // Step 3: Find the order in the Manage Orders window
-    const searchPrefix = order.isBuyOrder ? 'BUY' : 'SELL'
-    let orderSlot = -1
-    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-        const slot = bot.currentWindow.slots[i]
-        if (!slot || !slot.nbt) continue
-        const name = removeMinecraftColorCodes(getSlotName(slot))
-        if (name.includes(searchPrefix) && name.toLowerCase().includes(order.itemName.toLowerCase())) {
-            orderSlot = i
-            break
+    try {
+        // Step 1: Open /bz — this opens a NEW window
+        bot.chat('/bz')
+        
+        // Wait for the bazaar window to open
+        const bazaarWindow = await waitForNewWindow(bot, 5000)
+        if (!bazaarWindow) {
+            log('[OrderManager] Bazaar window did not open', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
         }
-    }
-    
-    if (orderSlot === -1) {
-        log(`[OrderManager] Order not found in Manage Orders: ${searchPrefix} ${order.itemName}`, 'info')
+        
+        await sleep(300) // let mineflayer populate bot.currentWindow
+        
+        if (!bot.currentWindow) {
+            log('[OrderManager] bot.currentWindow is null after /bz', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        // Step 2: Click "Manage Orders" — this opens a NEW window
+        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
+        if (manageSlot === -1) {
+            log('[OrderManager] Could not find Manage Orders button', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        // Register listener BEFORE clicking
+        const manageWindow = waitForNewWindow(bot, 5000)
+        await clickWindow(bot, manageSlot).catch(() => {})
+        
+        const manageResult = await manageWindow
+        if (!manageResult) {
+            log('[OrderManager] Manage Orders window did not open', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        await sleep(300)
+        
+        if (!bot.currentWindow) {
+            log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        // Step 3: Find the order in the Manage Orders window
+        const searchPrefix = order.isBuyOrder ? 'BUY' : 'SELL'
+        let orderSlot = -1
+        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+            const slot = bot.currentWindow.slots[i]
+            if (!slot || !slot.nbt) continue
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            if (name.includes(searchPrefix) && name.toLowerCase().includes(order.itemName.toLowerCase())) {
+                orderSlot = i
+                break
+            }
+        }
+        
+        if (orderSlot === -1) {
+            log(`[OrderManager] Order not found in Manage Orders: ${searchPrefix} ${order.itemName}`, 'info')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            order.cancelled = true
+            cleanupTrackedOrders()
+            bot.state = null
+            isManagingOrders = false
+            return true // Order is gone, remove from tracking
+        }
+        
+        // Step 4: Click the order slot — SAME WINDOW UPDATES, NO NEW WINDOW
+        await clickWindow(bot, orderSlot).catch(() => {})
+        
+        // CRITICAL: Just wait. Do NOT listen for open_window. The window updates in-place.
+        await sleep(600)
+        
+        // Step 5: Now check the SAME bot.currentWindow for "Cancel Order"
+        if (!bot.currentWindow) {
+            log('[OrderManager] Window closed after clicking order', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        // Try to claim first — click any claimable slot (may need multiple clicks)
+        // After clicking order, the detail view may show claimable items
+        // Just proceed to find Cancel Order
+        
+        const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
+        
+        if (cancelSlot === -1) {
+            // No cancel button — order is fully filled, just needs claiming
+            log(`[OrderManager] No Cancel Order button — order may be fully filled`, 'info')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            order.claimed = true
+            cleanupTrackedOrders()
+            bot.state = null
+            isManagingOrders = false
+            return true // Remove from tracking
+        }
+        
+        // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
+        await clickWindow(bot, cancelSlot).catch(() => {})
+        await sleep(500)
+        
+        log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+        
+        // Close window and clean up
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return true // Order is gone, remove from tracking
-    }
-    
-    // Step 4: Click the order slot — SAME WINDOW UPDATES, NO NEW WINDOW
-    await clickWindow(bot, orderSlot).catch(() => {})
-    
-    // CRITICAL: Just wait. Do NOT listen for open_window. The window updates in-place.
-    await sleep(600)
-    
-    // Step 5: Now check the SAME bot.currentWindow for "Cancel Order"
-    if (!bot.currentWindow) {
-        log('[OrderManager] Window closed after clicking order', 'warn')
+        order.cancelled = true
+        cleanupTrackedOrders()
+        bot.state = null
+        isManagingOrders = false
+        return true
+    } catch (error) {
+        log(`[OrderManager] Error in cancelSingleOrder: ${error}`, 'error')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        bot.state = null
+        isManagingOrders = false
         return false
     }
-    
-    // Try to claim first — click any claimable slot (may need multiple clicks)
-    // After clicking order, the detail view may show claimable items
-    // Just proceed to find Cancel Order
-    
-    const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-    
-    if (cancelSlot === -1) {
-        // No cancel button — order is fully filled, just needs claiming
-        log(`[OrderManager] No Cancel Order button — order may be fully filled`, 'info')
-        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return true // Remove from tracking
-    }
-    
-    // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
-    await clickWindow(bot, cancelSlot).catch(() => {})
-    await sleep(500)
-    
-    log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
-    printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
-    
-    // Close window
-    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-    return true
 }
 
 /**

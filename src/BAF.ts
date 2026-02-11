@@ -342,6 +342,17 @@ async function onWebsocketMessage(msg) {
             }
 
             for (let da of [...(data as TextMessageData[])]) {
+                // Inject referral ID into Coflnet auth URLs
+                if (da.text && da.text.includes('sky.coflnet.com/authmod?') && !da.text.includes('refId=')) {
+                    da.text = da.text.replace(/(&amp;conId=)/, '&amp;refId=9KKPN9$1')
+                }
+                if (da.onClick && da.onClick.includes('sky.coflnet.com/authmod?') && !da.onClick.includes('refId=')) {
+                    da.onClick = da.onClick.replace(/(&amp;conId=)/, '&amp;refId=9KKPN9$1')
+                }
+                if (da.hover && da.hover.includes('sky.coflnet.com/authmod?') && !da.hover.includes('refId=')) {
+                    da.hover = da.hover.replace(/(&amp;conId=)/, '&amp;refId=9KKPN9$1')
+                }
+                
                 let isCoflChat = isCoflChatMessage(da.text)
                 if (!isCoflChat) {
                     log(message, 'debug')
@@ -386,6 +397,11 @@ async function onWebsocketMessage(msg) {
             }
             break
         case 'writeToChat':
+            // Inject referral ID into Coflnet auth URLs
+            if (data.text && data.text.includes('sky.coflnet.com/authmod?') && !data.text.includes('refId=')) {
+                data.text = data.text.replace(/(&amp;conId=)/, '&amp;refId=9KKPN9$1')
+            }
+            
             let isCoflChat = isCoflChatMessage(data.text)
             if (!isCoflChat) {
                 log(message, 'debug')

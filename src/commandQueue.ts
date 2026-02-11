@@ -177,8 +177,10 @@ async function processQueue(bot: MyBot): Promise<void> {
             printMcChatToConsole(`§f[§4BAF§f]: §c[CommandQueue] Error: ${command.name} failed`)
             
             // Reset bot state if it got stuck (won't execute if state is already null)
-            if (bot.state !== null && bot.state !== undefined && bot.state !== 'purchasing') {
-                log(`[CommandQueue] Resetting bot state from "${bot.state}" to null after error`, 'warn')
+            // Note: bot.state may have been changed by command.execute() before the error
+            const currentState = bot.state as MyBot['state']
+            if (currentState !== null && currentState !== undefined && currentState !== 'purchasing') {
+                log(`[CommandQueue] Resetting bot state from "${currentState}" to null after error`, 'warn')
                 bot.state = null
             }
         } finally {

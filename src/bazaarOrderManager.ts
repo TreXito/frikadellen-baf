@@ -531,7 +531,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     clickedManageOrders = true
                     log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Opening Manage Orders...`)
-                    await sleep(100)
+                    await sleep(150)
                     await clickWindow(bot, 50).catch(err => log(`[OrderManager] Error clicking Manage Orders: ${err}`, 'error'))
                     return
                 }
@@ -571,12 +571,12 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             
                             await clickWindow(bot, i).catch(() => {})
                             claimedAny = true
-                            await sleep(200)
+                            await sleep(300)
                             
                             // Click again for partial claims (may fail if already fully claimed)
                             try { 
                                 await clickWindow(bot, i)
-                                await sleep(200)
+                                await sleep(300)
                             } catch (e) { 
                                 // Expected: already fully claimed or transaction rejected
                                 log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')

@@ -64,6 +64,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
 
                 sendWebhookItemPurchased(itemName, price, whitelistedData, flip, lastBuySpeed)
+                lastBuySpeed = 0 // Reset to prevent stale data in next purchase
                 setNothingBoughtFor1HourTimeout(wss)
             }
             // Handle auction errors (expired, not found, etc.)

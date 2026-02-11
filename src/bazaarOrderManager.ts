@@ -522,7 +522,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         
         const windowHandler = async (window) => {
             try {
-                await sleep(150)
+                await sleep(200)
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Claim window: ${title}`, 'debug')
                 
@@ -571,12 +571,12 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             
                             await clickWindow(bot, i).catch(() => {})
                             claimedAny = true
-                            await sleep(300)
+                            await sleep(400)
                             
                             // Click again for partial claims (may fail if already fully claimed)
                             try { 
                                 await clickWindow(bot, i)
-                                await sleep(300)
+                                await sleep(400)
                             } catch (e) { 
                                 // Expected: already fully claimed or transaction rejected
                                 log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')
@@ -760,7 +760,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
         await clickWindow(bot, cancelSlot).catch(() => {})
-        await sleep(300) // Transaction processing time
+        await sleep(400) // Transaction processing time
         
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)

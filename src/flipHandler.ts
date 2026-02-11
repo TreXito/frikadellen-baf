@@ -5,20 +5,49 @@ import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, rem
 import { trackFlipPurchase } from './flipTracker'
 
 // Constants for window interaction
-const CONFIRM_RETRY_DELAY = 100
-const WINDOW_CONFIRM_TIMEOUT_MS = 5000 // Maximum time to wait for confirm window to close
 const BED_SPAM_MAX_FAILED_CLICKS = 5 // Max failed clicks before stopping bed spam
-const WINDOW_INTERACTION_DELAY = 500
-const MINEFLAYER_WINDOW_POPULATE_DELAY = 300 // Time for mineflayer to populate bot.currentWindow after open_window packet
-
-// Window title constants
-const WINDOW_TITLE_CONFIRM_PURCHASE = '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}'
-const WINDOW_TITLE_BIN_AUCTION_VIEW = '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}'
 
 let currentFlip: Flip | null = null
 let actionCounter = 1
 let fromCoflSocket = false
+let recentlySkipped = false
 let purchaseStartTime: number | null = null // Track when BIN Auction View opens for timing
+
+/**
+ * Determines whether a flip should use the skip (pre-click) optimization
+ */
+function shouldSkipFlip(flip: Flip, profit: number): boolean {
+    const skipConfig = getConfigProperty('SKIP')
+    if (!skipConfig) return false
+
+    if (skipConfig.ALWAYS) return true
+    if (skipConfig.MIN_PROFIT && profit >= skipConfig.MIN_PROFIT) return true
+    if (skipConfig.USER_FINDER && flip.finder === 'USER') return true
+    if (skipConfig.SKINS && isSkin(flip.itemName)) return true
+    if (skipConfig.PROFIT_PERCENTAGE && flip.profitPerc && flip.profitPerc >= skipConfig.PROFIT_PERCENTAGE) return true
+    if (skipConfig.MIN_PRICE && flip.startingBid >= skipConfig.MIN_PRICE) return true
+
+    return false
+}
+
+/**
+ * Logs the reason a flip was skipped for debugging
+ */
+function logSkipReason(flip: Flip, profit: number) {
+    const skipConfig = getConfigProperty('SKIP')
+    if (!skipConfig) return
+
+    let reason = 'Unknown'
+    if (skipConfig.ALWAYS) reason = 'ALWAYS'
+    else if (skipConfig.MIN_PROFIT && profit >= skipConfig.MIN_PROFIT) reason = `MIN_PROFIT (${profit} >= ${skipConfig.MIN_PROFIT})`
+    else if (skipConfig.USER_FINDER && flip.finder === 'USER') reason = 'USER_FINDER'
+    else if (skipConfig.SKINS && isSkin(flip.itemName)) reason = 'SKINS'
+    else if (skipConfig.PROFIT_PERCENTAGE && flip.profitPerc && flip.profitPerc >= skipConfig.PROFIT_PERCENTAGE) reason = `PROFIT_PERCENTAGE (${flip.profitPerc} >= ${skipConfig.PROFIT_PERCENTAGE})`
+    else if (skipConfig.MIN_PRICE && flip.startingBid >= skipConfig.MIN_PRICE) reason = `MIN_PRICE (${flip.startingBid} >= ${skipConfig.MIN_PRICE})`
+
+    printMcChatToConsole(`§f[§4BAF§f]: §aSkipping confirm — reason: ${reason}`)
+    log(`Skip reason for ${flip.itemName}: ${reason}`, 'debug')
+}
 
 /**
  * Waits for an item to load in a slot - TPM+ pattern
@@ -140,220 +169,165 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
 }
 
 function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
         let firstGui: number
-        let handledBinAuction = false
-        let handledConfirm = false
-        
-        // Remove only our previous handler to prevent stacking (not mineflayer's internal handlers)
+
+        // Remove previous handler if exists to prevent stacking
         if ((bot as any)._bafOpenWindowHandler) {
             bot._client.removeListener('open_window', (bot as any)._bafOpenWindowHandler)
         }
-        
-        const openWindowHandler = async (window) => {
-            try {
-                const windowID = window.windowId
-                const windowName = window.windowTitle
-                log(`Got new window ${windowName}, windowId: ${windowID}, fromCoflSocket: ${fromCoflSocket}`, 'debug')
-                
-                // Only delay for BIN Auction View where we need bot.currentWindow populated
-                // Do NOT delay for Confirm Purchase — speed is critical there
-                if (windowName !== WINDOW_TITLE_CONFIRM_PURCHASE) {
-                    await sleep(MINEFLAYER_WINDOW_POPULATE_DELAY) // Wait for mineflayer to populate bot.currentWindow
-                    if (!bot.currentWindow) {
-                        log(`bot.currentWindow is null after delay for window ${windowName} (ID: ${windowID}), skipping`, 'warn')
-                        return
-                    }
-                }
-                
-                if (windowName === WINDOW_TITLE_BIN_AUCTION_VIEW) {
-                    // Skip if we already handled this window type
-                    if (handledBinAuction) {
-                        log('Already handled BIN Auction View, ignoring duplicate', 'debug')
-                        return
-                    }
-                    handledBinAuction = true
-                    
-                    // Send confirm click packet for faster response
-                    confirmClick(bot, windowID)
-                    
-                    // Reset fromCoflSocket flag
-                    fromCoflSocket = false
-                    
-                    firstGui = Date.now()
-                    purchaseStartTime = firstGui // Also set global for message handler access
-                    
-                    // Wait for item to load in slot 31 - TPM+ pattern
-                    let item = (await itemLoad(bot, 31, false))?.name
-                    
-                    if (item === 'gold_nugget') {
-                        // Click on gold nugget to proceed to confirm window
-                        clickSlot(bot, 31, windowID, 371)
-                        clickWindow(bot, 31).catch(err => log(`Error clicking slot 31: ${err}`, 'error'))
-                        printMcChatToConsole(`§f[§4BAF§f]: §e[Click] Slot 31 | Item: Buy Item Right Now`)
-                    }
-                    
-                    // Handle different item types
-                    switch (item) {
-                        case "gold_nugget":
-                            // Already handled above (clicked slot 31), just wait for Confirm Purchase window
-                            break
-                        case "bed":
-                            printMcChatToConsole(`§f[§4BAF§f]: §6Found a bed!`)
-                            await initBedSpam(bot)
-                            break
-                        case null:
-                        case undefined:
-                        case "potato":
-                            printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            purchaseStartTime = null
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
-                            return
-                        case "feather":
-                            // Double check for potato or gold_block
-                            // Wait a bit for the item to change, then check again
-                            await sleep(50)
-                            const secondItem = (await itemLoad(bot, 31, true))?.name
-                            if (secondItem === 'potato' || secondItem === null) {
-                                printMcChatToConsole(`§f[§4BAF§f]: §cPotatoed :(`)
-                                if (bot.currentWindow) {
-                                    bot.closeWindow(bot.currentWindow)
-                                }
-                                purchaseStartTime = null
-                                bot._client.removeListener('open_window', openWindowHandler)
-                                ;(bot as any)._bafOpenWindowHandler = null
-                                bot.state = null
-                                resolve()
-                                return
-                            } else if (secondItem !== 'gold_block') {
-                                log(`Found unexpected item on second check: ${secondItem}`, 'debug')
-                                if (bot.currentWindow) {
-                                    bot.closeWindow(bot.currentWindow)
-                                }
-                                purchaseStartTime = null
-                                bot._client.removeListener('open_window', openWindowHandler)
-                                ;(bot as any)._bafOpenWindowHandler = null
-                                bot.state = null
-                                resolve()
-                                return
-                            }
-                            // Fall through to gold_block case
-                        case "gold_block":
-                            // Claim sold item
-                            clickWindow(bot, 31).catch(err => log(`Error clicking claim slot: ${err}`, 'error'))
-                            purchaseStartTime = null
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
-                            return
-                        case "poisonous_potato":
-                            printMcChatToConsole(`§f[§4BAF§f]: §cToo poor to buy it :(`)
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            purchaseStartTime = null
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
-                            return
-                        case "stained_glass_pane":
-                            // Handle edge cases - just close window for now
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            purchaseStartTime = null
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
-                            return
-                        default:
-                            log(`Unexpected item found in slot 31: ${item}`, 'warn')
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            purchaseStartTime = null
-                            bot._client.removeListener('open_window', openWindowHandler)
-                            ;(bot as any)._bafOpenWindowHandler = null
-                            bot.state = null
-                            resolve()
-                            return
-                    }
-                } else if (windowName === WINDOW_TITLE_CONFIRM_PURCHASE) {
-                    // Skip if we already handled this window type
-                    if (handledConfirm) {
-                        log('Already handled Confirm Purchase, ignoring duplicate', 'debug')
-                        return
-                    }
-                    handledConfirm = true
-                    
-                    const confirmAt = Date.now() - firstGui
-                    printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
-                    
-                    // TPM+ pattern: Simple click and loop until window closes
-                    log("Confirming flip purchase...", 'debug')
-                    await clickWindow(bot, 11).catch(err => log(`Error clicking confirm slot: ${err}`, 'error'))
 
-                    // Loop with 100ms sleep while window is "Confirm Purchase"
-                    const confirmStartTime = Date.now()
-                    let confirmWindow = getWindowTitle(bot.currentWindow)
-                    while (confirmWindow === 'Confirm Purchase') {
-                        await sleep(100)
-                        confirmWindow = getWindowTitle(bot.currentWindow)
-                        
-                        // Timeout protection to prevent infinite loop
-                        if (Date.now() - confirmStartTime > WINDOW_CONFIRM_TIMEOUT_MS) {
-                            log('Confirm window timeout - closing window', 'warn')
-                            if (bot.currentWindow) {
-                                bot.closeWindow(bot.currentWindow)
-                            }
-                            break
-                        }
+        const openWindowHandler = async (window) => {
+            const windowID = window.windowId
+            const nextWindowID = windowID === 100 ? 1 : windowID + 1
+            const windowName = window.windowTitle
+
+            // CRITICAL: Send confirmClick for EVERY window, BEFORE any processing
+            confirmClick(bot, windowID)
+
+            // ============ BIN Auction View ============
+            if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}') {
+
+                // Calculate skip conditions BEFORE clicking anything
+                const profit = flip.target - flip.startingBid
+                const useSkipOnFlip = shouldSkipFlip(flip, profit) && fromCoflSocket
+                fromCoflSocket = false
+
+                firstGui = Date.now()
+
+                // Wait for item to load in slot 31
+                let item = (await itemLoad(bot, 31))?.name
+
+                if (item === 'gold_nugget') {
+                    // Send low-level click packet for slot 31
+                    clickSlot(bot, 31, windowID, 371)
+                    // Redundant click in case first packet was lost
+                    clickWindow(bot, 31).catch(() => {})
+
+                    if (useSkipOnFlip) {
+                        // SKIP: pre-click Confirm (slot 11) on the NEXT window in the same tick
+                        // This works because window IDs are sequential
+                        clickSlot(bot, 11, nextWindowID, 159)
+                        recentlySkipped = true
+                        logSkipReason(flip, profit)
+                        // RETURN here — do NOT fall through to switch
+                        // The open_window listener stays active and will handle
+                        // Confirm Purchase when it arrives
+                        return
                     }
-                    
-                    log("Purchase confirmed.", 'debug')
-                    // Note: purchaseStartTime cleared in message handler when "Putting coins in escrow..." is detected
-                    
-                    bot._client.removeListener('open_window', openWindowHandler)
-                    ;(bot as any)._bafOpenWindowHandler = null
-                    bot.state = null
-                    resolve()
-                    return
                 }
-                
-                await sleep(WINDOW_INTERACTION_DELAY)
-            } catch (error) {
-                log(`Error in flip window handler: ${error}`, 'error')
-                purchaseStartTime = null
-                bot._client.removeListener('open_window', openWindowHandler)
-                ;(bot as any)._bafOpenWindowHandler = null
-                bot.state = null
-                resolve()
+
+                // Only reached if skip was NOT used
+                recentlySkipped = false
+
+                switch (item) {
+                    case 'gold_nugget':
+                        // Already clicked slot 31 above
+                        // Do NOTHING here — just wait for Confirm Purchase window
+                        // Do NOT set state to null, do NOT clean up listener
+                        break
+                    case 'bed':
+                        printMcChatToConsole('§f[§4BAF§f]: §6Found a bed!')
+                        await initBedSpam(bot, flip, isBed)
+                        break
+                    case null:
+                    case undefined:
+                    case 'potato':
+                        printMcChatToConsole('§f[§4BAF§f]: §cPotatoed :(')
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        cleanup()
+                        return
+                    case 'feather':
+                        // Double-check: wait for slot to change
+                        const secondItem = (await itemLoad(bot, 31, true))?.name
+                        if (secondItem === 'potato') {
+                            printMcChatToConsole('§f[§4BAF§f]: §cPotatoed :(')
+                            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                            cleanup()
+                            return
+                        } else if (secondItem !== 'gold_block') {
+                            log(`Found unexpected item on second check: ${secondItem}`, 'debug')
+                            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                            cleanup()
+                            return
+                        }
+                        // Fall through to gold_block
+                    case 'gold_block':
+                        // Sold auction — claim it
+                        clickWindow(bot, 31).catch(() => {})
+                        cleanup()
+                        return
+                    case 'poisonous_potato':
+                        printMcChatToConsole('§f[§4BAF§f]: §cToo poor to buy it :(')
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        cleanup()
+                        return
+                    case 'stained_glass_pane':
+                        // Edge case — just close
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        cleanup()
+                        return
+                    default:
+                        log(`Unexpected item in slot 31: ${item}`, 'warn')
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        cleanup()
+                        return
+                }
+
+            // ============ Confirm Purchase ============
+            } else if (windowName === '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
+
+                // NO delay here — speed is everything
+
+                const confirmAt = Date.now() - firstGui
+                printMcChatToConsole(`§f[§4BAF§f]: §3Confirm at ${confirmAt}ms`)
+
+                // First click: only if we didn't pre-click via skip
+                if (!recentlySkipped) {
+                    clickWindow(bot, 11).catch(() => {})
+                }
+
+                // Wait ~150ms (3 ticks)
+                await sleep(150)
+
+                // Safety retry loop: runs REGARDLESS of recentlySkipped
+                // If skip pre-click worked, window is already gone and loop doesn't execute
+                // If skip pre-click failed (packet lost), this catches it
+                while (getWindowTitle(bot.currentWindow) === 'Confirm Purchase') {
+                    clickWindow(bot, 11).catch(() => {})
+                    await sleep(250) // 5 ticks
+                }
+
+                cleanup()
+                return
+
+            // ============ Auction View (non-BIN, failsafe) ============
+            } else if (windowName === '{"italic":false,"extra":[{"text":"Auction View"}],"text":""}') {
+                printMcChatToConsole('§f[§4BAF§f]: §cPlease turn off normal auctions!')
+                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                cleanup()
+                return
             }
         }
-        
-        // Store handler reference for proper cleanup
+
+        function cleanup() {
+            bot._client.removeListener('open_window', openWindowHandler)
+            ;(bot as any)._bafOpenWindowHandler = null
+            bot.state = null
+            resolve()
+        }
+
+        // Store reference for cleanup
         ;(bot as any)._bafOpenWindowHandler = openWindowHandler
         bot._client.on('open_window', openWindowHandler)
     })
 }
 
 /**
- * Handles bed spam clicking for bed flips
- */
-/**
  * Bed spam prevention - TPM+ pattern
  * Simple interval checking slot 31 for gold_nugget
  */
-async function initBedSpam(bot: MyBot) {
+async function initBedSpam(bot: MyBot, flip: Flip, isBed: boolean) {
     const clickInterval = getConfigProperty('BED_SPAM_CLICK_DELAY') || 100
     log("Starting bed spam prevention...", 'debug')
 

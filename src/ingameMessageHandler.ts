@@ -12,6 +12,8 @@ import { claimFilledOrders, markOrderClaimed } from './bazaarOrderManager'
 let errorTimeout
 // Track last buyspeed to prevent duplicate timing messages
 let oldBuyspeed = -1
+// Store buy speed for webhook
+let lastBuySpeed = 0
 
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
@@ -25,10 +27,14 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 if (startTime !== null) {
                     const buyspeed = Date.now() - startTime
                     // Prevent duplicate messages with same timing
-                    if (buyspeed === oldBuyspeed) return
-                    oldBuyspeed = buyspeed
-                    printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${buyspeed}ms`)
+                    if (buyspeed !== oldBuyspeed) {
+                        oldBuyspeed = buyspeed
+                        lastBuySpeed = buyspeed
+                        printMcChatToConsole(`§f[§4BAF§f]: §aAuction bought in ${buyspeed}ms`)
+                    }
                     clearPurchaseStartTime()
+                    // Close the window after purchase is complete
+                    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
                 }
             }
             if (text.startsWith('You purchased')) {
@@ -57,7 +63,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     clearCurrentFlip()
                 }
 
-                sendWebhookItemPurchased(itemName, price, whitelistedData, flip)
+                sendWebhookItemPurchased(itemName, price, whitelistedData, flip, lastBuySpeed)
                 setNothingBoughtFor1HourTimeout(wss)
             }
             // Handle auction errors (expired, not found, etc.)

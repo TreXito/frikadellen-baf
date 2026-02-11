@@ -147,7 +147,7 @@ export function sendWebhookStartupComplete(ordersFound?: number) {
     })
 }
 
-export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip) {
+export function sendWebhookItemPurchased(itemName: string, price: string, whitelistedData: FlipWhitelistedData, flip?: Flip, buySpeed?: number) {
     if (!isWebhookConfigured()) {
         return
     }
@@ -193,6 +193,15 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
         webhookData.embeds[0].fields.push({
             name: '📈 Expected Profit',
             value: `\`\`\`diff\n${profit > 0 ? '+' : ''}${formatNumber(profit)} coins (${profitPercent}%)\n\`\`\``,
+            inline: true
+        })
+    }
+
+    // Add buy speed if available
+    if (buySpeed && buySpeed > 0) {
+        webhookData.embeds[0].fields.push({
+            name: '⚡ Buy Speed',
+            value: `\`\`\`\n${buySpeed}ms\n\`\`\``,
             inline: true
         })
     }

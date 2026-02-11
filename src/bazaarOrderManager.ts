@@ -561,7 +561,7 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Processing order details from currentWindow: "${title}"`, 'debug')
                 
-                // First, check for claimable items
+                // First pass: Check for claimable items and claim them
                 let claimableSlot = -1
                 for (let i = 0; i < window.slots.length; i++) {
                     const slot = window.slots[i]
@@ -593,17 +593,25 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                     log(`[OrderManager] Claiming items from slot ${claimableSlot}...`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Claiming filled items...`)
                     
-                    // Click up to MAX_CLAIM_ATTEMPTS times to claim (handles partial fills)
-                    for (let clickCount = 0; clickCount < MAX_CLAIM_ATTEMPTS; clickCount++) {
-                        await sleep(CLAIM_DELAY_MS)
-                        await clickWindow(bot, claimableSlot).catch(err => {
-                            log(`[OrderManager] Claim click ${clickCount + 1} failed: ${err}`, 'debug')
-                        })
-                    }
+                    // Click the order slot to claim
+                    await sleep(300)
+                    await clickWindow(bot, claimableSlot).catch(err => {
+                        log(`[OrderManager] Claim click failed: ${err}`, 'debug')
+                    })
                     
-                    // After claiming, wait for window to refresh and check again for Cancel button
+                    // Wait for server to process claim
                     await sleep(500)
-                    log(`[OrderManager] Claimed items, re-checking window for cancel button...`, 'info')
+                    
+                    // According to Feature 1: Click the same slot again if needed (for partial fills)
+                    // The window may still have unclaimed/unfilled portions
+                    log(`[OrderManager] Clicking order slot again to ensure all claims are done...`, 'debug')
+                    await clickWindow(bot, claimableSlot).catch(err => {
+                        log(`[OrderManager] Second claim click failed: ${err}`, 'debug')
+                    })
+                    
+                    // Wait for window to refresh after all claims are done
+                    await sleep(500)
+                    log(`[OrderManager] All claims processed, checking for cancel button...`, 'info')
                 }
                 
                 // Re-check current window for the cancel button (window may have refreshed after claiming)

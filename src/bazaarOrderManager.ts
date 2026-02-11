@@ -54,6 +54,12 @@ const IMMEDIATE_CHECK_DELAY_MS = 2000
 // Delay after clicking an order in Manage Orders for window content to update
 const WINDOW_UPDATE_DELAY_MS = 600
 
+// Threshold for aggressive order checking - if we have this many or more stale orders, check more frequently
+const AGGRESSIVE_CHECK_THRESHOLD = 5
+
+// Delay between batch order cancellations (to avoid overwhelming the server)
+const BATCH_CANCEL_DELAY_MS = 1000
+
 /**
  * Helper: Extract display name from slot NBT data
  */
@@ -408,6 +414,7 @@ export function stopOrderManager(): void {
 
 /**
  * Check for orders that need to be cancelled due to timeout
+ * Now handles multiple stale orders at once when there are many
  */
 async function checkOrders(bot: MyBot): Promise<void> {
     if (isManagingOrders) {
@@ -436,21 +443,42 @@ async function checkOrders(bot: MyBot): Promise<void> {
     log(`[OrderManager] Found ${staleOrders.length} stale order(s) to cancel`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s)...`)
     
-    // Only cancel ONE order per cycle (as per requirements)
-    const orderToCancel = staleOrders[0]
-    const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
-    log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
+    // If we have many stale orders (>= AGGRESSIVE_CHECK_THRESHOLD), cancel multiple at once
+    // Otherwise, just cancel one per cycle
+    const ordersToCancel = staleOrders.length >= AGGRESSIVE_CHECK_THRESHOLD 
+        ? staleOrders.slice(0, 3) // Cancel up to 3 at a time when backlog is high
+        : [staleOrders[0]] // Cancel one at a time normally
     
-    // Queue the cancel operation with LOW priority (not time-sensitive, maintenance task)
-    const commandName = `Cancel Order: ${orderToCancel.itemName}`
-    enqueueCommand(
-        commandName,
-        CommandPriority.LOW,
-        async () => {
-            await cancelSingleOrder(bot, orderToCancel)
-        },
-        true // interruptible - can be interrupted by AH flips
-    )
+    if (ordersToCancel.length > 1) {
+        log(`[OrderManager] Aggressive mode: cancelling ${ordersToCancel.length} orders due to backlog`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Aggressive mode: ${ordersToCancel.length} orders queued`)
+    }
+    
+    // Queue all the orders for cancellation with delays between them
+    ordersToCancel.forEach((orderToCancel, index) => {
+        const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
+        log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
+        
+        // Add a small delay between operations to avoid overwhelming the command queue
+        setTimeout(() => {
+            const commandName = `Cancel Order: ${orderToCancel.itemName}`
+            enqueueCommand(
+                commandName,
+                CommandPriority.LOW,
+                async () => {
+                    await cancelSingleOrder(bot, orderToCancel)
+                },
+                true // interruptible - can be interrupted by AH flips
+            )
+        }, index * BATCH_CANCEL_DELAY_MS)
+    })
+    
+    // If we have many stale orders, schedule an extra check sooner
+    if (staleOrders.length >= AGGRESSIVE_CHECK_THRESHOLD) {
+        const reducedInterval = Math.max(30, getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS') / 2)
+        log(`[OrderManager] Scheduling next check in ${reducedInterval}s due to backlog`, 'info')
+        setTimeout(() => checkOrders(bot), reducedInterval * 1000)
+    }
 }
 
 /**

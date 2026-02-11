@@ -153,7 +153,6 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
     let isBed = flip.purchaseAt.getTime() > new Date().getTime()
 
     bot.lastViewAuctionCommandForPurchase = `/viewauction ${flip.id}`
-    bot.chat(bot.lastViewAuctionCommandForPurchase)
 
     printMcChatToConsole(
         `§f[§4BAF§f]: §fTrying to purchase flip${isBed ? ' (Bed)' : ''}: ${flip.itemName} §for ${numberWithThousandsSeparators(
@@ -320,6 +319,9 @@ function useRegularPurchase(bot: MyBot, flip: Flip, isBed: boolean) {
         // Store reference for cleanup
         ;(bot as any)._bafOpenWindowHandler = openWindowHandler
         bot._client.on('open_window', openWindowHandler)
+
+        // NOW send the command — listener is guaranteed to be active
+        bot.chat(`/viewauction ${flip.id}`)
     })
 }
 

@@ -629,7 +629,7 @@ async function cancelOrder(bot: MyBot, order: BazaarOrderRecord): Promise<boolea
                 }
                 
                 // Find the Cancel Order button using findSlotWithName
-                let cancelSlot = findSlotWithName(currentWindow, 'Cancel Order')
+                const cancelSlot = findSlotWithName(currentWindow, 'Cancel Order')
                 
                 if (cancelSlot === -1) {
                     // No cancel button - order was fully filled

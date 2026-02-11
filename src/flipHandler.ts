@@ -3,6 +3,7 @@ import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, isSkin, numberWithThousandsSeparators, removeMinecraftColorCodes, sleep } from './utils'
 import { trackFlipPurchase } from './flipTracker'
+import { canInterruptCurrentCommand, interruptCurrentCommand } from './commandQueue'
 
 // Constants for window interaction
 const BED_SPAM_MAX_FAILED_CLICKS = 5 // Max failed clicks before stopping bed spam
@@ -141,8 +142,6 @@ export async function flipHandler(bot: MyBot, flip: Flip) {
 
     if (bot.state) {
         // Check if we can interrupt the current operation
-        const { canInterruptCurrentCommand, interruptCurrentCommand } = require('./commandQueue')
-        
         if (canInterruptCurrentCommand()) {
             // Interrupt the current bazaar operation to prioritize AH flip
             log('[FlipHandler] Interrupting current operation for AH flip', 'info')

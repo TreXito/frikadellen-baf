@@ -243,10 +243,11 @@ export function interruptCurrentCommand(bot: MyBot): boolean {
         queuedAt: Date.now()
     }
     
-    // Insert at appropriate position in queue based on priority
-    // Within same priority, maintain FIFO order
+    // Insert after all commands with the same or higher priority
+    // This maintains FIFO ordering within the same priority level
     let insertIndex = commandQueue.length // Default to end of queue
     for (let i = 0; i < commandQueue.length; i++) {
+        // Only insert before lower priority commands
         if (commandQueue[i].priority > requeued.priority) {
             insertIndex = i
             break

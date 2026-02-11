@@ -4,8 +4,10 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
-import { recordOrder } from './bazaarOrderManager'
+import { recordOrder, getOrderCounts } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
+import { isBazaarDailyLimitReached } from './ingameMessageHandler'
+import { getCurrentPurse } from './BAF'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -191,6 +193,39 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     // Check if bazaar flips are enabled in config
     if (!getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
         log('[BazaarDebug] Bazaar flips are disabled in config', 'warn')
+        return
+    }
+
+    // Feature 4: Check if daily sell limit reached (skip sell offers, allow buy orders)
+    if (!recommendation.isBuyOrder && isBazaarDailyLimitReached()) {
+        log('[BAF]: Cannot place sell offer - bazaar daily sell limit reached', 'warn')
+        printMcChatToConsole('§f[§4BAF§f]: §cCannot place sell offer - daily sell limit reached')
+        return
+    }
+
+    // Feature 3: Check order slot limits (14 total, 7 buy orders max)
+    const { totalOrders, buyOrders } = getOrderCounts()
+    
+    if (totalOrders >= 14) {
+        log('[BAF]: Cannot place order - 14/14 order slots used', 'warn')
+        printMcChatToConsole('§f[§4BAF§f]: §cCannot place order - 14/14 order slots used')
+        // TODO: Could trigger claim/cancel cycle here to free up slots
+        return
+    }
+    
+    if (recommendation.isBuyOrder && buyOrders >= 7) {
+        log('[BAF]: Cannot place buy order - 7/7 buy order slots used', 'warn')
+        printMcChatToConsole('§f[§4BAF§f]: §cCannot place buy order - 7/7 buy order slots used')
+        // TODO: Could trigger claim/cancel cycle here to free up slots
+        return
+    }
+
+    // Feature 6: Check if bot can afford the order
+    const totalPrice = recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)
+    const currentPurse = getCurrentPurse()
+    if (currentPurse > 0 && totalPrice > currentPurse) {
+        log(`[BAF]: Cannot place order - insufficient funds (need ${totalPrice.toFixed(0)}, have ${currentPurse.toFixed(0)})`, 'warn')
+        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - insufficient funds`)
         return
     }
 

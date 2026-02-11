@@ -15,6 +15,10 @@ let oldBuyspeed = -1
 // Store buy speed for webhook
 let lastBuySpeed = 0
 
+// Feature 4: Bazaar daily sell limit tracking
+let bazaarDailyLimitReached = false
+let bazaarLimitResetTimer: NodeJS.Timeout | null = null
+
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
     bot.on('message', (message: ChatMessage, type) => {
@@ -159,10 +163,35 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     markOrderClaimed(itemName, isBuyOrder)
                 }
             }
+            
+            // Feature 4: Detect bazaar daily sell limit
+            if (text.includes('[Bazaar]') && removeMinecraftColorCodes(text).includes('You reached the daily limit in items value that you may sell on the bazaar!')) {
+                bazaarDailyLimitReached = true
+                log('[BAF]: §cBazaar daily sell limit reached! Disabling sell offers.', 'error')
+                printMcChatToConsole('§f[§4BAF§f]: §cBazaar daily sell limit reached! Disabling sell offers.')
+                
+                // Set timer to reset after 24 hours
+                if (bazaarLimitResetTimer) {
+                    clearTimeout(bazaarLimitResetTimer)
+                }
+                bazaarLimitResetTimer = setTimeout(() => {
+                    bazaarDailyLimitReached = false
+                    log('[BAF]: Bazaar daily sell limit reset', 'info')
+                    printMcChatToConsole('§f[§4BAF§f]: §aBazaar daily sell limit reset')
+                }, 24 * 60 * 60 * 1000) // 24 hours
+            }
         }
     })
 
     setNothingBoughtFor1HourTimeout(wss)
+}
+
+/**
+ * Feature 4: Check if bazaar daily sell limit has been reached
+ * @returns true if the sell limit has been reached, false otherwise
+ */
+export function isBazaarDailyLimitReached(): boolean {
+    return bazaarDailyLimitReached
 }
 
 export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promise<boolean> {

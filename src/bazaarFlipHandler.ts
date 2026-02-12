@@ -302,10 +302,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             try {
                 await executeBazaarFlip(bot, recommendation)
             } catch (error) {
-                // BUG 2: If first attempt fails, retry once after 500ms
-                log(`[BAF] Bazaar operation failed, retrying in 500ms: ${error}`, 'warn')
-                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in 500ms...`)
-                await sleep(500)
+                // BUG 2: If first attempt fails, retry once after a short delay
+                log(`[BAF] Bazaar operation failed, retrying in ${BAZAAR_RETRY_DELAY_MS}ms: ${error}`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in ${BAZAAR_RETRY_DELAY_MS}ms...`)
+                await sleep(BAZAAR_RETRY_DELAY_MS)
                 
                 // Check if AH flips are pending before retry
                 if (areAHFlipsPending()) {

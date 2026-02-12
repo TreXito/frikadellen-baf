@@ -322,20 +322,20 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     log(`[BazaarDebug] ===== STARTING BAZAAR FLIP ORDER =====`, 'info')
     log(`[BazaarDebug] Item: ${recommendation.itemName}`, 'info')
     log(`[BazaarDebug] Amount: ${recommendation.amount}`, 'info')
-    log(`[BazaarDebug] Price per unit: ${recommendation.pricePerUnit.toFixed(1)} coins`, 'info')
-    log(`[BazaarDebug] Total price: ${recommendation.totalPrice ? recommendation.totalPrice.toFixed(1) : (recommendation.pricePerUnit * recommendation.amount).toFixed(1)} coins`, 'info')
+    log(`[BazaarDebug] Price per unit: ${recommendation.pricePerUnit} coins`, 'info')
+    log(`[BazaarDebug] Total price: ${recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)} coins`, 'info')
     log(`[BazaarDebug] Order type: ${recommendation.isBuyOrder ? 'BUY' : 'SELL'}`, 'info')
     log(`[BazaarDebug] =====================================`, 'info')
     
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
     printMcChatToConsole(`§f[§4BAF§f]: §e${recommendation.isBuyOrder ? 'BUY' : 'SELL'} ORDER §7- §e${recommendation.itemName}`)
     printMcChatToConsole(`§f[§4BAF§f]: §7Amount: §a${recommendation.amount}x`)
-    printMcChatToConsole(`§f[§4BAF§f]: §7Price/unit: §6${recommendation.pricePerUnit.toFixed(1)} coins`)
-    printMcChatToConsole(`§f[§4BAF§f]: §7Total: §6${recommendation.totalPrice ? recommendation.totalPrice.toFixed(0) : (recommendation.pricePerUnit * recommendation.amount).toFixed(0)} coins`)
+    printMcChatToConsole(`§f[§4BAF§f]: §7Price/unit: §6${recommendation.pricePerUnit} coins`)
+    printMcChatToConsole(`§f[§4BAF§f]: §7Total: §6${recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)} coins`)
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
     const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
-    const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
+    const displayTotalPrice = totalPrice || (pricePerUnit * amount)
 
     // Prefer itemTag (internal ID like "FLAWED_PERIDOT_GEM") over itemName for /bz command
     // Using itemTag skips the search results page and goes directly to the item, which is faster
@@ -386,7 +386,7 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
                 printMcChatToConsole(`§f[§4BAF§f]: §e[Retry] Attempt ${attempt}/${MAX_ORDER_PLACEMENT_RETRIES}`)
             } else {
                 printMcChatToConsole(
-                    `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
+                    `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit} coins each (total: ${displayTotalPrice})`
                 )
             }
 
@@ -723,8 +723,8 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                 // 4. Price screen
                 else if (findSlotWithName(window, 'Custom Price') !== -1) {
                     const customPriceSlot = findSlotWithName(window, 'Custom Price')
-                    log(`[BazaarDebug] Setting price per unit to ${pricePerUnit.toFixed(1)} via slot ${customPriceSlot}`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Price] Setting to §e${pricePerUnit.toFixed(1)}§7 coins via slot §b${customPriceSlot}`)
+                    log(`[BazaarDebug] Setting price per unit to ${pricePerUnit} via slot ${customPriceSlot}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §7[Price] Setting to §e${pricePerUnit}§7 coins via slot §b${customPriceSlot}`)
                     currentStep = 'setPrice'
                     
                     // Register sign handler BEFORE clicking to avoid race condition
@@ -797,11 +797,11 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                         
-                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice.toFixed(1) : 'unknown'}, writing: ${pricePerUnit.toFixed(1)}`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${pricePerUnit.toFixed(1)}§7 coins`)
+                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice.toFixed(1) : 'unknown'}, writing: ${pricePerUnit}`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${pricePerUnit}§7 coins`)
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },
-                            text1: `\"${pricePerUnit.toFixed(1)}\"`,
+                            text1: `\"${pricePerUnit}\"`,
                             text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                             text3: '{"italic":false,"extra":[""],"text":""}',
                             text4: '{"italic":false,"extra":[""],"text":""}'

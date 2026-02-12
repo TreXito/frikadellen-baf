@@ -186,7 +186,8 @@ async function createSellOffer(bot: MyBot, itemName: string, amount: number): Pr
             return false
         }
         
-        await sleep(300)
+        // Wait for search results to populate
+        await sleep(500)
         
         // Find "Create Sell Offer" button
         const sellOfferSlot = findSlotWithName(bot.currentWindow, 'Create Sell Offer')
@@ -325,7 +326,8 @@ async function instasellItem(bot: MyBot, itemName: string): Promise<boolean> {
             return false
         }
         
-        await sleep(300)
+        // Wait for search results to populate
+        await sleep(500)
         
         // Find "Sell Instantly" button
         const sellInstantlySlot = findSlotWithName(bot.currentWindow, 'Sell Instantly')

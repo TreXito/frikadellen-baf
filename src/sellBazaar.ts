@@ -6,7 +6,7 @@ import { enqueueCommand, CommandPriority } from './commandQueue'
 // Constants
 const OPERATION_TIMEOUT_MS = 20000
 const ITEM_SELL_DELAY_MS = 500
-const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300
+const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 500
 const MAX_CLAIM_ATTEMPTS = 3
 const CLAIM_DELAY_MS = 300
 const BAZAAR_FIRST_RESULT_SLOT = 11

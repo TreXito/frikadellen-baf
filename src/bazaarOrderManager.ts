@@ -245,6 +245,30 @@ function parseOrderLore(lore: string[]): {
 }
 
 /**
+ * Update the maximum total orders limit
+ * Called when we detect a limit message from Hypixel
+ */
+export function updateMaxTotalOrders(limit: number): void {
+    if (limit > 0 && limit !== maxTotalOrders) {
+        log(`[OrderManager] Updating maxTotalOrders from ${maxTotalOrders} to ${limit}`, 'info')
+        maxTotalOrders = limit
+        orderLimitReached = false // Reset limit flag since we now know the actual limit
+    }
+}
+
+/**
+ * Update the maximum buy orders limit
+ * Called when we detect a limit message from Hypixel
+ */
+export function updateMaxBuyOrders(limit: number): void {
+    if (limit > 0 && limit !== maxBuyOrders) {
+        log(`[OrderManager] Updating maxBuyOrders from ${maxBuyOrders} to ${limit}`, 'info')
+        maxBuyOrders = limit
+        buyOrderLimitReached = false // Reset limit flag since we now know the actual limit
+    }
+}
+
+/**
  * Feature 3: Count current orders
  * @returns Object with total order count, buy order count, and limits
  */

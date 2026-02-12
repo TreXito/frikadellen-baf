@@ -198,6 +198,66 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }, 24 * 60 * 60 * 1000) // 24 hours
             }
             
+            // Detect bazaar order limit messages to dynamically update limits
+            // Examples: "[Bazaar] You may only have 25 orders open at once!"
+            //           "[Bazaar] You may only have 7 buy orders open at once!"
+            //           "[Bazaar] You can only have X orders at once!"
+            if (text.includes('[Bazaar]') && removeMinecraftColorCodes(text).toLowerCase().includes('maximum')) {
+                const cleanText = removeMinecraftColorCodes(text)
+                log(`[BAF]: Detected bazaar maximum limit message: ${cleanText}`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Bazaar limit detected - will refresh order count`)
+                
+                // Trigger order count refresh to update limits
+                const { refreshOrderCounts } = require('./bazaarOrderManager')
+                setTimeout(() => {
+                    refreshOrderCounts(bot).catch((err: any) => {
+                        log(`[BAF]: Error refreshing order counts after limit message: ${err}`, 'error')
+                    })
+                }, 2000) // Wait 2 seconds to let GUI close
+            }
+            
+            // Also check for "You may only have X orders" pattern
+            if (text.includes('[Bazaar]')) {
+                const cleanText = removeMinecraftColorCodes(text)
+                // Match patterns like "You may only have 25 orders open at once!"
+                const totalOrderMatch = cleanText.match(/may only have (\d+) orders? (?:open )?at once/i)
+                if (totalOrderMatch) {
+                    const limit = parseInt(totalOrderMatch[1], 10)
+                    log(`[BAF]: Detected total order limit: ${limit}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} total orders`)
+                    
+                    const { updateMaxTotalOrders } = require('./bazaarOrderManager')
+                    updateMaxTotalOrders(limit)
+                    
+                    // Trigger order count refresh
+                    const { refreshOrderCounts } = require('./bazaarOrderManager')
+                    setTimeout(() => {
+                        refreshOrderCounts(bot).catch((err: any) => {
+                            log(`[BAF]: Error refreshing order counts after limit detection: ${err}`, 'error')
+                        })
+                    }, 2000)
+                }
+                
+                // Match patterns like "You may only have 7 buy orders open at once!"
+                const buyOrderMatch = cleanText.match(/may only have (\d+) buy orders? (?:open )?at once/i)
+                if (buyOrderMatch) {
+                    const limit = parseInt(buyOrderMatch[1], 10)
+                    log(`[BAF]: Detected buy order limit: ${limit}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} buy orders`)
+                    
+                    const { updateMaxBuyOrders } = require('./bazaarOrderManager')
+                    updateMaxBuyOrders(limit)
+                    
+                    // Trigger order count refresh
+                    const { refreshOrderCounts } = require('./bazaarOrderManager')
+                    setTimeout(() => {
+                        refreshOrderCounts(bot).catch((err: any) => {
+                            log(`[BAF]: Error refreshing order counts after limit detection: ${err}`, 'error')
+                        })
+                    }, 2000)
+                }
+            }
+            
             // Detect "You don't have the space required to claim that!" message
             if (text.includes("You don't have the space required to claim that!")) {
                 log('[BAF]: Inventory full detected - triggering inventory management', 'warn')

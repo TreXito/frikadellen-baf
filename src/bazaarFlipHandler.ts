@@ -8,6 +8,7 @@ import { recordOrder, canPlaceOrder } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
+import { getFreeInventorySlots } from './inventoryManager'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -194,6 +195,17 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     if (!getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
         log('[BazaarDebug] Bazaar flips are disabled in config', 'warn')
         return
+    }
+
+    // Proactive inventory check before placing buy orders
+    if (recommendation.isBuyOrder) {
+        const freeSlots = getFreeInventorySlots(bot)
+        if (freeSlots <= 1) {
+            log('[BAF] Skipping buy order — inventory nearly full (need to free space first)', 'warn')
+            printMcChatToConsole('§f[§4BAF§f]: §c[BAF] Skipping buy order — inventory nearly full')
+            // TODO: Could queue auto-sell here and retry later
+            return
+        }
     }
 
     // Feature 4: Check if daily sell limit reached (skip sell offers, allow buy orders)

@@ -7,6 +7,7 @@ import { getCurrentWebsocket } from './BAF'
 import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartTime, clearPurchaseStartTime } from './flipHandler'
 import { trackFlipPurchase } from './flipTracker'
 import { claimFilledOrders, markOrderClaimed } from './bazaarOrderManager'
+import { handleInventoryFull } from './inventoryManager'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -191,6 +192,17 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     log('[BAF]: Bazaar daily sell limit reset', 'info')
                     printMcChatToConsole('§f[§4BAF§f]: §aBazaar daily sell limit reset')
                 }, 24 * 60 * 60 * 1000) // 24 hours
+            }
+            
+            // Detect "You don't have the space required to claim that!" message
+            if (text.includes("You don't have the space required to claim that!")) {
+                log('[BAF]: Inventory full detected - triggering inventory management', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §c[InventoryFull] Cannot claim - inventory full!')
+                
+                // Trigger inventory management in background
+                handleInventoryFull(bot).catch(err => {
+                    log(`[BAF]: Error handling inventory full: ${err}`, 'error')
+                })
             }
         }
     })

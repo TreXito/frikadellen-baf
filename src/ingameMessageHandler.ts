@@ -2,7 +2,7 @@ import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { ChatMessage } from 'prismarine-chat'
-import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
+import { sendWebhookItemPurchased, sendWebhookItemSold, sendWebhookBazaarOrderFilled } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
 import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartTime, clearPurchaseStartTime } from './flipHandler'
 import { trackFlipPurchase } from './flipTracker'
@@ -112,22 +112,34 @@ export async function registerIngameMessageHandler(bot: MyBot) {
             // Handles both buy order fills and sell offer fills
             if (text.includes('[Bazaar]') && text.includes('was filled!')) {
                 let itemName = ''
+                let amount = 0
                 let isBuyOrder = false
                 
                 if (text.includes('Buy Order')) {
                     log('Bazaar buy order filled, claiming via order manager', 'info')
                     isBuyOrder = true
-                    // Extract item name: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Buy Order for \d+x (.+) was filled!/)
-                    if (match) itemName = match[1].trim()
+                    // Extract item name and amount: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Buy Order for (\d+)x (.+) was filled!/)
+                    if (match) {
+                        amount = parseInt(match[1], 10)
+                        itemName = match[2].trim()
+                    }
                 } else if (text.includes('Sell Offer')) {
                     log('Bazaar sell offer filled, claiming via order manager', 'info')
                     isBuyOrder = false
-                    // Extract item name: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Sell Offer for \d+x (.+) was filled!/)
-                    if (match) itemName = match[1].trim()
+                    // Extract item name and amount: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Sell Offer for (\d+)x (.+) was filled!/)
+                    if (match) {
+                        amount = parseInt(match[1], 10)
+                        itemName = match[2].trim()
+                    }
                 } else {
                     log('Bazaar order filled, claiming via order manager', 'info')
+                }
+                
+                // Send webhook for filled order
+                if (itemName && amount > 0) {
+                    sendWebhookBazaarOrderFilled(itemName, amount, isBuyOrder)
                 }
                 
                 // Mark as claimed immediately to prevent cancellation attempts

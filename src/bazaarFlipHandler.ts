@@ -583,8 +583,9 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                         const { location, text1, text2, text3, text4 } = packet
                         
                         // Failsafe: Check if the current price in the sign is lower than 90% of recommended price
-                        // The sign shows the current default price (instant buy/sell price)
-                        // Extract price from sign text (usually in text1 or text2)
+                        // For BUY orders: sign shows instant-buy price, we want to place order below that
+                        // For SELL orders: sign shows instant-sell price, we want to place order above that
+                        // Validate that the market hasn't moved too far from the recommendation
                         let currentSignPrice = 0
                         const signTexts = [text1, text2, text3, text4].filter(t => t)
                         
@@ -610,18 +611,41 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                         
-                        // Check if current price is too low (< 90% of recommended)
-                        const minAcceptablePrice = pricePerUnit * 0.9
-                        if (currentSignPrice > 0 && currentSignPrice < minAcceptablePrice) {
-                            log(`[BazaarDebug] FAILSAFE: Sign price ${currentSignPrice.toFixed(1)} is below 90% of recommended ${pricePerUnit.toFixed(1)} (min: ${minAcceptablePrice.toFixed(1)})`, 'warn')
-                            printMcChatToConsole(`§f[§4BAF§f]: §c[Failsafe] Price too low! Sign: ${currentSignPrice.toFixed(1)}, Expected: ${pricePerUnit.toFixed(1)}`)
-                            printMcChatToConsole(`§f[§4BAF§f]: §c[Failsafe] Closing GUI and retrying...`)
+                        // Apply failsafe check based on order type
+                        if (currentSignPrice > 0) {
+                            let failsafeTriggered = false
+                            let reason = ''
                             
-                            // Close the window and reject to trigger retry
-                            bot._client.removeListener('open_window', windowListener)
-                            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-                            reject(new Error(`Price failsafe triggered: sign price ${currentSignPrice.toFixed(1)} < 90% of recommended ${pricePerUnit.toFixed(1)}`))
-                            return
+                            if (isBuyOrder) {
+                                // Buy order: reject if sign price (instant-buy) is too low (< 90% of our order price)
+                                // This means market crashed or recommendation is stale
+                                const minAcceptablePrice = pricePerUnit * 0.9
+                                if (currentSignPrice < minAcceptablePrice) {
+                                    failsafeTriggered = true
+                                    reason = `Sign instant-buy ${currentSignPrice.toFixed(1)} < 90% of order price ${pricePerUnit.toFixed(1)}`
+                                }
+                            } else {
+                                // Sell order: reject if sign price (instant-sell) is too high (> 110% of our order price)
+                                // This means market pumped or recommendation is stale
+                                const maxAcceptablePrice = pricePerUnit * 1.1
+                                if (currentSignPrice > maxAcceptablePrice) {
+                                    failsafeTriggered = true
+                                    reason = `Sign instant-sell ${currentSignPrice.toFixed(1)} > 110% of order price ${pricePerUnit.toFixed(1)}`
+                                }
+                            }
+                            
+                            if (failsafeTriggered) {
+                                log(`[BazaarDebug] FAILSAFE: ${reason}`, 'warn')
+                                printMcChatToConsole(`§f[§4BAF§f]: §c[Failsafe] Market price mismatch!`)
+                                printMcChatToConsole(`§f[§4BAF§f]: §c[Failsafe] ${reason}`)
+                                printMcChatToConsole(`§f[§4BAF§f]: §c[Failsafe] Closing GUI and retrying...`)
+                                
+                                // Close the window and reject to trigger retry
+                                bot._client.removeListener('open_window', windowListener)
+                                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                                reject(new Error(`Price failsafe: ${reason}`))
+                                return
+                            }
                         }
                         
                         log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice.toFixed(1) : 'unknown'}, writing: ${pricePerUnit.toFixed(1)}`, 'info')
@@ -677,6 +701,6 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
         setTimeout(() => {
             bot._client.removeListener('open_window', windowListener)
             reject(new Error(`Bazaar order placement timed out at step: ${currentStep}`))
-        }, 20000)
+        }, OPERATION_TIMEOUT_MS)
     })
 }

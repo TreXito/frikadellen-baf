@@ -285,8 +285,6 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
-    log(`[BazaarDebug] Queuing ${orderType} order for ${recommendation.itemName} with ${priority === CommandPriority.HIGH ? 'HIGH' : 'NORMAL'} priority`, 'info')
-    
     // Pass item name for duplicate detection
     enqueueCommand(
         commandName,

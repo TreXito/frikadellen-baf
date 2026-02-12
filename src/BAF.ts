@@ -22,7 +22,7 @@ import { startWebGui, addWebGuiChatMessage } from './webGui'
 import { initAccountSwitcher } from './accountSwitcher'
 import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
-import { startOrderManager, discoverExistingOrders } from './bazaarOrderManager'
+import { startOrderManager, discoverExistingOrders, startupOrderManagement } from './bazaarOrderManager'
 import { initCommandQueue, enqueueCommand, CommandPriority } from './commandQueue'
 import { startProfitReportTimer } from './bazaarProfitTracker'
 const WebSocket = require('ws')
@@ -590,20 +590,21 @@ async function runStartupWorkflow() {
     
     await sleep(1000)
     
-    // Step 2: Discover existing orders (if bazaar flips enabled)
+    // Step 2: Manage existing orders (cancel stale ones and re-list) - FEATURE 1
     if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        log('[Startup] Step 2/4: Discovering existing orders...', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fDiscovering existing orders...')
+        log('[Startup] Step 2/4: Managing existing orders...', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fManaging existing orders...')
         try {
-            ordersFound = await discoverExistingOrders(bot)
-            log('[Startup] Order discovery complete', 'info')
-            printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Order discovery complete')
+            const result = await startupOrderManagement(bot)
+            ordersFound = result.cancelled
+            log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Order management complete`)
         } catch (err) {
-            log(`[Startup] Order discovery error: ${err}`, 'error')
-            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Order discovery error')
+            log(`[Startup] Order management error: ${err}`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Order management error')
         }
     } else {
-        log('[Startup] Step 2/4: Skipping order discovery (Bazaar flips disabled)', 'info')
+        log('[Startup] Step 2/4: Skipping order management (Bazaar flips disabled)', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §7Skipped (Bazaar flips disabled)')
     }
     

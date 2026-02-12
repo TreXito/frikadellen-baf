@@ -15,6 +15,9 @@ const OPERATION_TIMEOUT_MS = 20000
 const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
 const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to populate bot.currentWindow
 const BAZAAR_RETRY_DELAY_MS = 2000
+// Price failsafe thresholds
+const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 90% of order price
+const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -619,18 +622,18 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             if (isBuyOrder) {
                                 // Buy order: reject if sign price (instant-buy) is too low (< 90% of our order price)
                                 // This means market crashed or recommendation is stale
-                                const minAcceptablePrice = pricePerUnit * 0.9
+                                const minAcceptablePrice = pricePerUnit * PRICE_FAILSAFE_BUY_THRESHOLD
                                 if (currentSignPrice < minAcceptablePrice) {
                                     failsafeTriggered = true
-                                    reason = `Sign instant-buy ${currentSignPrice.toFixed(1)} < 90% of order price ${pricePerUnit.toFixed(1)}`
+                                    reason = `Sign instant-buy ${currentSignPrice.toFixed(1)} < ${(PRICE_FAILSAFE_BUY_THRESHOLD * 100)}% of order price ${pricePerUnit.toFixed(1)}`
                                 }
                             } else {
                                 // Sell order: reject if sign price (instant-sell) is too high (> 110% of our order price)
                                 // This means market pumped or recommendation is stale
-                                const maxAcceptablePrice = pricePerUnit * 1.1
+                                const maxAcceptablePrice = pricePerUnit * PRICE_FAILSAFE_SELL_THRESHOLD
                                 if (currentSignPrice > maxAcceptablePrice) {
                                     failsafeTriggered = true
-                                    reason = `Sign instant-sell ${currentSignPrice.toFixed(1)} > 110% of order price ${pricePerUnit.toFixed(1)}`
+                                    reason = `Sign instant-sell ${currentSignPrice.toFixed(1)} > ${(PRICE_FAILSAFE_SELL_THRESHOLD * 100)}% of order price ${pricePerUnit.toFixed(1)}`
                                 }
                             }
                             

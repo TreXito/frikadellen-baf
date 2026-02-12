@@ -29,26 +29,26 @@ jobs:
         run: npm run build
       
       - name: Build Windows executable
-        run: npx pkg ./build/BAF.js --targets node20-win-x64 --output ./executables/BAF-${{ github.ref_name }}-win
+        run: npx pkg ./build/BAF.js --targets node20-win-x64 --output ./executables/BAF-windows
       
       - name: Build Linux executable
-        run: npx pkg ./build/BAF.js --targets node20-linux-x64 --output ./executables/BAF-${{ github.ref_name }}-linux
+        run: npx pkg ./build/BAF.js --targets node20-linux-x64 --output ./executables/BAF-linux
       
       - name: Build macOS executable
-        run: npx pkg ./build/BAF.js --targets node20-macos-x64 --output ./executables/BAF-${{ github.ref_name }}-macos
+        run: npx pkg ./build/BAF.js --targets node20-macos-x64 --output ./executables/BAF-macos
       
       - name: Make executables executable
         run: |
-          chmod +x ./executables/BAF-${{ github.ref_name }}-linux
-          chmod +x ./executables/BAF-${{ github.ref_name }}-macos
+          chmod +x ./executables/BAF-linux
+          chmod +x ./executables/BAF-macos
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./executables/BAF-${{ github.ref_name }}-win.exe
-            ./executables/BAF-${{ github.ref_name }}-linux
-            ./executables/BAF-${{ github.ref_name }}-macos
+            ./executables/BAF-windows.exe
+            ./executables/BAF-linux
+            ./executables/BAF-macos
             ./start_script/BAF.ps1
             ./start_script/BAF.cmd
           draft: false

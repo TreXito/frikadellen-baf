@@ -4,7 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
-import { recordOrder, canPlaceOrder } from './bazaarOrderManager'
+import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
@@ -213,7 +213,6 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         if (orderCheck.needsRefresh) {
             log('[BAF]: Order count is stale, refreshing...', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §7Refreshing order count...')
-            const { refreshOrderCounts } = await import('./bazaarOrderManager')
             const refreshed = await refreshOrderCounts(bot)
             if (refreshed) {
                 log('[BAF]: Order count refreshed, retrying order placement', 'info')

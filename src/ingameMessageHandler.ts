@@ -21,6 +21,9 @@ let lastBuySpeed = 0
 let bazaarDailyLimitReached = false
 let bazaarLimitResetTimer: NodeJS.Timeout | null = null
 
+// Debounce timer for order count refresh after limit detection
+let orderRefreshDebounceTimer: NodeJS.Timeout | null = null
+
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
     bot.on('message', (message: ChatMessage, type) => {
@@ -210,6 +213,8 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                                        cleanText.toLowerCase().includes('may only have')
                 
                 if (hasLimitMessage) {
+                    let limitDetected = false
+                    
                     // Match patterns like "You may only have 25 orders open at once!"
                     const totalOrderMatch = cleanText.match(/may only have (\d+) orders? (?:open )?at once/i)
                     if (totalOrderMatch) {
@@ -217,6 +222,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                         log(`[BAF]: Detected total order limit: ${limit}`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} total orders`)
                         updateMaxTotalOrders(limit)
+                        limitDetected = true
                     }
                     
                     // Match patterns like "You may only have 7 buy orders open at once!"
@@ -226,16 +232,25 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                         log(`[BAF]: Detected buy order limit: ${limit}`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} buy orders`)
                         updateMaxBuyOrders(limit)
+                        limitDetected = true
                     }
                     
-                    // If any limit was detected, refresh order counts after a short delay
-                    if (totalOrderMatch || buyOrderMatch) {
-                        log('[BAF]: Scheduling order count refresh after limit detection', 'info')
-                        setTimeout(() => {
+                    // If any limit was detected, schedule a debounced order count refresh
+                    if (limitDetected) {
+                        log('[BAF]: Scheduling debounced order count refresh after limit detection', 'info')
+                        
+                        // Clear any existing refresh timer to debounce multiple rapid limit messages
+                        if (orderRefreshDebounceTimer) {
+                            clearTimeout(orderRefreshDebounceTimer)
+                        }
+                        
+                        // Schedule refresh after 2 seconds (debounced)
+                        orderRefreshDebounceTimer = setTimeout(() => {
+                            orderRefreshDebounceTimer = null
                             refreshOrderCounts(bot).catch((err: any) => {
                                 log(`[BAF]: Error refreshing order counts after limit detection: ${err}`, 'error')
                             })
-                        }, 2000) // Wait 2 seconds to let GUI close
+                        }, 2000) // Wait 2 seconds to let GUI close and debounce multiple messages
                     }
                 }
             }

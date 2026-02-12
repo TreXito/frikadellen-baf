@@ -24,7 +24,7 @@ const RETRY_DELAY_MS = 1100
 const OPERATION_TIMEOUT_MS = 20000
 const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
 const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to populate bot.currentWindow
-const BAZAAR_RETRY_DELAY_MS = 2000
+const BAZAAR_RETRY_DELAY_MS = 500
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -302,10 +302,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             try {
                 await executeBazaarFlip(bot, recommendation)
             } catch (error) {
-                // BUG 2: If first attempt fails, retry once after 2 seconds
-                log(`[BAF] Bazaar operation failed, retrying in 2 seconds: ${error}`, 'warn')
-                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in 2 seconds...`)
-                await sleep(2000)
+                // BUG 2: If first attempt fails, retry once after a short delay
+                log(`[BAF] Bazaar operation failed, retrying in ${BAZAAR_RETRY_DELAY_MS}ms: ${error}`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in ${BAZAAR_RETRY_DELAY_MS}ms...`)
+                await sleep(BAZAAR_RETRY_DELAY_MS)
                 
                 // Check if AH flips are pending before retry
                 if (areAHFlipsPending()) {
@@ -400,12 +400,12 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
 export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     // Step 1: /bz command — opens new window
     bot.chat(`/bz ${itemName}`)
-    const bazaarOpened = await waitForNewWindow(bot, 5000)
+    const bazaarOpened = await waitForNewWindow(bot, 3000)
     if (!bazaarOpened || !bot.currentWindow) {
         log(`[BAF] /bz didn't open a window`, 'warn')
         throw new Error('/bz command failed to open window')
     }
-    await sleep(200)
+    await sleep(100)
     
     // Step 2: If search results page, find and click the correct item
     const title = getWindowTitle(bot.currentWindow)
@@ -418,10 +418,10 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
             throw new Error(`Item "${itemName}" not found in search results`)
         }
         // Click item — opens new window or same window updates
-        const clicked = await clickAndWaitForWindow(bot, itemSlot, 3000)
+        const clicked = await clickAndWaitForWindow(bot, itemSlot, 2000)
         if (!clicked) {
             // Maybe same window updated instead
-            await sleep(300)
+            await sleep(150)
         }
         if (!bot.currentWindow) {
             throw new Error('Window closed after item selection')
@@ -436,7 +436,7 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         throw new Error(`Failed to click "${orderButtonName}"`)
     }
-    await sleep(200)
+    await sleep(100)
     
     // Step 4: Amount step (buy orders only — sell offers skip this)
     if (isBuyOrder) {
@@ -450,8 +450,8 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
                 throw new Error('Failed to set amount')
             }
             // Wait for window to return after sign
-            await waitForNewWindow(bot, 3000)
-            await sleep(200)
+            await waitForNewWindow(bot, 2000)
+            await sleep(100)
         }
     }
     
@@ -474,15 +474,15 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
     }
     
     // Wait for confirm window after sign
-    await waitForNewWindow(bot, 3000)
-    await sleep(200)
+    await waitForNewWindow(bot, 2000)
+    await sleep(100)
     
     // Step 6: Confirm — click slot 13
     if (!bot.currentWindow) {
         throw new Error('Window closed before confirmation')
     }
     await clickWindow(bot, 13).catch(() => {})
-    await sleep(300)
+    await sleep(150)
     
     log(`[BAF] Successfully placed ${isBuyOrder ? 'buy order' : 'sell offer'} for ${amount}x ${itemName}`, 'info')
     

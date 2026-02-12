@@ -328,16 +328,9 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
             return false
         }
         
-        // Click "Manage Orders"
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            return false
-        }
-        
+        // Click "Manage Orders" at slot 50
         const manageWindow = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         const manageOpened = await manageWindow
         
         if (!manageOpened || !bot.currentWindow) {
@@ -698,16 +691,6 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Opening Manage Orders...`)
                     await sleep(50)
                     
-                    if (areAHFlipsPending()) {
-                        log('[OrderManager] AH flips pending, aborting claim', 'info')
-                        bot.removeListener('windowOpen', windowHandler)
-                        bot.state = null
-                        isManagingOrders = false
-                        clearTimeout(timeout)
-                        reject(new Error('AH flips pending'))
-                        return
-                    }
-                    
                     const success = await clickAndWaitForWindow(bot, 50)
                     if (!success) {
                         log('[OrderManager] Failed to open Manage Orders window', 'error')
@@ -728,11 +711,6 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     let claimedAny = false
                     
                     for (let i = 0; i < window.slots.length; i++) {
-                        if (areAHFlipsPending()) {
-                            log('[OrderManager] AH flips pending, stopping claim loop', 'info')
-                            break
-                        }
-                        
                         const slot = window.slots[i]
                         const name = removeMinecraftColorCodes(
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
@@ -768,11 +746,9 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                 claimedAny = true
                                 
                                 // Click again for partial claims (may fail if already fully claimed)
-                                if (!areAHFlipsPending()) {
-                                    await clickAndWaitForUpdate(bot, i, 400).catch(() => {
-                                        log(`[OrderManager] Second claim click failed (likely already claimed)`, 'debug')
-                                    })
-                                }
+                                await clickAndWaitForUpdate(bot, i, 400).catch(() => {
+                                    log(`[OrderManager] Second claim click failed (likely already claimed)`, 'debug')
+                                })
                                 
                                 // Mark as claimed in our tracking
                                 const orderType = name.startsWith('BUY ')
@@ -860,18 +836,9 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
         }
         await sleep(50)
 
-        // Step 2: Click Manage Orders — new window opens
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            log('[OrderManager] Could not find Manage Orders button', 'warn')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            isManagingOrders = false
-            return
-        }
-
+        // Step 2: Click Manage Orders at slot 50 — new window opens
         const manageOpened = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         await manageOpened
         await sleep(50)
 
@@ -888,12 +855,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
         // Step 4: Cancel each stale order one by one, WITHOUT closing Manage Orders
         for (const order of staleOrders) {
-            // Check if AH flips incoming — abort if so
-            if (areAHFlipsPending()) {
-                log('[OrderManager] AH flips incoming, aborting cancellation', 'info')
-                break
-            }
-
             // Find the order in the CURRENT window
             const searchPrefix = order.isBuyOrder ? 'BUY' : 'SELL'
             let orderSlot = -1
@@ -919,15 +880,13 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
             if (!bot.currentWindow) break
 
-            // Find and click Cancel Order
-            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-            if (cancelSlot !== -1) {
-                await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(100)
-                
-                const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
-                log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
-                printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+            // Click Cancel Order at slot 13 (per bazaar slot reference)
+            await clickWindow(bot, 13).catch(() => {})
+            await sleep(100)
+            
+            const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+            log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
                 
                 // FEATURE 2: Add cancelled sell offers to re-list queue
                 if (!order.isBuyOrder && order.pricePerUnit > 0 && order.amount > 0) {
@@ -945,9 +904,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
                     order.filled || 0,
                     order.totalAmount || order.amount
                 )
-            } else {
-                log(`[OrderManager] No Cancel Order for ${order.itemName} — may be fully filled`, 'info')
-            }
 
             order.cancelled = true
 
@@ -964,11 +920,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
         
         // FEATURE 2: Re-list cancelled sell offers
         for (const order of relistQueue) {
-            if (areAHFlipsPending()) {
-                log('[OrderManager] AH flips incoming, skipping re-listing', 'info')
-                break
-            }
-            
             log(`[OrderManager] Re-listing cancelled sell offer: ${order.amount}x ${order.itemName} at ${order.pricePerUnit}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Re-listing §e${order.itemName}`)
             
@@ -1013,13 +964,6 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         // Step 1: Open /bz — this opens a NEW window
         bot.chat('/bz')
         
-        if (areAHFlipsPending()) {
-            log('[OrderManager] AH flips pending, aborting cancel', 'info')
-            bot.state = null
-            isManagingOrders = false
-            return false
-        }
-        
         // Wait for the bazaar window to open
         const bazaarWindow = await waitForNewWindow(bot, 5000)
         if (!bazaarWindow) {
@@ -1038,18 +982,10 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        if (areAHFlipsPending()) {
-            log('[OrderManager] AH flips pending, aborting cancel', 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            isManagingOrders = false
-            return false
-        }
-        
-        // Step 2: Click "Manage Orders" using resilient helper — this opens a NEW window
-        const manageSuccess = await findAndClick(bot, 'Manage Orders', { waitForNewWindow: true, timeout: 5000 })
-        if (!manageSuccess) {
-            log('[OrderManager] Could not find or click Manage Orders button', 'warn')
+        // Step 2: Click "Manage Orders" at slot 50 — this opens a NEW window
+        const manageSuccess = await clickAndWaitForWindow(bot, 50, 5000, 2)
+        if (!manageSuccess || !bot.currentWindow) {
+            log('[OrderManager] Could not click Manage Orders button', 'warn')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
@@ -1058,14 +994,6 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
-            bot.state = null
-            isManagingOrders = false
-            return false
-        }
-        
-        if (areAHFlipsPending()) {
-            log('[OrderManager] AH flips pending, aborting cancel', 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
             return false
@@ -1098,14 +1026,6 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return true
         }
         
-        if (areAHFlipsPending()) {
-            log('[OrderManager] AH flips pending, aborting cancel', 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            isManagingOrders = false
-            return false
-        }
-        
         // Step 4: Click the order slot using resilient helper — SAME WINDOW UPDATES
         const orderClickSuccess = await clickAndWaitForUpdate(bot, orderSlot, 2000)
         if (!orderClickSuccess) {
@@ -1124,29 +1044,8 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        if (areAHFlipsPending()) {
-            log('[OrderManager] AH flips pending, aborting cancel', 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            isManagingOrders = false
-            return false
-        }
-        
-        const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-        
-        if (cancelSlot === -1) {
-            // No cancel button — order is fully filled
-            log(`[OrderManager] No Cancel Order button — order may be fully filled`, 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            order.claimed = true
-            cleanupTrackedOrders()
-            bot.state = null
-            isManagingOrders = false
-            return true
-        }
-        
-        // Step 6: Click "Cancel Order" using resilient helper — SAME WINDOW UPDATES
-        const cancelSuccess = await clickAndWaitForUpdate(bot, cancelSlot, 300)
+        // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
+        const cancelSuccess = await clickAndWaitForUpdate(bot, 13, 300)
         if (cancelSuccess) {
             log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
@@ -1247,15 +1146,9 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         }
         await sleep(50)
         
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            log('[Startup] Could not find Manage Orders button', 'warn')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            return { cancelled: 0, relisted: 0 }
-        }
-        
+        // Click Manage Orders at slot 50
         const manageOpened = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         await manageOpened
         await sleep(50)
         
@@ -1290,49 +1183,34 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             if (!bot.currentWindow) break
             
-            // Find Cancel Order button
-            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-            if (cancelSlot !== -1) {
-                // Cancel the order
-                await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(100)
-                
-                cancelledCount++
-                
-                if (!isBuy) {
-                    // Sell offer cancelled — add to re-list queue
-                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
-                        relistQueue.push({
-                            itemName,
-                            pricePerUnit: orderInfo.pricePerUnit,
-                            amount: orderInfo.remaining
-                        })
-                        log(`[Startup] Will re-list: ${orderInfo.remaining}x ${itemName} at ${orderInfo.pricePerUnit}`, 'debug')
-                    }
-                } else {
-                    // Buy order cancelled — sell any claimed items
-                    if (orderInfo.filled > 0) {
-                        sellQueue.push({
-                            itemName,
-                            amount: orderInfo.filled
-                        })
-                        log(`[Startup] Will sell ${orderInfo.filled}x ${itemName} from filled buy order`, 'debug')
-                    }
+            // Click Cancel Order at slot 13
+            await clickWindow(bot, 13).catch(() => {})
+            await sleep(100)
+            
+            cancelledCount++
+            
+            if (!isBuy) {
+                // Sell offer cancelled — add to re-list queue
+                if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
+                    relistQueue.push({
+                        itemName,
+                        pricePerUnit: orderInfo.pricePerUnit,
+                        amount: orderInfo.remaining
+                    })
+                    log(`[Startup] Will re-list: ${orderInfo.remaining}x ${itemName} at ${orderInfo.pricePerUnit}`, 'debug')
                 }
-                
-                log(`[Startup] Cancelled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             } else {
-                // No cancel button — fully filled, just claimed
-                if (isBuy && orderInfo.amount > 0) {
-                    // Items from filled buy order should be sold
+                // Buy order cancelled — sell any claimed items
+                if (orderInfo.filled > 0) {
                     sellQueue.push({
                         itemName,
-                        amount: orderInfo.amount
+                        amount: orderInfo.filled
                     })
-                    log(`[Startup] Will sell ${orderInfo.amount}x ${itemName} from completed buy order`, 'debug')
+                    log(`[Startup] Will sell ${orderInfo.filled}x ${itemName} from filled buy order`, 'debug')
                 }
-                log(`[Startup] Claimed fully filled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             }
+            
+            log(`[Startup] Cancelled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             
             // Wait for window to return to Manage Orders list
             await sleep(100)
@@ -1349,11 +1227,6 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (item.amount <= 0 || item.pricePerUnit <= 0) {
                 log(`[Startup] Skipping invalid re-list entry for ${item.itemName}`, 'debug')
                 continue
-            }
-            
-            if (areAHFlipsPending()) {
-                log('[Startup] AH flips incoming, skipping re-listing', 'info')
-                break
             }
             
             log(`[Startup] Re-listing sell offer: ${item.amount}x ${item.itemName} at ${item.pricePerUnit}`, 'info')

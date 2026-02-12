@@ -1,7 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log } from './logger'
 import { clickWindow, sleep, removeMinecraftColorCodes } from './utils'
-import { areAHFlipsPending } from './bazaarFlipPauser'
 
 /**
  * Helper to get slot name from NBT data
@@ -115,8 +114,6 @@ async function waitForWindowChange(bot: MyBot, beforeSlots: string[], timeout: n
  */
 export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 1000, maxRetries = 2): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-        if (areAHFlipsPending()) return false
-        
         const windowPromise = waitForNewWindow(bot, timeout)
         await clickWindow(bot, slot).catch(() => {})
         const opened = await windowPromise
@@ -138,7 +135,6 @@ export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 
  */
 export async function clickAndWaitForUpdate(bot: MyBot, slot: number, timeout = 800, maxRetries = 2): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-        if (areAHFlipsPending()) return false
         if (!bot.currentWindow) return false
         
         // Snapshot a few key slots to detect changes
@@ -171,7 +167,6 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
     const { waitForNewWindow: expectNewWindow = false, timeout = 1000, maxRetries = 2 } = opts
     
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-        if (areAHFlipsPending()) return false
         if (!bot.currentWindow) return false
         
         // Try to find the button — poll briefly if not found
@@ -214,8 +209,6 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
  */
 export async function clickAndWaitForSign(bot: MyBot, slot: number, value: string, timeout = 600, maxRetries = 3): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-        if (areAHFlipsPending()) return false
-        
         const attemptStartTime = Date.now()
         
         // Register sign handler BEFORE clicking

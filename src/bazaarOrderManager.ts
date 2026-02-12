@@ -1351,16 +1351,16 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             const itemName = foundOrder.name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
             
-            // Click the order — same window updates
+            // Read the lore BEFORE clicking (from the Manage Orders list view)
+            // Parse fill status, price etc from the lore
+            const lore = getSlotLore(bot.currentWindow.slots[foundOrder.slot])
+            const orderInfo = parseOrderLore(lore)
+            
+            // Click the order — window transitions to order detail view
             await clickWindow(bot, foundOrder.slot).catch(() => {})
             await sleep(400)
             
             if (!bot.currentWindow) break
-            
-            // Read the lore AFTER clicking (now showing order detail view)
-            // Parse fill status, price etc from the lore
-            const lore = getSlotLore(bot.currentWindow.slots[foundOrder.slot])
-            const orderInfo = parseOrderLore(lore)
             
             // Find Cancel Order button
             const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
@@ -1384,7 +1384,11 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             } else {
                 // No cancel button — fully filled, just claimed
                 if (foundOrder.isBuy) {
-                    sellQueue.push({ itemName, amount: orderInfo.amount })
+                    // Use filled amount for consistency (orderInfo.amount might be 0 if lore parsing fails)
+                    const amount = orderInfo.filled || orderInfo.amount
+                    if (amount > 0) {
+                        sellQueue.push({ itemName, amount })
+                    }
                 }
                 claimedCount++
                 log(`[Startup] Claimed fully filled order for ${itemName}`, 'info')
@@ -1425,6 +1429,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         }
         
         log(`[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`, 'info')
+        log(`[Startup] Details: cancelled ${cancelledCount}, claimed ${claimedCount}, re-listed ${relistedCount}`, 'debug')
         printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`)
         
         return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }

@@ -208,31 +208,31 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 const cleanText = removeMinecraftColorCodes(text)
                 const lowerCleanText = cleanText.toLowerCase()
                 
-                // Check for limit messages - "may only have" pattern
-                // Note: The "maximum" check is kept for future compatibility if Hypixel changes message format
-                const hasLimitMessage = lowerCleanText.includes('maximum') || 
-                                       lowerCleanText.includes('may only have')
+                // Check for "may only have" pattern (current Hypixel message format)
+                const hasLimitMessage = lowerCleanText.includes('may only have')
                 
                 if (hasLimitMessage) {
                     let limitDetected = false
                     
-                    // Match patterns like "You may only have 25 orders open at once!"
-                    const totalOrderMatch = cleanText.match(/may only have (\d+) orders? (?:open )?at once/i)
-                    if (totalOrderMatch) {
-                        const limit = parseInt(totalOrderMatch[1], 10)
-                        log(`[BAF]: Detected total order limit: ${limit}`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} total orders`)
-                        updateMaxTotalOrders(limit)
-                        limitDetected = true
-                    }
-                    
                     // Match patterns like "You may only have 7 buy orders open at once!"
+                    // Must check buy orders FIRST to avoid false matches with total orders
                     const buyOrderMatch = cleanText.match(/may only have (\d+) buy orders? (?:open )?at once/i)
                     if (buyOrderMatch) {
                         const limit = parseInt(buyOrderMatch[1], 10)
                         log(`[BAF]: Detected buy order limit: ${limit}`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} buy orders`)
                         updateMaxBuyOrders(limit)
+                        limitDetected = true
+                    }
+                    
+                    // Match patterns like "You may only have 25 orders open at once!" (but NOT "buy orders")
+                    // Use negative lookbehind to exclude messages with "buy" before "orders"
+                    const totalOrderMatch = cleanText.match(/may only have (\d+) (?!buy )orders? (?:open )?at once/i)
+                    if (totalOrderMatch && !buyOrderMatch) {
+                        const limit = parseInt(totalOrderMatch[1], 10)
+                        log(`[BAF]: Detected total order limit: ${limit}`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Detected limit: ${limit} total orders`)
+                        updateMaxTotalOrders(limit)
                         limitDetected = true
                     }
                     

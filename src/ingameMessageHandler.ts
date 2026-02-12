@@ -8,6 +8,7 @@ import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartT
 import { trackFlipPurchase } from './flipTracker'
 import { claimFilledOrders, markOrderClaimed } from './bazaarOrderManager'
 import { handleInventoryFull } from './inventoryManager'
+import { clearAHFlipsPending } from './bazaarFlipPauser'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -43,6 +44,9 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             if (text.startsWith('You purchased')) {
+                // BUG 3: Clear AH flips pending flag after purchase
+                clearAHFlipsPending()
+                
                 wss.send(
                     JSON.stringify({
                         type: 'uploadTab',

@@ -2,9 +2,9 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
-import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
+import { areBazaarFlipsPaused, queueBazaarFlip, areAHFlipsPending } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
-import { recordOrder, canPlaceOrder } from './bazaarOrderManager'
+import { recordOrder, canPlaceOrder, refreshOrderCounts, getOrderCounts } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
@@ -219,9 +219,28 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     // Check if we can place the order (dynamic slot checking)
     const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
     if (!orderCheck.canPlace) {
-        log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
-        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
-        return
+        // If order count needs refresh, try to refresh it
+        if (orderCheck.needsRefresh) {
+            log('[BAF]: Order count is stale, refreshing...', 'info')
+            const refreshed = await refreshOrderCounts(bot)
+            if (refreshed) {
+                // Re-check after refresh
+                const recheckOrder = canPlaceOrder(recommendation.isBuyOrder)
+                if (!recheckOrder.canPlace) {
+                    log(`[BAF]: Cannot place order after refresh - ${recheckOrder.reason}`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${recheckOrder.reason}`)
+                    return
+                }
+                // If can place after refresh, continue
+            } else {
+                log('[BAF]: Failed to refresh order count, skipping order', 'warn')
+                return
+            }
+        } else {
+            log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
+            return
+        }
     }
 
     // Feature 6: Check if bot can afford the order
@@ -240,18 +259,30 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
+    // BUG 2: Check for duplicate tracked orders
+    const orderCounts = getOrderCounts()
+    const activeOrders = orderCounts.totalOrders
+    if (activeOrders > 0) {
+        // Import trackedOrders to check for duplicates
+        const { default: bazaarOrderManager } = require('./bazaarOrderManager')
+        // We need to check if there's already an order for this item
+        // This is handled in the commandQueue now
+    }
+
     // Queue the bazaar flip with NORMAL priority and mark as interruptible
     // This ensures it doesn't interrupt other operations but can be interrupted by AH flips
     const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
+    // Pass item name for duplicate detection
     enqueueCommand(
         commandName,
         CommandPriority.NORMAL,
         async () => {
             await executeBazaarFlip(bot, recommendation)
         },
-        true // interruptible - can be interrupted by AH flips
+        true, // interruptible - can be interrupted by AH flips
+        recommendation.itemName // for duplicate checking
     )
 }
 
@@ -260,6 +291,14 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
  * This is the actual implementation that runs from the queue
  */
 async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommendation): Promise<void> {
+    // BUG 3: Check if AH flips are pending before starting
+    if (areAHFlipsPending()) {
+        log('[BAF] Aborting bazaar operation — AH flips incoming', 'info')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        bot.state = null
+        throw new Error('AH flips incoming - operation aborted')
+    }
+    
     // Double-check bot state before execution (queue should handle this, but safety check)
     if (bot.state) {
         log(`[BazaarDebug] Bot is busy (state: ${bot.state}), cannot execute flip`, 'warn')
@@ -508,6 +547,16 @@ function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePer
             }
 
             try {
+                // BUG 3: Check if AH flips are pending before each window transition
+                if (areAHFlipsPending()) {
+                    log('[BAF] Aborting bazaar operation — AH flips incoming', 'info')
+                    bot._client.removeListener('open_window', windowListener)
+                    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                    bot.state = null
+                    reject(new Error('AH flips incoming - operation aborted'))
+                    return
+                }
+                
                 // 1. Item detail page - detected by order buttons, works with ANY window title
                 let hasOrderButton = findSlotWithName(window, 'Create Buy Order') !== -1 ||
                                      findSlotWithName(window, 'Create Sell Offer') !== -1

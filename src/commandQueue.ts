@@ -108,12 +108,25 @@ export function enqueueCommand(
     }
     
     // Insert command in priority order (lower priority value = higher actual priority)
-    // Within same priority, maintain FIFO order
+    // Within same priority:
+    // - Bazaar orders use LIFO (newest first) to prioritize fresh recommendations when at limit
+    // - Other commands use FIFO to maintain order
     let insertIndex = commandQueue.length
+    const isBazaarOrder = name.startsWith('Bazaar ')
+    
     for (let i = 0; i < commandQueue.length; i++) {
         if (commandQueue[i].priority > priority) {
+            // Found lower priority, insert here
             insertIndex = i
             break
+        } else if (commandQueue[i].priority === priority) {
+            // Same priority - different behavior for bazaar vs other commands
+            if (isBazaarOrder) {
+                // For bazaar orders, insert at this position (LIFO - newest first)
+                insertIndex = i
+                break
+            }
+            // For non-bazaar commands, continue to maintain FIFO (insertIndex stays at end)
         }
     }
     

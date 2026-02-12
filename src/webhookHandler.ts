@@ -606,3 +606,93 @@ export function sendWebhookBazaarOrderFilled(
         ]
     })
 }
+
+/**
+ * Send periodic profit report webhook
+ * Shows total profit, trade count, and bot uptime
+ */
+export function sendWebhookProfitReport(stats: {
+    totalProfit: number
+    tradeCount: number
+    averageProfit: number
+    profitPerHour: number
+    uptime: number
+}): void {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
+    
+    // Helper to format uptime
+    const formatUptime = (ms: number): string => {
+        const seconds = Math.floor(ms / 1000)
+        const minutes = Math.floor(seconds / 60)
+        const hours = Math.floor(minutes / 60)
+        const days = Math.floor(hours / 24)
+        
+        if (days > 0) {
+            return `${days}d ${hours % 24}h ${minutes % 60}m`
+        } else if (hours > 0) {
+            return `${hours}h ${minutes % 60}m`
+        } else {
+            return `${minutes}m`
+        }
+    }
+    
+    // Determine color based on profit (green for positive, red for negative, gray for zero)
+    let color = 0x808080 // Gray for zero
+    if (stats.totalProfit > 0) {
+        color = 0x00FF00 // Green for profit
+    } else if (stats.totalProfit < 0) {
+        color = 0xFF0000 // Red for loss
+    }
+    
+    const profitSign = stats.totalProfit >= 0 ? '+' : ''
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: '📊 Bazaar Profit Report',
+                description: `**Periodic Report** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: color,
+                fields: [
+                    {
+                        name: '💰 Total Profit',
+                        value: `\`\`\`diff\n${profitSign}${formatNumber(stats.totalProfit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📈 Profit/Hour',
+                        value: `\`\`\`fix\n${formatNumber(stats.profitPerHour)} coins/h\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '🔄 Trades',
+                        value: `\`\`\`\n${stats.tradeCount} completed\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '⏱️ Uptime',
+                        value: `\`\`\`\n${formatUptime(stats.uptime)}\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Avg Profit/Trade',
+                        value: `\`\`\`fix\n${formatNumber(stats.averageProfit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💵 Current Purse',
+                        value: `\`\`\`fix\n${formatNumber(purse)} coins\n\`\`\``,
+                        inline: true
+                    }
+                ],
+                footer: {
+                    text: `BAF • ${ingameName} • Automated Report`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}

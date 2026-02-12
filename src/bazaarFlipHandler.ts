@@ -9,6 +9,7 @@ import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
 import { getFreeInventorySlots } from './inventoryManager'
+import { recordBuyOrder, recordSellOrder } from './bazaarProfitTracker'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -385,6 +386,13 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
         
         // Record the order for tracking (claiming and cancelling)
         recordOrder(recommendation)
+        
+        // Record order for profit tracking
+        if (recommendation.isBuyOrder) {
+            recordBuyOrder(recommendation.itemName, recommendation.pricePerUnit, recommendation.amount)
+        } else {
+            recordSellOrder(recommendation.itemName, recommendation.pricePerUnit, recommendation.amount)
+        }
         
         log('[BazaarDebug] ===== BAZAAR FLIP ORDER COMPLETED =====', 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §aSuccessfully placed bazaar order!`)

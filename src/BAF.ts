@@ -24,6 +24,7 @@ import { getProxyConfig } from './proxyHelper'
 import { checkAndBuyCookie } from './cookieHandler'
 import { startOrderManager, discoverExistingOrders } from './bazaarOrderManager'
 import { initCommandQueue, enqueueCommand, CommandPriority } from './commandQueue'
+import { startProfitReportTimer } from './bazaarProfitTracker'
 const WebSocket = require('ws')
 const EventEmitter = require('events')
 var prompt = require('prompt-sync')()
@@ -47,6 +48,9 @@ let currentPurse: number = 0
 
 // Bazaar flip request interval (Feature 5)
 let bazaarFlipRequestInterval: NodeJS.Timeout | null = null
+
+// Bot start time for uptime tracking
+let botStartTime: number = Date.now()
 
 if (!ingameName) {
     ingameName = prompt('Enter your ingame name: ')
@@ -656,6 +660,11 @@ async function runStartupWorkflow() {
     
     // Send webhook notification about startup complete
     sendWebhookStartupComplete(ordersFound)
+    
+    // Start profit tracking timer if bazaar flips are enabled
+    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+        startProfitReportTimer()
+    }
 }
 
 async function onScoreboardChanged() {
@@ -857,4 +866,11 @@ function parsePurseFromScoreboard(scoreboardLines: string[]): void {
  */
 export function getCurrentPurse(): number {
     return currentPurse
+}
+
+/**
+ * Get bot start time for uptime calculation
+ */
+export function getBotStartTime(): number {
+    return botStartTime
 }

@@ -8,6 +8,7 @@ import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderMan
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
+import { findItemInSearchResults } from './bazaarHelpers'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -17,6 +18,7 @@ const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to
 const BAZAAR_RETRY_DELAY_MS = 2000
 const MAX_ORDER_PLACEMENT_RETRIES = 3 // Maximum number of retries for order placement
 const RETRY_BACKOFF_BASE_MS = 1000 // Base delay for exponential backoff between retries
+const FIRST_SEARCH_RESULT_SLOT = 11 // Fallback slot for first item in bazaar search results
 // Price failsafe thresholds
 const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 90% of order price
 const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
@@ -217,23 +219,28 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             printMcChatToConsole('§f[§4BAF§f]: §7Refreshing order count...')
             const refreshed = await refreshOrderCounts(bot)
             if (refreshed) {
-                log('[BAF]: Order count refreshed, retrying order placement', 'info')
+                log('[BAF]: Order count refreshed, proceeding with order placement', 'info')
                 // Check again after refresh
                 const retryCheck = canPlaceOrder(recommendation.isBuyOrder)
-                if (!retryCheck.canPlace) {
+                // Block only if it's a confirmed hard limit (not stale, not can place)
+                if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
+                    // Hard limit confirmed after refresh
                     log(`[BAF]: Cannot place order after refresh - ${retryCheck.reason}`, 'warn')
                     printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${retryCheck.reason}`)
                     return
                 }
+                // Otherwise continue with order placement (Hypixel will enforce actual limits)
             } else {
-                log('[BAF]: Failed to refresh order count', 'warn')
-                printMcChatToConsole('§f[§4BAF§f]: §cFailed to refresh order count')
-                return
+                // Refresh failed, but proceed anyway - Hypixel will enforce actual limits
+                log('[BAF]: Failed to refresh order count, attempting order placement anyway (Hypixel will enforce limits)', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §e[Warning] Order count refresh failed, attempting placement...')
+                // Don't return - continue with order placement
             }
         } else {
-            log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
-            return
+            // This is a hard limit from our counts, but still attempt placement
+            log(`[BAF]: Order slots appear full - ${orderCheck.reason}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §e[Warning] ${orderCheck.reason}, attempting placement...`)
+            // Don't return - let Hypixel enforce the actual limit
         }
     }
 
@@ -301,12 +308,17 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
     const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
-    // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
-    // The /bz command expects display names as shown in Hypixel's bazaar UI
-    const searchTerm = itemName || itemTag
-    if (!itemName && itemTag) {
-        log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
-        log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
+    // Prefer itemTag (internal ID like "FLAWED_PERIDOT_GEM") over itemName for /bz command
+    // Using itemTag skips the search results page and goes directly to the item, which is faster
+    // Falls back to itemName if itemTag is not available
+    const searchTerm = itemTag || itemName
+    if (!searchTerm) {
+        throw new Error('Both itemTag and itemName are missing from recommendation')
+    }
+    if (itemTag) {
+        log(`[BazaarDebug] Using itemTag "${itemTag}" for /bz command (faster, skips search results)`, 'info')
+    } else if (itemName) {
+        log(`[BazaarDebug] itemTag not available, using itemName "${itemName}" for /bz command`, 'info')
     }
 
     // Retry loop for order placement
@@ -621,28 +633,32 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Search] Looking for §e${itemName}`)
                     currentStep = 'searchResults'
                     
-                    let itemSlot = -1
-                    for (let i = 0; i < window.slots.length; i++) {
-                        const slot = window.slots[i]
+                    // Use findItemInSearchResults to prefer exact matches
+                    const itemSlot = findItemInSearchResults(window, itemName)
+                    
+                    if (itemSlot === -1) {
+                        // Fallback to slot 11 (first search result position) when no exact match is found.
+                        // This can happen if:
+                        // - The itemName doesn't match any item in search results (typo, changed name)
+                        // - We landed on search results despite using itemTag (server inconsistency)
+                        // - The search results are empty or malformed
+                        // We proceed with the fallback to attempt order placement, which may fail later
+                        // with price failsafe checks if the wrong item was selected.
+                        log(`[BazaarDebug] Item not found by name, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`, 'warn')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`)
+                        await sleep(200)
+                        await clickWindow(bot, FIRST_SEARCH_RESULT_SLOT).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                    } else {
+                        // Get the item name from the slot for logging
+                        const slot = window.slots[itemSlot]
                         const name = removeMinecraftColorCodes(
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
                         )
-                        if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
-                            itemSlot = i
-                            log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
-                            printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
-                            break
-                        }
+                        log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
+                        await sleep(200)
+                        await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                     }
-                    
-                    if (itemSlot === -1) {
-                        // Fallback to slot 11 (first search result position)
-                        itemSlot = 11
-                        log(`[BazaarDebug] Item not found by name, using fallback slot ${itemSlot}`, 'warn')
-                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
-                    }
-                    await sleep(200)
-                    await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
                 // 3. Amount screen - ONLY for buy orders (sell offers skip this step)
                 else if (findSlotWithName(window, 'Custom Amount') !== -1 && isBuyOrder) {

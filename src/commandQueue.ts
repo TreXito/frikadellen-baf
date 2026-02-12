@@ -156,20 +156,20 @@ async function processQueue(bot: MyBot): Promise<void> {
     while (true) {
         if (commandQueue.length === 0) {
             // No commands to process, wait and check again
-            await sleep(75)
+            await sleep(50)
             continue
         }
         
         if (isProcessing) {
             // Already processing a command, wait
-            await sleep(75)
+            await sleep(50)
             continue
         }
         
         // Check if bot is in grace period
         if (bot.state === 'gracePeriod') {
             // Don't process commands during grace period
-            await sleep(300)
+            await sleep(100)
             continue
         }
         
@@ -177,14 +177,14 @@ async function processQueue(bot: MyBot): Promise<void> {
         // This is the ONLY state that should block everything
         if (bot.state === 'purchasing') {
             // Wait for AH flip to complete
-            await sleep(100)
+            await sleep(50)
             continue
         }
         
         // BUG 3: Pause queue while AH flips are pending
         if (areAHFlipsPending()) {
             // Don't process any commands while AH flip is incoming
-            await sleep(100)
+            await sleep(50)
             continue
         }
         
@@ -246,7 +246,7 @@ async function processQueue(bot: MyBot): Promise<void> {
             currentCommand = null
             
             // Small delay between commands to avoid overwhelming the server
-            await sleep(100)
+            await sleep(50)
         }
     }
 }

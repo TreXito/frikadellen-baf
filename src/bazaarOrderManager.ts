@@ -55,16 +55,16 @@ const CLAIM_RETRY_DELAY_MS = 5000
 
 // Constants for claiming filled orders
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
-const CLAIM_DELAY_MS = 150 // Delay in milliseconds between claim attempts
+const CLAIM_DELAY_MS = 50 // Delay in milliseconds between claim attempts
 
 // Delay before immediate order check to ensure command queue is ready
-const IMMEDIATE_CHECK_DELAY_MS = 250
+const IMMEDIATE_CHECK_DELAY_MS = 100
 
 // Delay after clicking an order in Manage Orders for window content to update
-const WINDOW_UPDATE_DELAY_MS = 150
+const WINDOW_UPDATE_DELAY_MS = 50
 
 // Delay between batch order cancellations (to avoid overwhelming the server)
-const BATCH_CANCEL_DELAY_MS = 150
+const BATCH_CANCEL_DELAY_MS = 50
 
 /**
  * Helper: Extract display name from slot NBT data
@@ -328,8 +328,6 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
             return false
         }
         
-        await sleep(150)
-        
         // Click "Manage Orders"
         const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
         if (manageSlot === -1) {
@@ -347,8 +345,6 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
             bot.state = null
             return false
         }
-        
-        await sleep(150)
         
         // Count orders in the window
         countOrdersInWindow(bot.currentWindow)
@@ -428,7 +424,7 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
         
         const windowHandler = async (window) => {
             try {
-                await sleep(300)
+                await sleep(100)
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Discovery window: ${title}`, 'debug')
                 
@@ -436,7 +432,7 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                 if (title.includes('Bazaar') && !clickedManageOrders) {
                     clickedManageOrders = true
                     log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
-                    await sleep(200)
+                    await sleep(50)
                     await clickWindow(bot, 50).catch(err => log(`[OrderManager] Error clicking Manage Orders: ${err}`, 'error'))
                     return
                 }
@@ -691,7 +687,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         
         const windowHandler = async (window) => {
             try {
-                await sleep(200)
+                await sleep(50)
                 const title = getWindowTitle(window)
                 log(`[OrderManager] Claim window: ${title}`, 'debug')
                 
@@ -700,7 +696,7 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     clickedManageOrders = true
                     log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Opening Manage Orders...`)
-                    await sleep(150)
+                    await sleep(50)
                     
                     if (areAHFlipsPending()) {
                         log('[OrderManager] AH flips pending, aborting claim', 'info')
@@ -862,7 +858,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             isManagingOrders = false
             return
         }
-        await sleep(200)
+        await sleep(50)
 
         // Step 2: Click Manage Orders — new window opens
         const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
@@ -877,7 +873,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
         const manageOpened = waitForNewWindow(bot, 5000)
         await clickWindow(bot, manageSlot).catch(() => {})
         await manageOpened
-        await sleep(200)
+        await sleep(50)
 
         if (!bot.currentWindow) {
             log('[OrderManager] Manage Orders window did not open', 'warn')
@@ -927,7 +923,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
             if (cancelSlot !== -1) {
                 await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(250)
+                await sleep(100)
                 
                 const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
                 log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
@@ -957,14 +953,14 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
             // After cancelling, the window should return to the Manage Orders list
             // Wait a moment for it to refresh
-            await sleep(250)
+            await sleep(100)
 
             if (!bot.currentWindow) break
         }
 
         // Close window when done
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        await sleep(200)
+        await sleep(50)
         
         // FEATURE 2: Re-list cancelled sell offers
         for (const order of relistQueue) {
@@ -978,7 +974,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             
             try {
                 await placeBazaarOrder(bot, order.itemName, order.amount, order.pricePerUnit, false)
-                await sleep(400)
+                await sleep(100)
             } catch (err) {
                 log(`[OrderManager] Failed to re-list ${order.itemName}: ${err}`, 'warn')
             }
@@ -1033,7 +1029,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        await sleep(150) // let mineflayer populate bot.currentWindow
+        await sleep(50) // let mineflayer populate bot.currentWindow
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after /bz', 'warn')
@@ -1059,8 +1055,6 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             isManagingOrders = false
             return false
         }
-        
-        await sleep(150)
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
@@ -1251,7 +1245,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             log('[Startup] Bazaar window did not open', 'warn')
             return { cancelled: 0, relisted: 0 }
         }
-        await sleep(200)
+        await sleep(50)
         
         const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
         if (manageSlot === -1) {
@@ -1263,7 +1257,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         const manageOpened = waitForNewWindow(bot, 5000)
         await clickWindow(bot, manageSlot).catch(() => {})
         await manageOpened
-        await sleep(200)
+        await sleep(50)
         
         if (!bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
@@ -1292,7 +1286,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             // All orders found on startup are considered stale (from previous session)
             // Click the order to open it
             await clickWindow(bot, i).catch(() => {})
-            await sleep(250)
+            await sleep(100)
             
             if (!bot.currentWindow) break
             
@@ -1301,7 +1295,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (cancelSlot !== -1) {
                 // Cancel the order
                 await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(250)
+                await sleep(100)
                 
                 cancelledCount++
                 
@@ -1341,13 +1335,13 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             }
             
             // Wait for window to return to Manage Orders list
-            await sleep(250)
+            await sleep(100)
             if (!bot.currentWindow) break
         }
         
         // Close Manage Orders
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        await sleep(200)
+        await sleep(50)
         
         // Re-list cancelled sell offers
         for (const item of relistQueue) {
@@ -1368,7 +1362,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             try {
                 await placeBazaarOrder(bot, item.itemName, item.amount, item.pricePerUnit, false)
                 relistedCount++
-                await sleep(400)
+                await sleep(100)
             } catch (err) {
                 log(`[Startup] Failed to re-list ${item.itemName}: ${err}`, 'warn')
             }

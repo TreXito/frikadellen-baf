@@ -24,7 +24,7 @@ const RETRY_DELAY_MS = 1100
 const OPERATION_TIMEOUT_MS = 20000
 const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
 const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to populate bot.currentWindow
-const BAZAAR_RETRY_DELAY_MS = 500
+const BAZAAR_RETRY_DELAY_MS = 100
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -405,7 +405,6 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
         log(`[BAF] /bz didn't open a window`, 'warn')
         throw new Error('/bz command failed to open window')
     }
-    await sleep(50)
     
     // Step 2: If search results page, find and click the correct item
     const title = getWindowTitle(bot.currentWindow)
@@ -418,11 +417,7 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
             throw new Error(`Item "${itemName}" not found in search results`)
         }
         // Click item — opens new window or same window updates
-        const clicked = await clickAndWaitForWindow(bot, itemSlot, 1500)
-        if (!clicked) {
-            // Maybe same window updated instead
-            await sleep(50)
-        }
+        const clicked = await clickAndWaitForWindow(bot, itemSlot, 1000)
         if (!bot.currentWindow) {
             throw new Error('Window closed after item selection')
         }
@@ -430,28 +425,26 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
     
     // Step 3: Item detail page — click Create Buy Order or Create Sell Offer
     const orderButtonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-    const orderButtonClicked = await findAndClick(bot, orderButtonName, { waitForNewWindow: true })
+    const orderButtonClicked = await findAndClick(bot, orderButtonName, { waitForNewWindow: true, timeout: 1000 })
     if (!orderButtonClicked) {
         log(`[BAF] "${orderButtonName}" button click failed`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         throw new Error(`Failed to click "${orderButtonName}"`)
     }
-    await sleep(50)
     
     // Step 4: Amount step (buy orders only — sell offers skip this)
     if (isBuyOrder) {
         // Find and click Custom Amount — this opens a sign
         const customAmountSlot = findSlotByName(bot.currentWindow, 'Custom Amount')
         if (customAmountSlot !== -1) {
-            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, Math.floor(amount).toString())
+            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, Math.floor(amount).toString(), 300)
             if (!amountSigned) {
                 log(`[BAF] Custom Amount sign failed`, 'warn')
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
                 throw new Error('Failed to set amount')
             }
             // Wait for window to return after sign
-            await waitForNewWindow(bot, 1500)
-            await sleep(50)
+            await waitForNewWindow(bot, 1000)
         }
     }
     
@@ -466,7 +459,7 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
         throw new Error('Custom Price button not found')
     }
     
-    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toFixed(1))
+    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toFixed(1), 300)
     if (!priceSigned) {
         log(`[BAF] Custom Price sign failed`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
@@ -474,15 +467,13 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
     }
     
     // Wait for confirm window after sign
-    await waitForNewWindow(bot, 1500)
-    await sleep(50)
+    await waitForNewWindow(bot, 1000)
     
     // Step 6: Confirm — click slot 13
     if (!bot.currentWindow) {
         throw new Error('Window closed before confirmation')
     }
     await clickWindow(bot, 13).catch(() => {})
-    await sleep(50)
     
     log(`[BAF] Successfully placed ${isBuyOrder ? 'buy order' : 'sell offer'} for ${amount}x ${itemName}`, 'info')
     

@@ -15,6 +15,8 @@ const OPERATION_TIMEOUT_MS = 20000
 const MAX_LOGGED_SLOTS = 15 // Maximum number of slots to log per window to avoid spam
 const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to populate bot.currentWindow
 const BAZAAR_RETRY_DELAY_MS = 2000
+const MAX_ORDER_PLACEMENT_RETRIES = 3 // Maximum number of retries for order placement
+const RETRY_BACKOFF_BASE_MS = 1000 // Base delay for exponential backoff between retries
 // Price failsafe thresholds
 const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 90% of order price
 const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
@@ -296,85 +298,159 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     printMcChatToConsole(`§f[§4BAF§f]: §7Total: §6${recommendation.totalPrice ? recommendation.totalPrice.toFixed(0) : (recommendation.pricePerUnit * recommendation.amount).toFixed(0)} coins`)
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
-    bot.state = 'bazaar'
-    let operationTimeout = setTimeout(() => {
-        if (bot.state === 'bazaar') {
-            log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
-            log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
-            printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
-            bot.state = null
-            // Note: The placeBazaarOrder function will clean up its own listener on timeout
-        }
-    }, OPERATION_TIMEOUT_MS)
-    const bazaarTracking = {
-        windowOpened: false,
-        retryTimer: null as NodeJS.Timeout | null,
-        openTracker: null as ((packet: any) => void) | null
+    const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
+    const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
+
+    // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
+    // The /bz command expects display names as shown in Hypixel's bazaar UI
+    const searchTerm = itemName || itemTag
+    if (!itemName && itemTag) {
+        log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
+        log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
     }
 
-    try {
-        const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
-        const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
-
-        // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
-        // The /bz command expects display names as shown in Hypixel's bazaar UI
-        const searchTerm = itemName || itemTag
-        if (!itemName && itemTag) {
-            log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
-            log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
+    // Retry loop for order placement
+    let lastError: Error | null = null
+    for (let attempt = 1; attempt <= MAX_ORDER_PLACEMENT_RETRIES; attempt++) {
+        bot.state = 'bazaar'
+        let operationTimeout: NodeJS.Timeout | null = null
+        const bazaarTracking = {
+            windowOpened: false,
+            retryTimer: null as NodeJS.Timeout | null,
+            openTracker: null as ((packet: any) => void) | null
         }
-        bazaarTracking.openTracker = (packet) => {
-            if (bazaarTracking.windowOpened) return
-            bazaarTracking.windowOpened = true
-            log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
-        }
-        bot._client.on('open_window', bazaarTracking.openTracker)
-        
-        printMcChatToConsole(
-            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
-        )
 
-        // CRITICAL: Set up listener BEFORE opening bazaar to catch the first window
-        // Use bot._client.on('open_window') for low-level protocol handling
-        // Do NOT use bot.removeAllListeners('windowOpen') as that breaks mineflayer's internal handler
-        log('[BazaarDebug] Setting up window listener for bazaar order placement', 'info')
-        const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
-        
-        // Small delay to ensure Node.js event loop has processed the listener registration
-        // This guarantees the listener is active before the window opens
-        await sleep(100)
-        
-        // Open bazaar for the item - the listener is now ready to catch this event
-        log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
-        log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
-        bazaarTracking.retryTimer = setTimeout(() => {
-            if (!bazaarTracking.windowOpened && bot.state === 'bazaar') {
-                log(`[BazaarDebug] No bazaar GUI opened after initial /bz command, retrying with "/bz ${searchTerm}"`, 'warn')
-                printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Bazaar GUI did not open, retrying command...`)
-                bot.chat(`/bz ${searchTerm}`)
+        try {
+            // Set operation timeout
+            operationTimeout = setTimeout(() => {
+                if (bot.state === 'bazaar') {
+                    log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
+                    log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
+                    printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
+                    bot.state = null
+                    // Note: The placeBazaarOrder function will clean up its own listener on timeout
+                }
+            }, OPERATION_TIMEOUT_MS)
+
+            bazaarTracking.openTracker = (packet) => {
+                if (bazaarTracking.windowOpened) return
+                bazaarTracking.windowOpened = true
+                log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
             }
-        }, BAZAAR_RETRY_DELAY_MS)
-        bot.chat(`/bz ${searchTerm}`)
+            bot._client.on('open_window', bazaarTracking.openTracker)
+            
+            if (attempt > 1) {
+                // This is a retry - log it
+                log(`[BazaarDebug] Retry attempt ${attempt}/${MAX_ORDER_PLACEMENT_RETRIES} for ${itemName}`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Retry] Attempt ${attempt}/${MAX_ORDER_PLACEMENT_RETRIES}`)
+            } else {
+                printMcChatToConsole(
+                    `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
+                )
+            }
 
-        await orderPromise
-        
-        // Record the order for tracking (claiming and cancelling)
-        recordOrder(recommendation)
-        
-        log('[BazaarDebug] ===== BAZAAR FLIP ORDER COMPLETED =====', 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §aSuccessfully placed bazaar order!`)
-    } catch (error) {
-        log(`[BazaarDebug] Error handling bazaar flip: ${error}`, 'error')
-        printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${error}`)
-    } finally {
-        clearTimeout(operationTimeout)
-        if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
-        if (bazaarTracking.openTracker) {
-            bot._client.removeListener('open_window', bazaarTracking.openTracker)
+            // CRITICAL: Set up listener BEFORE opening bazaar to catch the first window
+            // Use bot._client.on('open_window') for low-level protocol handling
+            // Do NOT use bot.removeAllListeners('windowOpen') as that breaks mineflayer's internal handler
+            log('[BazaarDebug] Setting up window listener for bazaar order placement', 'info')
+            const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
+            
+            // Small delay to ensure Node.js event loop has processed the listener registration
+            // This guarantees the listener is active before the window opens
+            await sleep(100)
+            
+            // Open bazaar for the item - the listener is now ready to catch this event
+            log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
+            log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
+            bazaarTracking.retryTimer = setTimeout(() => {
+                if (!bazaarTracking.windowOpened && bot.state === 'bazaar') {
+                    log(`[BazaarDebug] No bazaar GUI opened after initial /bz command, retrying with "/bz ${searchTerm}"`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Bazaar GUI did not open, retrying command...`)
+                    bot.chat(`/bz ${searchTerm}`)
+                }
+            }, BAZAAR_RETRY_DELAY_MS)
+            bot.chat(`/bz ${searchTerm}`)
+
+            await orderPromise
+            
+            // Record the order for tracking (claiming and cancelling)
+            recordOrder(recommendation)
+            
+            log('[BazaarDebug] ===== BAZAAR FLIP ORDER COMPLETED =====', 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §aSuccessfully placed bazaar order!`)
+            
+            // Success! Clean up and return
+            clearTimeout(operationTimeout)
+            if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
+            if (bazaarTracking.openTracker) {
+                bot._client.removeListener('open_window', bazaarTracking.openTracker)
+            }
+            bot.state = null
+            return // Success - exit retry loop
+        } catch (error) {
+            lastError = error as Error
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            
+            // Check if this is a timeout error that we should retry
+            const isTimeoutError = errorMessage.includes('timed out')
+            const isRetryableError = isTimeoutError || errorMessage.includes('Price failsafe')
+            
+            log(`[BazaarDebug] Error handling bazaar flip (attempt ${attempt}/${MAX_ORDER_PLACEMENT_RETRIES}): ${errorMessage}`, 'error')
+            
+            if (attempt < MAX_ORDER_PLACEMENT_RETRIES && isRetryableError) {
+                // Calculate exponential backoff delay
+                const backoffDelay = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt - 1)
+                log(`[BazaarDebug] Will retry after ${backoffDelay}ms delay...`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Retry] Retrying in ${backoffDelay}ms...`)
+                
+                // Clean up before retry
+                if (operationTimeout) clearTimeout(operationTimeout)
+                if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
+                if (bazaarTracking.openTracker) {
+                    bot._client.removeListener('open_window', bazaarTracking.openTracker)
+                }
+                
+                // Close any open windows before retry
+                if (bot.currentWindow) {
+                    try {
+                        bot.closeWindow(bot.currentWindow)
+                    } catch (e) {
+                        log(`[BazaarDebug] Error closing window before retry: ${e}`, 'debug')
+                    }
+                }
+                
+                bot.state = null
+                await sleep(backoffDelay)
+                // Continue to next retry attempt
+            } else {
+                // Either max retries reached or non-retryable error
+                if (!isRetryableError) {
+                    log(`[BazaarDebug] Non-retryable error, aborting: ${errorMessage}`, 'error')
+                    printMcChatToConsole(`§f[§4BAF§f]: §cNon-retryable error: ${errorMessage}`)
+                } else {
+                    log(`[BazaarDebug] Max retries (${MAX_ORDER_PLACEMENT_RETRIES}) reached, giving up`, 'error')
+                    printMcChatToConsole(`§f[§4BAF§f]: §cFailed after ${MAX_ORDER_PLACEMENT_RETRIES} attempts`)
+                }
+                printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${errorMessage}`)
+                
+                // Clean up
+                if (operationTimeout) clearTimeout(operationTimeout)
+                if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
+                if (bazaarTracking.openTracker) {
+                    bot._client.removeListener('open_window', bazaarTracking.openTracker)
+                }
+                bot.state = null
+                
+                // Re-throw the error to propagate it
+                throw lastError
+            }
         }
-        bot.state = null
     }
+    
+    // If we get here, all retries failed
+    bot.state = null
+    throw lastError || new Error('Order placement failed after all retries')
 }
 
 /**

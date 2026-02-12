@@ -1353,11 +1353,19 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             // Read the lore BEFORE clicking (from the Manage Orders list view)
             // Parse fill status, price etc from the lore
-            const lore = getSlotLore(bot.currentWindow.slots[foundOrder.slot])
+            // Safety check: ensure slot still exists and has NBT data (window could have changed)
+            const slot = bot.currentWindow.slots[foundOrder.slot]
+            if (!slot || !slot.nbt) {
+                log(`[Startup] Slot ${foundOrder.slot} no longer valid, re-scanning`, 'debug')
+                continue // Re-scan from beginning
+            }
+            const lore = getSlotLore(slot)
             const orderInfo = parseOrderLore(lore)
             
             // Click the order — window transitions to order detail view
-            await clickWindow(bot, foundOrder.slot).catch(() => {})
+            await clickWindow(bot, foundOrder.slot).catch((err) => {
+                log(`[Startup] Failed to click order slot: ${err}`, 'warn')
+            })
             await sleep(400)
             
             if (!bot.currentWindow) break
@@ -1367,7 +1375,9 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             if (cancelSlot !== -1) {
                 // Cancel it
-                await clickWindow(bot, cancelSlot).catch(() => {})
+                await clickWindow(bot, cancelSlot).catch((err) => {
+                    log(`[Startup] Failed to click cancel button: ${err}`, 'warn')
+                })
                 await sleep(400)
                 
                 // Track for re-listing
@@ -1384,7 +1394,8 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             } else {
                 // No cancel button — fully filled, just claimed
                 if (foundOrder.isBuy) {
-                    // Use filled amount for consistency (orderInfo.amount might be 0 if lore parsing fails)
+                    // Use filled amount for consistency
+                    // Fallback to orderInfo.amount if lore parsing fails for filled field
                     const amount = orderInfo.filled || orderInfo.amount
                     if (amount > 0) {
                         sellQueue.push({ itemName, amount })

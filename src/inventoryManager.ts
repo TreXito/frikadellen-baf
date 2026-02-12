@@ -76,8 +76,10 @@ export function scanInventoryForBazaarItems(bot: MyBot): BazaarItem[] {
             const cleanName = removeMinecraftColorCodes(displayName)
             if (!cleanName) continue
             
-            // Estimate stack value (we don't have exact prices here, so use a heuristic)
-            // For now, just track amount - actual value would need bazaar API lookup
+            // Estimate stack value
+            // TODO: This currently uses item count as a proxy for value
+            // In production, this should use bazaar API to get actual market prices
+            // RISK: Without actual prices, valuable items might be sold at low prices
             const stackValue = item.count // Placeholder: use count as proxy for value
             
             items.push({
@@ -212,7 +214,10 @@ async function createSellOffer(bot: MyBot, itemName: string, amount: number): Pr
             return false
         }
         
-        // Click Custom Price and set a reasonable price (market price - 0.1 coins for quick sell)
+        // Click Custom Price and set a reasonable price
+        // TODO: This should use a percentage of market price (e.g., 95% of buy price)
+        // Currently using 0.1 coins as emergency low price to ensure quick sale
+        // WARNING: This may result in significant value loss on expensive items
         await clickWindow(bot, customPriceSlot)
         await sleep(500)
         
@@ -261,9 +266,12 @@ export async function instasellCheapItems(bot: MyBot): Promise<boolean> {
             return false
         }
         
-        // Filter for cheap items (< 1M coins value)
-        // For now, we'll instasell items with low count as a proxy
-        const cheapItems = items.filter(item => item.stackValue < 64) // Placeholder threshold
+        // Filter for cheap items
+        // TODO: Currently compares item counts, not actual values
+        // Should use bazaar prices once API integration is added
+        // Using threshold of 64 items as a conservative limit
+        const CHEAP_ITEM_THRESHOLD = 64 // Items with count <= 64 considered "cheap" for now
+        const cheapItems = items.filter(item => item.stackValue < CHEAP_ITEM_THRESHOLD)
         
         if (cheapItems.length === 0) {
             log('[InventoryManager] No cheap items found to instasell', 'warn')

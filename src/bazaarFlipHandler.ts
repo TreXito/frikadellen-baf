@@ -198,9 +198,10 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     }
 
     // Proactive inventory check before placing buy orders
+    // Using threshold of 3 free slots to provide adequate buffer
     if (recommendation.isBuyOrder) {
         const freeSlots = getFreeInventorySlots(bot)
-        if (freeSlots <= 1) {
+        if (freeSlots <= 3) {
             log('[BAF] Skipping buy order — inventory nearly full (need to free space first)', 'warn')
             printMcChatToConsole('§f[§4BAF§f]: §c[BAF] Skipping buy order — inventory nearly full')
             // TODO: Could queue auto-sell here and retry later

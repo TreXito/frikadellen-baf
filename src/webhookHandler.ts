@@ -593,11 +593,6 @@ export function sendWebhookBazaarOrderFilled(
                         name: 'Amount',
                         value: `${amount}x`,
                         inline: true
-                    },
-                    {
-                        name: 'Purse',
-                        value: `${formatNumber(purse)} coins`,
-                        inline: true
                     }
                 ],
                 thumbnail: { 

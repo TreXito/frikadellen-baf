@@ -351,6 +351,7 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
 
 /**
  * Place a bazaar order by navigating through the Hypixel bazaar interface
+ * Exported for use by bazaarOrderManager for re-listing cancelled orders
  * 
  * The bazaar interface has multiple steps:
  * 1. Search results (title: "Bazaar ➜ ..." when opened via /bz <item>)
@@ -366,7 +367,7 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
  * @param isBuyOrder True for buy order, false for sell offer
  * @returns Promise that resolves when the order is placed
  */
-function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
+export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let currentStep = 'initial'
 

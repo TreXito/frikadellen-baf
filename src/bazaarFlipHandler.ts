@@ -307,9 +307,12 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     // Using itemTag skips the search results page and goes directly to the item, which is faster
     // Falls back to itemName if itemTag is not available
     const searchTerm = itemTag || itemName
+    if (!searchTerm) {
+        throw new Error('[BazaarDebug] ERROR: Both itemTag and itemName are missing from recommendation')
+    }
     if (itemTag) {
         log(`[BazaarDebug] Using itemTag "${itemTag}" for /bz command (faster, skips search results)`, 'info')
-    } else {
+    } else if (itemName) {
         log(`[BazaarDebug] itemTag not available, using itemName "${itemName}" for /bz command`, 'info')
     }
 

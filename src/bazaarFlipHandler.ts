@@ -415,13 +415,12 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
     
     // Step 3: Item detail page — click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
     const orderButtonSlot = isBuyOrder ? 15 : 16
-    const orderButtonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-    log(`[BAF] Clicking ${orderButtonName} at slot ${orderButtonSlot}`, 'debug')
+    log(`[BAF] Clicking ${isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'} at slot ${orderButtonSlot}`, 'debug')
     const orderButtonClicked = await clickAndWaitForWindow(bot, orderButtonSlot, 1000, 2)
     if (!orderButtonClicked || !bot.currentWindow) {
-        log(`[BAF] "${orderButtonName}" button click failed`, 'warn')
+        log(`[BAF] Order button click failed at slot ${orderButtonSlot}`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        throw new Error(`Failed to click "${orderButtonName}"`)
+        throw new Error(`Failed to click order button at slot ${orderButtonSlot}`)
     }
     
     // Step 4: Amount step (buy orders only — sell offers skip this)

@@ -396,14 +396,14 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                 if (findSlotWithName(window, 'Custom Price') !== -1) {
                     currentStep = 'setPrice'
                     const customPriceSlot = findSlotWithName(window, 'Custom Price')
-                    log(`[SellBZ] Setting price to ${item.pricePerUnit.toFixed(1)}`, 'debug')
+                    log(`[SellBZ] Setting price to ${item.pricePerUnit}`, 'debug')
 
                     // Register sign handler BEFORE clicking
                     bot._client.once('open_sign_entity', ({ location }) => {
-                        log(`[SellBZ] Sign opened, writing price: ${item.pricePerUnit.toFixed(1)}`, 'debug')
+                        log(`[SellBZ] Sign opened, writing price: ${item.pricePerUnit}`, 'debug')
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },
-                            text1: `"${item.pricePerUnit.toFixed(1)}"`,
+                            text1: `"${item.pricePerUnit}"`,
                             text2: SIGN_TEXT_LINE2,
                             text3: SIGN_TEXT_LINE3,
                             text4: SIGN_TEXT_LINE4

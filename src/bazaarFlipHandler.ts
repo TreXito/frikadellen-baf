@@ -797,7 +797,7 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                         
-                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice.toFixed(1) : 'unknown'}, writing: ${pricePerUnit}`, 'info')
+                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice : 'unknown'}, writing: ${pricePerUnit}`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${pricePerUnit}§7 coins`)
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },

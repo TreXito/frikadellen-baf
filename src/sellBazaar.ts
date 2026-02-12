@@ -82,7 +82,7 @@ export async function executeSellBazaar(bot: MyBot): Promise<void> {
         let totalEstimatedValue = 0
         for (const item of itemsWithPrices) {
             printMcChatToConsole(
-                `§f[§4BAF§f]: §7  - §e${item.amount}x ${item.displayName} §7@ §6${item.pricePerUnit}§7 coins each (total: §6${item.totalValue}§7)`
+                `§f[§4BAF§f]: §7  - §e${item.amount}x ${item.displayName} §7@ §6${item.pricePerUnit.toFixed(1)}§7 coins each (total: §6${item.totalValue.toFixed(1)}§7)`
             )
             totalEstimatedValue += item.totalValue
         }

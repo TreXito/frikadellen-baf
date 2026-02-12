@@ -251,18 +251,22 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
-    // Queue the bazaar flip with NORMAL priority and mark as interruptible
-    // This ensures it doesn't interrupt other operations but can be interrupted by AH flips
+    // Queue the bazaar flip with appropriate priority:
+    // - SELL orders use HIGH priority (bypass queue limits, free up inventory)
+    // - BUY orders use NORMAL priority (can be queued/limited)
+    // Both are interruptible by AH flips
     const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
+    const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     
     enqueueCommand(
         commandName,
-        CommandPriority.NORMAL,
+        priority,
         async () => {
             await executeBazaarFlip(bot, recommendation)
         },
-        true // interruptible - can be interrupted by AH flips
+        true, // interruptible - can be interrupted by AH flips
+        recommendation.itemName
     )
 }
 

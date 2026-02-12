@@ -41,7 +41,6 @@ let commandIdCounter = 0
 let queueInitialized = false
 
 // Constants for bazaar queue management
-const MAX_BAZAAR_QUEUE_SIZE = 3
 const BAZAAR_RECOMMENDATION_MAX_AGE_MS = 60000 // 60 seconds
 
 /**
@@ -78,38 +77,23 @@ export function enqueueCommand(
     interruptible: boolean = false,
     itemName?: string
 ): string | null {
-    // Queue limit check only for NORMAL priority bazaar commands (buy orders)
-    // HIGH priority bazaar commands (sell offers) bypass the queue limit
-    if (priority === CommandPriority.NORMAL && name.startsWith('Bazaar ')) {
-        // Count existing bazaar commands in queue
-        const bazaarCommandCount = commandQueue.filter(cmd => 
-            cmd.priority === CommandPriority.NORMAL && cmd.name.startsWith('Bazaar ')
-        ).length
+    // Check for duplicate items in queue (for bazaar commands only)
+    // HIGH priority (sell offers) and NORMAL priority (buy orders) are both checked
+    if (name.startsWith('Bazaar ') && itemName) {
+        const duplicateInQueue = commandQueue.some(cmd => 
+            cmd.name.startsWith('Bazaar ') && 
+            cmd.name.includes(itemName)
+        )
         
-        if (bazaarCommandCount >= MAX_BAZAAR_QUEUE_SIZE) {
-            log(`[BAF] Bazaar queue full (${bazaarCommandCount}/${MAX_BAZAAR_QUEUE_SIZE}), skipping buy order: ${name}`, 'info')
-            printMcChatToConsole(`§f[§4BAF§f]: §c[BAF] Bazaar queue full, skipping buy order`)
+        if (duplicateInQueue) {
+            log(`[BAF] Already have order/queue entry for ${itemName}, skipping`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Already queued: ${itemName}`)
             return null
-        }
-        
-        // BUG 2: Check for duplicate items in queue
-        if (itemName) {
-            const duplicateInQueue = commandQueue.some(cmd => 
-                cmd.priority === CommandPriority.NORMAL && 
-                cmd.name.startsWith('Bazaar ') && 
-                cmd.name.includes(itemName)
-            )
-            
-            if (duplicateInQueue) {
-                log(`[BAF] Already have order/queue entry for ${itemName}, skipping`, 'info')
-                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Already queued: ${itemName}`)
-                return null
-            }
         }
     }
     
-    // HIGH priority bazaar commands (sell offers) skip queue limit checks entirely
-    // They always get queued since they free up inventory space
+    // No arbitrary queue limits - the system will attempt orders and only stop on actual Hypixel errors
+    // Hypixel messages like "may only have X orders" will be detected and handled dynamically
     
     commandIdCounter++
     const id = `cmd_${commandIdCounter}`

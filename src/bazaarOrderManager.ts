@@ -1292,7 +1292,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             // All orders found on startup are considered stale (from previous session)
             // Click the order to open it
             await clickWindow(bot, i).catch(() => {})
-            await sleep(300)
+            await sleep(250)
             
             if (!bot.currentWindow) break
             
@@ -1364,9 +1364,13 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             }
         }
         
-        // List partially filled buy order items as sell offers
-        // For now, we'll skip this as it requires fetching prices from Coflnet
-        // This can be enhanced later if needed
+        // List items from buy orders as sell offers
+        // Currently skipped because it requires fetching current market prices from Coflnet API
+        // The sellQueue contains items from completed/partially filled buy orders
+        // Future enhancement: fetch prices and create sell offers for these items
+        if (sellQueue.length > 0) {
+            log(`[Startup] Skipping sell creation for ${sellQueue.length} buy order item(s) (requires price fetch)`, 'debug')
+        }
         
         log(`[Startup] Order management complete - cancelled ${cancelledCount}, re-listed ${relistedCount}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount} order(s), re-listed ${relistedCount}`)

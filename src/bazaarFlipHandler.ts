@@ -222,16 +222,14 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
                 log('[BAF]: Order count refreshed, proceeding with order placement', 'info')
                 // Check again after refresh
                 const retryCheck = canPlaceOrder(recommendation.isBuyOrder)
-                // Continue if we can place or if it's just another stale check
-                // Only block if it's a confirmed hard limit
-                if (retryCheck.canPlace || retryCheck.needsRefresh) {
-                    // Continue with order placement (Hypixel will enforce actual limits)
-                } else {
+                // Block only if it's a confirmed hard limit (not stale, not can place)
+                if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
                     // Hard limit confirmed after refresh
                     log(`[BAF]: Cannot place order after refresh - ${retryCheck.reason}`, 'warn')
                     printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${retryCheck.reason}`)
                     return
                 }
+                // Otherwise continue with order placement (Hypixel will enforce actual limits)
             } else {
                 // Refresh failed, but proceed anyway - Hypixel will enforce actual limits
                 log('[BAF]: Failed to refresh order count, attempting order placement anyway (Hypixel will enforce limits)', 'warn')

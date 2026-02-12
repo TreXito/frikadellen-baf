@@ -391,8 +391,8 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
         // Wait for window to populate
         await sleep(300)
         
-        // Count orders in the window
-        const counts = countOrdersInWindow(bot.currentWindow)
+        // Count orders in the window (updates global state: currentBazaarOrders, currentBuyOrders)
+        countOrdersInWindow(bot.currentWindow)
         
         // Close window
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)

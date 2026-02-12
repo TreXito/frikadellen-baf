@@ -204,13 +204,14 @@ export async function registerIngameMessageHandler(bot: MyBot) {
             // Detect bazaar order limit messages to dynamically update limits
             // Examples: "[Bazaar] You may only have 25 orders open at once!"
             //           "[Bazaar] You may only have 7 buy orders open at once!"
-            //           "[Bazaar] You can only have X orders at once!"
             if (text.includes('[Bazaar]')) {
                 const cleanText = removeMinecraftColorCodes(text)
+                const lowerCleanText = cleanText.toLowerCase()
                 
-                // Check for limit messages - either "maximum" or "may only have"
-                const hasLimitMessage = cleanText.toLowerCase().includes('maximum') || 
-                                       cleanText.toLowerCase().includes('may only have')
+                // Check for limit messages - "may only have" pattern
+                // Note: The "maximum" check is kept for future compatibility if Hypixel changes message format
+                const hasLimitMessage = lowerCleanText.includes('maximum') || 
+                                       lowerCleanText.includes('may only have')
                 
                 if (hasLimitMessage) {
                     let limitDetected = false

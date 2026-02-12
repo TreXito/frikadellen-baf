@@ -252,7 +252,10 @@ export function updateMaxTotalOrders(limit: number): void {
     if (limit > 0 && limit !== maxTotalOrders) {
         log(`[OrderManager] Updating maxTotalOrders from ${maxTotalOrders} to ${limit}`, 'info')
         maxTotalOrders = limit
-        orderLimitReached = false // Reset limit flag since we now know the actual limit
+        // Reset limit flag only if we're currently below the new limit
+        if (currentBazaarOrders < maxTotalOrders) {
+            orderLimitReached = false
+        }
     }
 }
 
@@ -264,7 +267,10 @@ export function updateMaxBuyOrders(limit: number): void {
     if (limit > 0 && limit !== maxBuyOrders) {
         log(`[OrderManager] Updating maxBuyOrders from ${maxBuyOrders} to ${limit}`, 'info')
         maxBuyOrders = limit
-        buyOrderLimitReached = false // Reset limit flag since we now know the actual limit
+        // Reset limit flag only if we're currently below the new limit
+        if (currentBuyOrders < maxBuyOrders) {
+            buyOrderLimitReached = false
+        }
     }
 }
 

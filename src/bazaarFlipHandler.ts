@@ -393,7 +393,11 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
  * BUG 2: Place a bazaar order by navigating through the Hypixel bazaar interface
  * Now uses resilient helper functions with automatic retries for each step
  */
-async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
+/**
+ * Place a bazaar order (buy or sell)
+ * Exported for use by startupOrderManagement and other modules
+ */
+export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
     // Step 1: /bz command — opens new window
     bot.chat(`/bz ${itemName}`)
     const bazaarOpened = await waitForNewWindow(bot, 5000)
@@ -401,7 +405,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
         log(`[BAF] /bz didn't open a window`, 'warn')
         throw new Error('/bz command failed to open window')
     }
-    await sleep(300)
+    await sleep(200)
     
     // Step 2: If search results page, find and click the correct item
     const title = getWindowTitle(bot.currentWindow)
@@ -417,7 +421,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
         const clicked = await clickAndWaitForWindow(bot, itemSlot, 3000)
         if (!clicked) {
             // Maybe same window updated instead
-            await sleep(400)
+            await sleep(300)
         }
         if (!bot.currentWindow) {
             throw new Error('Window closed after item selection')
@@ -432,7 +436,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         throw new Error(`Failed to click "${orderButtonName}"`)
     }
-    await sleep(300)
+    await sleep(200)
     
     // Step 4: Amount step (buy orders only — sell offers skip this)
     if (isBuyOrder) {
@@ -447,7 +451,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
             }
             // Wait for window to return after sign
             await waitForNewWindow(bot, 3000)
-            await sleep(300)
+            await sleep(200)
         }
     }
     
@@ -471,14 +475,14 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
     
     // Wait for confirm window after sign
     await waitForNewWindow(bot, 3000)
-    await sleep(300)
+    await sleep(200)
     
     // Step 6: Confirm — click slot 13
     if (!bot.currentWindow) {
         throw new Error('Window closed before confirmation')
     }
     await clickWindow(bot, 13).catch(() => {})
-    await sleep(500)
+    await sleep(300)
     
     log(`[BAF] Successfully placed ${isBuyOrder ? 'buy order' : 'sell offer'} for ${amount}x ${itemName}`, 'info')
     

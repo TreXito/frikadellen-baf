@@ -178,7 +178,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -246,6 +246,21 @@ function formatNumber(num: number): string {
     }
 }
 
+/**
+ * Format purse amount with B/M/K suffixes for better readability
+ * Examples: 1404040000 -> "1.40b", 96532000 -> "96.53m", 590278 -> "590.3k"
+ */
+function formatPurse(amount: number): string {
+    if (amount >= 1_000_000_000) {
+        return `${(amount / 1_000_000_000).toFixed(2)}b`
+    } else if (amount >= 1_000_000) {
+        return `${(amount / 1_000_000).toFixed(2)}m`
+    } else if (amount >= 1_000) {
+        return `${(amount / 1_000).toFixed(1)}k`
+    }
+    return amount.toLocaleString()
+}
+
 export function sendWebhookItemSold(itemName: string, price: string, purchasedBy: string) {
     if (!isWebhookConfigured()) {
         return
@@ -295,7 +310,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -371,7 +386,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -422,7 +437,7 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -493,7 +508,7 @@ export function sendWebhookBazaarOrderCancelled(
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -550,7 +565,7 @@ export function sendWebhookBazaarOrderClaimed(
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -599,7 +614,7 @@ export function sendWebhookBazaarOrderFilled(
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    text: `BAF • ${ingameName} • Purse: ${formatPurse(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -684,7 +699,7 @@ export function sendWebhookProfitReport(stats: {
                     },
                     {
                         name: '💵 Current Purse',
-                        value: `\`\`\`fix\n${formatNumber(purse)} coins\n\`\`\``,
+                        value: `\`\`\`fix\n${formatPurse(purse)} coins\n\`\`\``,
                         inline: true
                     }
                 ],

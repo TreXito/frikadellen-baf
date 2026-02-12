@@ -55,16 +55,16 @@ const CLAIM_RETRY_DELAY_MS = 5000
 
 // Constants for claiming filled orders
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
-const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
+const CLAIM_DELAY_MS = 150 // Delay in milliseconds between claim attempts
 
 // Delay before immediate order check to ensure command queue is ready
-const IMMEDIATE_CHECK_DELAY_MS = 2000
+const IMMEDIATE_CHECK_DELAY_MS = 250
 
 // Delay after clicking an order in Manage Orders for window content to update
-const WINDOW_UPDATE_DELAY_MS = 400
+const WINDOW_UPDATE_DELAY_MS = 150
 
 // Delay between batch order cancellations (to avoid overwhelming the server)
-const BATCH_CANCEL_DELAY_MS = 300
+const BATCH_CANCEL_DELAY_MS = 150
 
 /**
  * Helper: Extract display name from slot NBT data

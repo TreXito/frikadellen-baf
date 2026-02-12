@@ -426,43 +426,38 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
         }
     }
     
-    // Step 3: Item detail page — click Create Buy Order or Create Sell Offer
+    // Step 3: Item detail page — click Create Buy Order (slot 15) or Create Sell Offer (slot 16)
+    const orderButtonSlot = isBuyOrder ? 15 : 16
     const orderButtonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-    const orderButtonClicked = await findAndClick(bot, orderButtonName, { waitForNewWindow: true, timeout: 1000 })
-    if (!orderButtonClicked) {
+    log(`[BAF] Clicking ${orderButtonName} at slot ${orderButtonSlot}`, 'debug')
+    const orderButtonClicked = await clickAndWaitForWindow(bot, orderButtonSlot, 1000, 2)
+    if (!orderButtonClicked || !bot.currentWindow) {
         log(`[BAF] "${orderButtonName}" button click failed`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         throw new Error(`Failed to click "${orderButtonName}"`)
     }
     
     // Step 4: Amount step (buy orders only — sell offers skip this)
+    // Buy orders: "How Many Do You Want?" page with Custom Amount at slot 16
     if (isBuyOrder) {
-        // Find and click Custom Amount — this opens a sign
-        const customAmountSlot = findSlotByName(bot.currentWindow, 'Custom Amount')
-        if (customAmountSlot !== -1) {
-            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, Math.floor(amount).toString())
-            if (!amountSigned) {
-                log(`[BAF] Custom Amount sign failed`, 'warn')
-                if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-                throw new Error('Failed to set amount')
-            }
-            // Wait for window to return after sign
-            await waitForNewWindow(bot, 1000)
+        log(`[BAF] Setting amount ${amount} via slot 16 (Custom Amount)`, 'debug')
+        const amountSigned = await clickAndWaitForSign(bot, 16, Math.floor(amount).toString())
+        if (!amountSigned) {
+            log(`[BAF] Custom Amount sign failed`, 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            throw new Error('Failed to set amount')
         }
+        // Wait for window to return after sign
+        await waitForNewWindow(bot, 1000)
     }
     
-    // Step 5: Price step — click Custom Price, opens a sign
+    // Step 5: Price step — Custom Price at slot 16 (both buy and sell)
     if (!bot.currentWindow) {
         throw new Error('Window closed before price step')
     }
-    const customPriceSlot = findSlotByName(bot.currentWindow, 'Custom Price')
-    if (customPriceSlot === -1) {
-        log(`[BAF] Custom Price button not found`, 'warn')
-        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        throw new Error('Custom Price button not found')
-    }
     
-    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toFixed(1))
+    log(`[BAF] Setting price ${pricePerUnit.toFixed(1)} via slot 16 (Custom Price)`, 'debug')
+    const priceSigned = await clickAndWaitForSign(bot, 16, pricePerUnit.toFixed(1))
     if (!priceSigned) {
         log(`[BAF] Custom Price sign failed`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)

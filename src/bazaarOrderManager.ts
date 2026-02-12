@@ -328,16 +328,9 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
             return false
         }
         
-        // Click "Manage Orders"
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            return false
-        }
-        
+        // Click "Manage Orders" at slot 50
         const manageWindow = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         const manageOpened = await manageWindow
         
         if (!manageOpened || !bot.currentWindow) {
@@ -860,18 +853,9 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
         }
         await sleep(50)
 
-        // Step 2: Click Manage Orders — new window opens
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            log('[OrderManager] Could not find Manage Orders button', 'warn')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            bot.state = null
-            isManagingOrders = false
-            return
-        }
-
+        // Step 2: Click Manage Orders at slot 50 — new window opens
         const manageOpened = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         await manageOpened
         await sleep(50)
 
@@ -919,15 +903,13 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
             if (!bot.currentWindow) break
 
-            // Find and click Cancel Order
-            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-            if (cancelSlot !== -1) {
-                await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(100)
-                
-                const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
-                log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
-                printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+            // Click Cancel Order at slot 13 (per bazaar slot reference)
+            await clickWindow(bot, 13).catch(() => {})
+            await sleep(100)
+            
+            const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+            log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
                 
                 // FEATURE 2: Add cancelled sell offers to re-list queue
                 if (!order.isBuyOrder && order.pricePerUnit > 0 && order.amount > 0) {
@@ -945,9 +927,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
                     order.filled || 0,
                     order.totalAmount || order.amount
                 )
-            } else {
-                log(`[OrderManager] No Cancel Order for ${order.itemName} — may be fully filled`, 'info')
-            }
 
             order.cancelled = true
 
@@ -1046,10 +1025,10 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        // Step 2: Click "Manage Orders" using resilient helper — this opens a NEW window
-        const manageSuccess = await findAndClick(bot, 'Manage Orders', { waitForNewWindow: true, timeout: 5000 })
-        if (!manageSuccess) {
-            log('[OrderManager] Could not find or click Manage Orders button', 'warn')
+        // Step 2: Click "Manage Orders" at slot 50 — this opens a NEW window
+        const manageSuccess = await clickAndWaitForWindow(bot, 50, 5000, 2)
+        if (!manageSuccess || !bot.currentWindow) {
+            log('[OrderManager] Could not click Manage Orders button', 'warn')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
@@ -1132,21 +1111,8 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-        
-        if (cancelSlot === -1) {
-            // No cancel button — order is fully filled
-            log(`[OrderManager] No Cancel Order button — order may be fully filled`, 'info')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            order.claimed = true
-            cleanupTrackedOrders()
-            bot.state = null
-            isManagingOrders = false
-            return true
-        }
-        
-        // Step 6: Click "Cancel Order" using resilient helper — SAME WINDOW UPDATES
-        const cancelSuccess = await clickAndWaitForUpdate(bot, cancelSlot, 300)
+        // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
+        const cancelSuccess = await clickAndWaitForUpdate(bot, 13, 300)
         if (cancelSuccess) {
             log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
@@ -1247,15 +1213,9 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         }
         await sleep(50)
         
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            log('[Startup] Could not find Manage Orders button', 'warn')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-            return { cancelled: 0, relisted: 0 }
-        }
-        
+        // Click Manage Orders at slot 50
         const manageOpened = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
+        await clickWindow(bot, 50).catch(() => {})
         await manageOpened
         await sleep(50)
         
@@ -1290,49 +1250,34 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             if (!bot.currentWindow) break
             
-            // Find Cancel Order button
-            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
-            if (cancelSlot !== -1) {
-                // Cancel the order
-                await clickWindow(bot, cancelSlot).catch(() => {})
-                await sleep(100)
-                
-                cancelledCount++
-                
-                if (!isBuy) {
-                    // Sell offer cancelled — add to re-list queue
-                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
-                        relistQueue.push({
-                            itemName,
-                            pricePerUnit: orderInfo.pricePerUnit,
-                            amount: orderInfo.remaining
-                        })
-                        log(`[Startup] Will re-list: ${orderInfo.remaining}x ${itemName} at ${orderInfo.pricePerUnit}`, 'debug')
-                    }
-                } else {
-                    // Buy order cancelled — sell any claimed items
-                    if (orderInfo.filled > 0) {
-                        sellQueue.push({
-                            itemName,
-                            amount: orderInfo.filled
-                        })
-                        log(`[Startup] Will sell ${orderInfo.filled}x ${itemName} from filled buy order`, 'debug')
-                    }
+            // Click Cancel Order at slot 13
+            await clickWindow(bot, 13).catch(() => {})
+            await sleep(100)
+            
+            cancelledCount++
+            
+            if (!isBuy) {
+                // Sell offer cancelled — add to re-list queue
+                if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
+                    relistQueue.push({
+                        itemName,
+                        pricePerUnit: orderInfo.pricePerUnit,
+                        amount: orderInfo.remaining
+                    })
+                    log(`[Startup] Will re-list: ${orderInfo.remaining}x ${itemName} at ${orderInfo.pricePerUnit}`, 'debug')
                 }
-                
-                log(`[Startup] Cancelled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             } else {
-                // No cancel button — fully filled, just claimed
-                if (isBuy && orderInfo.amount > 0) {
-                    // Items from filled buy order should be sold
+                // Buy order cancelled — sell any claimed items
+                if (orderInfo.filled > 0) {
                     sellQueue.push({
                         itemName,
-                        amount: orderInfo.amount
+                        amount: orderInfo.filled
                     })
-                    log(`[Startup] Will sell ${orderInfo.amount}x ${itemName} from completed buy order`, 'debug')
+                    log(`[Startup] Will sell ${orderInfo.filled}x ${itemName} from filled buy order`, 'debug')
                 }
-                log(`[Startup] Claimed fully filled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             }
+            
+            log(`[Startup] Cancelled ${isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             
             // Wait for window to return to Manage Orders list
             await sleep(100)

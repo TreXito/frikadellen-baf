@@ -755,7 +755,9 @@ async function checkOrders(bot: MyBot): Promise<void> {
             const age = now - order.placedAt
             const ageMinutes = Math.floor(age / 60000)
             const isStale = age > cancelTimeoutMs
-            log(`[OrderManager] - ${order.itemName} (${order.isBuyOrder ? 'buy' : 'sell'}): age ${ageMinutes}min, stale: ${isStale}, filled: ${order.isFullyFilled ? 'yes' : 'no'}`, 'debug')
+            const orderType = order.isBuyOrder ? 'buy' : 'sell'
+            const fillStatus = order.isFullyFilled ? 'yes' : 'no'
+            log(`[OrderManager] - ${order.itemName} (${orderType}): age ${ageMinutes}min, stale: ${isStale}, filled: ${fillStatus}`, 'debug')
         })
     } else {
         log('[OrderManager] No active orders being tracked', 'debug')

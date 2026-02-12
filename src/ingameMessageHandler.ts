@@ -9,6 +9,7 @@ import { trackFlipPurchase } from './flipTracker'
 import { claimFilledOrders, markOrderClaimed, refreshOrderCounts, updateMaxTotalOrders, updateMaxBuyOrders } from './bazaarOrderManager'
 import { handleInventoryFull } from './inventoryManager'
 import { clearAHFlipsPending } from './bazaarFlipPauser'
+import { enqueueCommand, CommandPriority } from './commandQueue'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -95,7 +96,6 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 log('New item sold - queuing claim with HIGH priority')
                 
                 // Queue the claim with HIGH priority so it runs immediately after current task
-                const { enqueueCommand, CommandPriority } = require('./commandQueue')
                 enqueueCommand(
                     'Claim Sold Auction',
                     CommandPriority.HIGH,

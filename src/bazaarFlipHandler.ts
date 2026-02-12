@@ -217,65 +217,49 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
-    // Check if we can place the order (dynamic slot checking)
-    const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
-    if (!orderCheck.canPlace) {
-        // If order count needs refresh, try to refresh it
-        if (orderCheck.needsRefresh) {
-            log('[BAF]: Order count is stale, refreshing...', 'info')
-            const refreshed = await refreshOrderCounts(bot)
-            if (refreshed) {
-                // Re-check after refresh
-                const recheckOrder = canPlaceOrder(recommendation.isBuyOrder)
-                if (!recheckOrder.canPlace) {
-                    log(`[BAF]: Cannot place order after refresh - ${recheckOrder.reason}`, 'warn')
-                    printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${recheckOrder.reason}`)
+    // Only buy orders are subject to queue limit and order slot checks
+    if (recommendation.isBuyOrder) {
+        // Check if we can place the order (dynamic slot checking)
+        const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
+        if (!orderCheck.canPlace) {
+            // If order count needs refresh, try to refresh it
+            if (orderCheck.needsRefresh) {
+                log('[BAF]: Order count is stale, refreshing...', 'info')
+                const refreshed = await refreshOrderCounts(bot)
+                if (refreshed) {
+                    // Re-check after refresh
+                    const recheckOrder = canPlaceOrder(recommendation.isBuyOrder)
+                    if (!recheckOrder.canPlace) {
+                        log(`[BAF]: Cannot place order after refresh - ${recheckOrder.reason}`, 'warn')
+                        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${recheckOrder.reason}`)
+                        return
+                    }
+                    // If can place after refresh, continue
+                } else {
+                    log('[BAF]: Failed to refresh order count, skipping order', 'warn')
                     return
                 }
-                // If can place after refresh, continue
             } else {
-                log('[BAF]: Failed to refresh order count, skipping order', 'warn')
+                log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
                 return
             }
-        } else {
-            log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
+        }
+    }
+    // Sell offers — skip order slot checks entirely
+
+    // Feature 6: Check if bot can afford the order (buy orders only)
+    if (recommendation.isBuyOrder) {
+        const totalCost = recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)
+        const currentPurse = getCurrentPurse()
+        
+        if (currentPurse > 0 && currentPurse < totalCost) {
+            log(`[BAF] Cannot place buy order - insufficient funds (purse: ${currentPurse}, cost: ${totalCost})`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place buy order - insufficient funds`)
             return
         }
     }
-
-    // Feature 6: Check if bot can afford the order
-    const totalPrice = recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)
-    const currentPurse = getCurrentPurse()
-    
-    // TEMPORARY: Verbose debug logging to diagnose purse parsing issue
-    log(`[PurseDebug] currentPurse = ${currentPurse}`, 'info')
-    log(`[PurseDebug] bot.scoreboard keys = ${Object.keys(bot.scoreboard || {})}`, 'info')
-    log(`[PurseDebug] bot.scoreboard.sidebar = ${!!bot.scoreboard?.sidebar}`, 'info')
-    if (bot.scoreboard?.sidebar) {
-        log(`[PurseDebug] sidebar.items count = ${bot.scoreboard.sidebar.items?.length}`, 'info')
-        // Log first 5 items to see the structure
-        const items = bot.scoreboard.sidebar.items || []
-        for (let i = 0; i < Math.min(5, items.length); i++) {
-            const item = items[i]
-            log(`[PurseDebug] item[${i}] = ${JSON.stringify({
-                name: item?.name,
-                displayName: item?.displayName?.toString?.(),
-                displayNameText: item?.displayName?.getText?.(null),
-                value: item?.value,
-                keys: Object.keys(item || {})
-            })}`, 'info')
-        }
-    }
-    
-    // TEMPORARY: Don't block orders on purse check until we fix parsing
-    // TODO: re-enable when purse parsing works
-    // if (currentPurse > 0 && totalPrice > currentPurse) {
-    //     log(`[BAF]: Cannot place order - insufficient funds (need ${totalPrice.toFixed(0)}, have ${currentPurse.toFixed(0)})`, 'warn')
-    //     printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - insufficient funds`)
-    //     return
-    // }
-    log(`[BAF] Purse check: ${currentPurse} vs cost ${totalPrice} (check disabled until parsing fixed)`, 'debug')
+    // Sell offers — skip insufficient funds check entirely
 
     // Check if bazaar flips are paused due to incoming AH flip
     if (areBazaarFlipsPaused()) {
@@ -294,15 +278,17 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         // This is handled in the commandQueue now
     }
 
-    // Queue the bazaar flip with NORMAL priority and mark as interruptible
-    // This ensures it doesn't interrupt other operations but can be interrupted by AH flips
+    // Queue the bazaar flip with priority based on order type
+    // Sell offers get HIGH priority (process first), buy orders get NORMAL priority
+    // This ensures sell offers (which free inventory) are processed before buy orders
     const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
+    const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
     // Pass item name for duplicate detection
     enqueueCommand(
         commandName,
-        CommandPriority.NORMAL,
+        priority,
         async () => {
             await executeBazaarFlip(bot, recommendation)
         },

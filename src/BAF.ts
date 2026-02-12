@@ -690,21 +690,11 @@ async function onScoreboardChanged() {
             // Parse purse from scoreboard (Feature 6)
             parsePurseFromScoreboard(scoreboardData)
             
-            // Set up scoreboard event listeners to continuously update purse
-            // Try both scoreboardPosition and scoreboardUpdated events
-            bot.on('scoreboardPosition' as any, () => {
-                currentPurse = getPurseFromScoreboard(bot)
-            })
-            
-            // Also try the scoreboardUpdated event if it exists
-            bot.on('scoreboardUpdated' as any, () => {
-                currentPurse = getPurseFromScoreboard(bot)
-            })
-            
-            // Listen for scoreboardObjective event as well
-            bot.on('scoreboardObjective' as any, () => {
-                currentPurse = getPurseFromScoreboard(bot)
-            })
+            // Set up 5-second interval to regularly update purse
+            setInterval(() => {
+                const purse = getPurseFromScoreboard(bot)
+                if (purse > 0) currentPurse = purse
+            }, 5000)
             
             wss.send(
                 JSON.stringify({
@@ -795,58 +785,28 @@ export function getCoflnetPremiumInfo() {
 
 /**
  * Parse purse amount from scoreboard using bot.scoreboard API
+ * Uses the exact pattern from sendScoreboard(): item.displayName.getText(null).replace(item.name, '')
  * Scoreboard line format: "Purse: 1,151,612,206" or "Purse: 1,151,612,206 (+5)"
  * Also handles "Piggy:" for piggy bank variant
  */
 function getPurseFromScoreboard(bot: MyBot): number {
     try {
-        // Mineflayer scoreboard: bot.scoreboard.sidebar contains the sidebar objective
-        const sidebar = bot.scoreboard?.sidebar
-        if (!sidebar) {
-            log('[Scoreboard] sidebar does not exist', 'debug')
-            return 0
-        }
+        if (!bot?.scoreboard?.sidebar?.items) return 0
 
-        // Add extensive debug logging (first time only - use a flag)
-        if (!(bot as any)._purseDebugLogged) {
-            log(`[Scoreboard] sidebar exists: ${!!bot.scoreboard?.sidebar}`, 'debug')
-            log(`[Scoreboard] sidebar items count: ${bot.scoreboard?.sidebar?.items?.length || 0}`, 'debug')
-            if (bot.scoreboard?.sidebar?.items) {
-                for (const item of bot.scoreboard.sidebar.items) {
-                    log(`[Scoreboard] item: ${JSON.stringify({
-                        name: item.name,
-                        displayName: item.displayName?.toString?.() || item.displayName?.getText?.(null),
-                        value: (item as any).value
-                    })}`, 'debug')
-                }
-            }
-            ;(bot as any)._purseDebugLogged = true
-        }
-
-        // sidebar.items is an array of scoreboard entries
-        // Each entry has a .displayName or .name that contains the text
-        for (const item of sidebar.items) {
-            // Get the display text — may be in item.displayName.toString() or item.displayName.getText()
-            const text = removeMinecraftColorCodes(
-                item.displayName?.toString?.() || item.displayName?.getText?.(null) || item.name || ''
-            )
-
-            // Look for "Purse:" or "Piggy:" (piggy bank variant)
+        for (const item of bot.scoreboard.sidebar.items) {
+            const text = item.displayName.getText(null).replace(item.name, '')
             if (text.includes('Purse:') || text.includes('Piggy:')) {
-                // Extract number: "Purse: 1,151,612,206 (+5)" → 1151612206
-                const match = text.match(/(?:Purse|Piggy):\s*([\d,]+)/)
+                // Strip color codes, then extract the number
+                const clean = removeMinecraftColorCodes(text)
+                const match = clean.match(/(?:Purse|Piggy):\s*([\d,]+)/)
                 if (match) {
-                    const purseValue = parseInt(match[1].replace(/,/g, ''), 10)
-                    if (!isNaN(purseValue)) {
-                        log(`[Purse] Current purse: ${purseValue.toLocaleString()} coins`, 'debug')
-                        return purseValue
-                    }
+                    return parseInt(match[1].replace(/,/g, ''), 10)
                 }
             }
         }
         return 0
     } catch (e) {
-        log(`Error parsing purse from scoreboard: ${e}`, 'debug')
+        log(`Error parsing purse: ${e}`, 'debug')
         return 0
     }
 }

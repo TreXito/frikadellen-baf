@@ -1317,7 +1317,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                     }
                 } else {
                     // Buy order cancelled — sell any claimed items
-                    if (orderInfo.filled && orderInfo.filled > 0) {
+                    if (orderInfo.filled > 0) {
                         sellQueue.push({
                             itemName,
                             amount: orderInfo.filled
@@ -1351,7 +1351,17 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         
         // Re-list cancelled sell offers
         for (const item of relistQueue) {
-            if (item.amount <= 0 || item.pricePerUnit <= 0) continue
+            // Defensive check: skip invalid entries (in case lore parsing failed)
+            if (item.amount <= 0 || item.pricePerUnit <= 0) {
+                log(`[Startup] Skipping invalid re-list entry for ${item.itemName}`, 'debug')
+                continue
+            }
+            
+            if (areAHFlipsPending()) {
+                log('[Startup] AH flips incoming, skipping re-listing', 'info')
+                break
+            }
+            
             log(`[Startup] Re-listing sell offer: ${item.amount}x ${item.itemName} at ${item.pricePerUnit}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${item.itemName}`)
             

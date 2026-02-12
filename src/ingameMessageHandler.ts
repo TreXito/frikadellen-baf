@@ -2,11 +2,13 @@ import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { ChatMessage } from 'prismarine-chat'
-import { sendWebhookItemPurchased, sendWebhookItemSold } from './webhookHandler'
+import { sendWebhookItemPurchased, sendWebhookItemSold, sendWebhookBazaarOrderFilled } from './webhookHandler'
 import { getCurrentWebsocket } from './BAF'
 import { getWhitelistedData, getCurrentFlip, clearCurrentFlip, getPurchaseStartTime, clearPurchaseStartTime } from './flipHandler'
 import { trackFlipPurchase } from './flipTracker'
 import { claimFilledOrders, markOrderClaimed } from './bazaarOrderManager'
+import { handleInventoryFull } from './inventoryManager'
+import { clearAHFlipsPending } from './bazaarFlipPauser'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -42,6 +44,9 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             if (text.startsWith('You purchased')) {
+                // BUG 3: Clear AH flips pending flag after purchase
+                clearAHFlipsPending()
+                
                 wss.send(
                     JSON.stringify({
                         type: 'uploadTab',
@@ -112,22 +117,34 @@ export async function registerIngameMessageHandler(bot: MyBot) {
             // Handles both buy order fills and sell offer fills
             if (text.includes('[Bazaar]') && text.includes('was filled!')) {
                 let itemName = ''
+                let amount = 0
                 let isBuyOrder = false
                 
                 if (text.includes('Buy Order')) {
                     log('Bazaar buy order filled, claiming via order manager', 'info')
                     isBuyOrder = true
-                    // Extract item name: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Buy Order for \d+x (.+) was filled!/)
-                    if (match) itemName = match[1].trim()
+                    // Extract item name and amount: "[Bazaar] Your Buy Order for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Buy Order for (\d+)x (.+) was filled!/)
+                    if (match) {
+                        amount = parseInt(match[1], 10)
+                        itemName = match[2].trim()
+                    }
                 } else if (text.includes('Sell Offer')) {
                     log('Bazaar sell offer filled, claiming via order manager', 'info')
                     isBuyOrder = false
-                    // Extract item name: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
-                    const match = text.match(/Sell Offer for \d+x (.+) was filled!/)
-                    if (match) itemName = match[1].trim()
+                    // Extract item name and amount: "[Bazaar] Your Sell Offer for 64x ☘ Flawed Peridot Gemstone was filled!"
+                    const match = text.match(/Sell Offer for (\d+)x (.+) was filled!/)
+                    if (match) {
+                        amount = parseInt(match[1], 10)
+                        itemName = match[2].trim()
+                    }
                 } else {
                     log('Bazaar order filled, claiming via order manager', 'info')
+                }
+                
+                // Send webhook for filled order
+                if (itemName && amount > 0) {
+                    sendWebhookBazaarOrderFilled(itemName, amount, isBuyOrder)
                 }
                 
                 // Mark as claimed immediately to prevent cancellation attempts
@@ -179,6 +196,17 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     log('[BAF]: Bazaar daily sell limit reset', 'info')
                     printMcChatToConsole('§f[§4BAF§f]: §aBazaar daily sell limit reset')
                 }, 24 * 60 * 60 * 1000) // 24 hours
+            }
+            
+            // Detect "You don't have the space required to claim that!" message
+            if (text.includes("You don't have the space required to claim that!")) {
+                log('[BAF]: Inventory full detected - triggering inventory management', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §c[InventoryFull] Cannot claim - inventory full!')
+                
+                // Trigger inventory management in background
+                handleInventoryFull(bot).catch(err => {
+                    log(`[BAF]: Error handling inventory full: ${err}`, 'error')
+                })
             }
         }
     })

@@ -33,9 +33,12 @@ let checkTimer: NodeJS.Timeout | null = null
 // Flag to track if we're currently managing orders
 let isManagingOrders = false
 
-// Dynamic order slot limits (defaults to Hypixel's known limits, updated when errors occur)
-let maxTotalOrders = 14
+// Dynamic order slot limits (defaults to Hypixel's known limits, updated dynamically)
+let maxTotalOrders = 21 // Default to 21, will be updated from Manage Orders window
 let maxBuyOrders = 7
+let currentBazaarOrders = 0
+let currentBuyOrders = 0
+let lastOrderCountUpdate = 0 // Timestamp of last order count update
 
 // Flag to track if we hit a limit (to avoid spamming attempts)
 let orderLimitReached = false
@@ -52,10 +55,10 @@ const CLAIM_DELAY_MS = 300 // Delay in milliseconds between claim attempts
 const IMMEDIATE_CHECK_DELAY_MS = 2000
 
 // Delay after clicking an order in Manage Orders for window content to update
-const WINDOW_UPDATE_DELAY_MS = 300
+const WINDOW_UPDATE_DELAY_MS = 400
 
 // Delay between batch order cancellations (to avoid overwhelming the server)
-const BATCH_CANCEL_DELAY_MS = 500
+const BATCH_CANCEL_DELAY_MS = 300
 
 /**
  * Helper: Extract display name from slot NBT data
@@ -95,6 +98,49 @@ function waitForNewWindow(bot: MyBot, timeout: number): Promise<boolean> {
         
         bot._client.once('open_window', handler)
     })
+}
+
+/**
+ * Count orders in the Manage Orders window
+ * Updates the global order counts and max limits
+ * @param window The Manage Orders window
+ * @returns Object with total, buy, and sell order counts
+ */
+function countOrdersInWindow(window: any): { total: number, buy: number, sell: number } {
+    let buy = 0
+    let sell = 0
+    
+    if (!window || !window.slots) {
+        return { total: 0, buy: 0, sell: 0 }
+    }
+    
+    for (let i = 0; i < window.slots.length; i++) {
+        const slot = window.slots[i]
+        if (!slot || !slot.nbt) continue
+        const name = removeMinecraftColorCodes(getSlotName(slot))
+        if (name.startsWith('BUY ')) buy++
+        else if (name.startsWith('SELL ')) sell++
+    }
+    
+    const total = buy + sell
+    
+    // Update global counts
+    currentBazaarOrders = total
+    currentBuyOrders = buy
+    lastOrderCountUpdate = Date.now()
+    
+    // Try to infer max total orders from window size or use higher default
+    // Manage Orders window typically has more slots than just the orders
+    // We can't reliably detect the max from the window itself, so we update based on actual usage
+    // If we see more orders than current max, update the max
+    if (total > maxTotalOrders) {
+        maxTotalOrders = total
+        log(`[OrderManager] Updated maxTotalOrders to ${maxTotalOrders} based on observed orders`, 'info')
+    }
+    
+    log(`[OrderManager] Order count: ${total} total (${buy} buy, ${sell} sell), max: ${maxTotalOrders}`, 'debug')
+    
+    return { total, buy, sell }
 }
 
 /**
@@ -158,18 +204,28 @@ export function getOrderCounts(): { totalOrders: number, buyOrders: number, maxT
 
 /**
  * Check if we can place a new order based on current counts
+ * If the order count is stale (>2 minutes), returns false to trigger refresh
  * @param isBuyOrder Whether the order is a buy order
  * @returns Object with canPlace flag and reason if false
  */
-export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?: string } {
-    const { totalOrders, buyOrders } = getOrderCounts()
+export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?: string, needsRefresh?: boolean } {
+    // Check if order count is stale (older than 2 minutes)
+    const now = Date.now()
+    const twoMinutes = 2 * 60 * 1000
+    const isStale = (now - lastOrderCountUpdate) > twoMinutes
     
-    if (totalOrders >= maxTotalOrders) {
-        return { canPlace: false, reason: `Total order slots full (${totalOrders}/${maxTotalOrders})` }
+    if (isStale && lastOrderCountUpdate > 0) {
+        log('[OrderManager] Order count is stale (>2 minutes), needs refresh', 'debug')
+        return { canPlace: false, reason: 'Order count needs refresh', needsRefresh: true }
     }
     
-    if (isBuyOrder && buyOrders >= maxBuyOrders) {
-        return { canPlace: false, reason: `Buy order slots full (${buyOrders}/${maxBuyOrders})` }
+    // Use current counts from last Manage Orders scan
+    if (currentBazaarOrders >= maxTotalOrders) {
+        return { canPlace: false, reason: `Total order slots full (${currentBazaarOrders}/${maxTotalOrders})` }
+    }
+    
+    if (isBuyOrder && currentBuyOrders >= maxBuyOrders) {
+        return { canPlace: false, reason: `Buy order slots full (${currentBuyOrders}/${maxBuyOrders})` }
     }
     
     return { canPlace: true }
@@ -189,6 +245,68 @@ export function resetOrderLimitFlags(): void {
     if (wasTotalLimitReached || wasBuyLimitReached) {
         log('[OrderManager] Order limit flags reset - slots are now available', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §a[OrderManager] Order slots freed up!')
+    }
+}
+
+/**
+ * Refresh order counts by opening Manage Orders window
+ * Should be called before placing orders if count is stale (>2 minutes)
+ * @returns Promise<boolean> True if refresh succeeded, false otherwise
+ */
+export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
+    if (bot.state) {
+        log('[OrderManager] Bot is busy, cannot refresh order counts', 'debug')
+        return false
+    }
+    
+    log('[OrderManager] Refreshing order counts...', 'debug')
+    bot.state = 'bazaar'
+    
+    try {
+        // Open /bz
+        bot.chat('/bz')
+        const bazaarOpened = await waitForNewWindow(bot, 5000)
+        if (!bazaarOpened || !bot.currentWindow) {
+            bot.state = null
+            return false
+        }
+        
+        await sleep(150)
+        
+        // Click "Manage Orders"
+        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
+        if (manageSlot === -1) {
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            return false
+        }
+        
+        const manageWindow = waitForNewWindow(bot, 5000)
+        await clickWindow(bot, manageSlot).catch(() => {})
+        const manageOpened = await manageWindow
+        
+        if (!manageOpened || !bot.currentWindow) {
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            return false
+        }
+        
+        await sleep(150)
+        
+        // Count orders in the window
+        countOrdersInWindow(bot.currentWindow)
+        
+        // Close window
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        bot.state = null
+        
+        log(`[OrderManager] Order counts refreshed: ${currentBazaarOrders}/${maxTotalOrders} total`, 'info')
+        return true
+    } catch (error) {
+        log(`[OrderManager] Error refreshing order counts: ${error}`, 'error')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        bot.state = null
+        return false
     }
 }
 
@@ -268,6 +386,9 @@ export async function discoverExistingOrders(bot: MyBot): Promise<number> {
                 
                 // Orders view - scan all orders
                 if (clickedManageOrders) {
+                    // Count orders in the window to update global counts
+                    countOrdersInWindow(window)
+                    
                     let foundOrders = 0
                     
                     for (let i = 0; i < window.slots.length; i++) {
@@ -538,6 +659,11 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                 
                 // Orders view - find and click filled orders to claim
                 if (clickedManageOrders) {
+                    // Count orders in the window to update global counts
+                    countOrdersInWindow(window)
+                    
+                    let claimedAny = false
+                    
                     for (let i = 0; i < window.slots.length; i++) {
                         const slot = window.slots[i]
                         const name = removeMinecraftColorCodes(
@@ -707,6 +833,9 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
+        // Count orders in the window to update global counts
+        countOrdersInWindow(bot.currentWindow)
+        
         // Step 3: Find the order in the Manage Orders window
         const searchPrefix = order.isBuyOrder ? 'BUY' : 'SELL'
         let orderSlot = -1
@@ -760,7 +889,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
         await clickWindow(bot, cancelSlot).catch(() => {})
-        await sleep(400) // Transaction processing time
+        await sleep(300) // Transaction processing time
         
         log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)

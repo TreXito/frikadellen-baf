@@ -7,13 +7,62 @@ let bazaarFlipsPaused = false
 let pauseTimeoutHandle: NodeJS.Timeout | null = null
 let queuedBazaarFlips: Array<{ bot: MyBot, recommendation: BazaarFlipRecommendation }> = []
 
+// BUG 3: AH flips pending flag
+let ahFlipsPending = false
+let ahFlipsPendingTimeout: NodeJS.Timeout | null = null
+
 const PAUSE_DURATION_MS = 20000 // 20 seconds - pause starts when "flips in 10 seconds" appears, resumes 20 seconds after
+const AH_FLIP_PENDING_TIMEOUT_MS = 30000 // 30 seconds - clear ahFlipsPending after this time
 
 /**
  * Check if bazaar flips are currently paused due to incoming AH flip
  */
 export function areBazaarFlipsPaused(): boolean {
     return bazaarFlipsPaused
+}
+
+/**
+ * BUG 3: Check if AH flips are pending (incoming)
+ * This flag is set immediately when "flips in 10 seconds" is detected
+ * and cleared after purchase or 30s timeout
+ */
+export function areAHFlipsPending(): boolean {
+    return ahFlipsPending
+}
+
+/**
+ * BUG 3: Set the AH flips pending flag
+ * Called when AH flip message is detected
+ */
+export function setAHFlipsPending(): void {
+    ahFlipsPending = true
+    log('[BAF] AH flips pending flag set', 'info')
+    
+    // Clear existing timeout
+    if (ahFlipsPendingTimeout) {
+        clearTimeout(ahFlipsPendingTimeout)
+    }
+    
+    // Auto-clear after 30 seconds if not cleared manually
+    ahFlipsPendingTimeout = setTimeout(() => {
+        ahFlipsPending = false
+        log('[BAF] AH flips pending flag cleared (30s timeout)', 'info')
+    }, AH_FLIP_PENDING_TIMEOUT_MS)
+}
+
+/**
+ * BUG 3: Clear the AH flips pending flag
+ * Called after AH flip purchase completes
+ */
+export function clearAHFlipsPending(): void {
+    ahFlipsPending = false
+    
+    if (ahFlipsPendingTimeout) {
+        clearTimeout(ahFlipsPendingTimeout)
+        ahFlipsPendingTimeout = null
+    }
+    
+    log('[BAF] AH flips pending flag cleared', 'info')
 }
 
 /**
@@ -29,6 +78,9 @@ export function pauseBazaarFlips(bot?: MyBot): void {
             clearTimeout(pauseTimeoutHandle)
         }
     }
+
+    // BUG 3: Set ahFlipsPending flag immediately
+    setAHFlipsPending()
 
     // Abort any active order management to prioritize AH flips
     if (bot) {

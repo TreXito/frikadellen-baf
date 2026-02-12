@@ -1,5 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
+import { areAHFlipsPending } from './bazaarFlipPauser'
 
 /**
  * Priority levels for queued commands
@@ -39,6 +40,10 @@ let commandIdCounter = 0
 // Flag to track if queue is initialized
 let queueInitialized = false
 
+// Constants for bazaar queue management
+const MAX_BAZAAR_QUEUE_SIZE = 3
+const BAZAAR_RECOMMENDATION_MAX_AGE_MS = 60000 // 60 seconds
+
 /**
  * Initialize the command queue system
  * Must be called before any commands are queued
@@ -63,14 +68,45 @@ export function initCommandQueue(bot: MyBot): void {
  * @param priority Priority level (lower = higher priority)
  * @param execute Async function to execute
  * @param interruptible If true, can be interrupted by higher priority commands
- * @returns Command ID for tracking
+ * @param itemName Optional item name for duplicate checking (bazaar operations)
+ * @returns Command ID for tracking, or null if rejected
  */
 export function enqueueCommand(
     name: string,
     priority: CommandPriority,
     execute: () => Promise<void>,
-    interruptible: boolean = false
-): string {
+    interruptible: boolean = false,
+    itemName?: string
+): string | null {
+    // BUG 2: Check bazaar queue limits
+    if (priority === CommandPriority.NORMAL && name.startsWith('Bazaar ')) {
+        // Count existing bazaar commands in queue
+        const bazaarCommandCount = commandQueue.filter(cmd => 
+            cmd.priority === CommandPriority.NORMAL && cmd.name.startsWith('Bazaar ')
+        ).length
+        
+        if (bazaarCommandCount >= MAX_BAZAAR_QUEUE_SIZE) {
+            log(`[BAF] Bazaar queue full (${bazaarCommandCount}/${MAX_BAZAAR_QUEUE_SIZE}), skipping recommendation: ${name}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §c[BAF] Bazaar queue full, skipping order`)
+            return null
+        }
+        
+        // BUG 2: Check for duplicate items in queue
+        if (itemName) {
+            const duplicateInQueue = commandQueue.some(cmd => 
+                cmd.priority === CommandPriority.NORMAL && 
+                cmd.name.startsWith('Bazaar ') && 
+                cmd.name.includes(itemName)
+            )
+            
+            if (duplicateInQueue) {
+                log(`[BAF] Already have order/queue entry for ${itemName}, skipping`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Already queued: ${itemName}`)
+                return null
+            }
+        }
+    }
+    
     commandIdCounter++
     const id = `cmd_${commandIdCounter}`
     
@@ -141,9 +177,27 @@ async function processQueue(bot: MyBot): Promise<void> {
             continue
         }
         
+        // BUG 3: Pause queue while AH flips are pending
+        if (areAHFlipsPending()) {
+            // Don't process any commands while AH flip is incoming
+            await sleep(200)
+            continue
+        }
+        
         // Get next command (highest priority first)
         const command = commandQueue.shift()
         if (!command) {
+            continue
+        }
+        
+        // BUG 2: Drop stale bazaar recommendations
+        const queueTime = Date.now() - command.queuedAt
+        if (command.priority === CommandPriority.NORMAL && command.name.startsWith('Bazaar ') && queueTime > BAZAAR_RECOMMENDATION_MAX_AGE_MS) {
+            const queueTimeSeconds = Math.floor(queueTime / 1000)
+            const itemMatch = command.name.match(/Bazaar \w+: \d+x (.+)/)
+            const itemName = itemMatch ? itemMatch[1] : 'unknown'
+            log(`[BAF] Dropping stale bazaar recommendation for ${itemName} (queued ${queueTimeSeconds}s ago)`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Dropped stale order for ${itemName} (${queueTimeSeconds}s old)`)
             continue
         }
         

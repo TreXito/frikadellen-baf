@@ -2,6 +2,7 @@ import { MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getSlotLore, sleep } from './utils'
+import { getCurrentPurse } from './BAF'
 
 const COOKIE_PRICE_API = 'https://api.hypixel.net/v2/skyblock/bazaar'
 const DEFAULT_COOKIE_PRICE = 5000000 // 5M coins fallback
@@ -33,8 +34,15 @@ async function getCookiePrice(): Promise<number> {
 
 /**
  * Gets the player's current purse balance
+ * Now uses the centralized getCurrentPurse function from BAF
  */
 function getPurse(bot: MyBot): number {
+    const purse = getCurrentPurse()
+    if (purse > 0) {
+        return purse
+    }
+    
+    // Fallback to old method if getCurrentPurse returns 0
     if (!bot.scoreboard || !bot.scoreboard.sidebar || !bot.scoreboard.sidebar.items) {
         return 0
     }
@@ -202,16 +210,17 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         
         log(`Cookie price: ${price}, Purse: ${purse}`, 'info')
         
-        // Check if cookie is too expensive or we don't have enough coins
+        // Check if cookie is too expensive
         if (price > MAX_COOKIE_PRICE) {
             printMcChatToConsole(`§f[§4BAF§f]: §cCookie costs ${Math.round(price / 1000000)}M - too expensive, not buying`)
             log('Cookie too expensive, not buying', 'warn')
             return
         }
         
-        if (purse < price * 2) {
-            printMcChatToConsole(`§f[§4BAF§f]: §cNot enough coins to buy cookie (need ${Math.round(price / 1000000)}M, have ${Math.round(purse / 1000000)}M)`)
-            log('Not enough coins to buy cookie', 'warn')
+        // Check affordability based on actual cookie price
+        if (purse < price * 1.5) {
+            printMcChatToConsole(`§f[§4BAF§f]: §c[AutoCookie] Not enough coins to buy cookie (need ${Math.round(price / 1000000)}M, have ${Math.round(purse / 1000000)}M)`)
+            log('[AutoCookie] Not enough coins to buy cookie', 'warn')
             return
         }
         

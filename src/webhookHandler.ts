@@ -2,7 +2,7 @@ import axios from 'axios'
 import { getConfigProperty } from './configHelper'
 import { FlipWhitelistedData, Flip } from '../types/autobuy'
 import { getFlipData, calculateProfit, formatTimeToSell, removeFlipData } from './flipTracker'
-import { getCoflnetPremiumInfo } from './BAF'
+import { getCoflnetPremiumInfo, getCurrentPurse } from './BAF'
 import { calculateAuctionHouseFee } from './utils'
 
 function sendWebhookData(options: Partial<Webhook>): void {
@@ -152,6 +152,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     
     const buyPrice = parseFloat(price.replace(/,/g, ''))
     // Fee is calculated based on target price since that's when the item is resold
@@ -165,7 +166,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
             {
                 title: '🛒 Item Purchased Successfully',
                 description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
-                color: 0x3498db, // Professional blue
+                color: 0x00FF00, // Green for AH flip purchased
                 fields: [
                     {
                         name: '💰 Purchase Price',
@@ -177,7 +178,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -250,6 +251,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     
     const sellPrice = parseFloat(price.replace(/,/g, ''))
     const flipData = getFlipData(itemName)
@@ -267,8 +269,8 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         removeFlipData(itemName)
     }
     
-    // Use gradient colors - green for profit, red for loss
-    const color = profit >= 0 ? 0x2ecc71 : 0xe74c3c
+    // Use blue for sold items per spec (0x0099FF)
+    const color = 0x0099FF
     const statusEmoji = profit >= 0 ? '✅' : '❌'
     
     const webhookData: any = {
@@ -293,7 +295,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -340,13 +342,14 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
         return
     }
     let ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     const listPrice = parseFloat(price.replace(/,/g, ''))
     sendWebhookData({
         embeds: [
             {
                 title: '📋 Item Listed on Auction House',
                 description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
-                color: 0x9b59b6, // Purple for listing
+                color: 0x0099FF, // Blue for AH flip listed
                 fields: [
                     {
                         name: '💵 List Price',
@@ -368,7 +371,7 @@ export function sendWebhookItemListed(itemName: string, price: string, duration:
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -381,10 +384,11 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
         return
     }
     const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     
     const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
     const orderEmoji = isBuyOrder ? '🛒' : '🏷️'
-    const orderColor = isBuyOrder ? 0x3498db : 0xe67e22 // Blue for buy, orange for sell
+    const orderColor = isBuyOrder ? 0x00CCCC : 0xFF9900 // Cyan for buy, orange for sell
     
     sendWebhookData({
         embeds: [
@@ -418,7 +422,7 @@ export function sendWebhookBazaarOrderPlaced(itemName: string, amount: number, p
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -440,10 +444,11 @@ export function sendWebhookBazaarOrderCancelled(
         return
     }
     const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     
     const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
     const orderEmoji = '🚫'
-    const orderColor = 0xe67e22 // Orange for cancellation
+    const orderColor = 0x808080 // Gray for cancellation
     const fillPercentage = totalAmount > 0 ? ((filled / totalAmount) * 100).toFixed(1) : '0'
     
     sendWebhookData({
@@ -488,7 +493,7 @@ export function sendWebhookBazaarOrderCancelled(
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }
@@ -506,10 +511,11 @@ export function sendWebhookBazaarOrderClaimed(
         return
     }
     const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
     
     const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
     const orderEmoji = '✅'
-    const orderColor = 0x2ecc71 // Green for successful claim
+    const orderColor = isBuyOrder ? 0x66FF66 : 0xFFCC00 // Light green for buy, gold for sell
     const totalValue = amount * pricePerUnit
     
     sendWebhookData({
@@ -544,7 +550,146 @@ export function sendWebhookBazaarOrderClaimed(
                     url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
                 },
                 footer: {
-                    text: `BAF • ${ingameName}`,
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}
+
+/**
+ * Send webhook for filled bazaar orders
+ * Called when a buy order or sell offer is filled
+ */
+export function sendWebhookBazaarOrderFilled(
+    itemName: string,
+    amount: number,
+    isBuyOrder: boolean
+) {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
+    
+    const orderType = isBuyOrder ? 'Buy Order' : 'Sell Offer'
+    const orderEmoji = isBuyOrder ? '✅' : '💰'
+    const orderColor = isBuyOrder ? 0x66FF66 : 0xFFCC00 // Light green for buy filled, gold for sell filled
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: `${orderEmoji} Bazaar ${orderType} Filled!`,
+                description: `**${itemName}** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: orderColor,
+                fields: [
+                    {
+                        name: 'Item',
+                        value: itemName,
+                        inline: true
+                    },
+                    {
+                        name: 'Amount',
+                        value: `${amount}x`,
+                        inline: true
+                    }
+                ],
+                thumbnail: { 
+                    url: `https://sky.coflnet.com/static/icon/${itemName.replace(/[^a-zA-Z0-9_]/g, '_')}` 
+                },
+                footer: {
+                    text: `BAF • ${ingameName} • Purse: ${formatNumber(purse)} coins`,
+                    icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
+                }
+            }
+        ]
+    })
+}
+
+/**
+ * Send periodic profit report webhook
+ * Shows total profit, trade count, and bot uptime
+ */
+export function sendWebhookProfitReport(stats: {
+    totalProfit: number
+    tradeCount: number
+    averageProfit: number
+    profitPerHour: number
+    uptime: number
+}): void {
+    if (!isWebhookConfigured()) {
+        return
+    }
+    const ingameName = getConfigProperty('INGAME_NAME')
+    const purse = getCurrentPurse()
+    
+    // Helper to format uptime
+    const formatUptime = (ms: number): string => {
+        const seconds = Math.floor(ms / 1000)
+        const minutes = Math.floor(seconds / 60)
+        const hours = Math.floor(minutes / 60)
+        const days = Math.floor(hours / 24)
+        
+        if (days > 0) {
+            return `${days}d ${hours % 24}h ${minutes % 60}m`
+        } else if (hours > 0) {
+            return `${hours}h ${minutes % 60}m`
+        } else {
+            return `${minutes}m`
+        }
+    }
+    
+    // Determine color based on profit (green for positive, red for negative, gray for zero)
+    let color = 0x808080 // Gray for zero
+    if (stats.totalProfit > 0) {
+        color = 0x00FF00 // Green for profit
+    } else if (stats.totalProfit < 0) {
+        color = 0xFF0000 // Red for loss
+    }
+    
+    const profitSign = stats.totalProfit >= 0 ? '+' : ''
+    
+    sendWebhookData({
+        embeds: [
+            {
+                title: '📊 Bazaar Profit Report',
+                description: `**Periodic Report** • <t:${Math.floor(Date.now() / 1000)}:R>`,
+                color: color,
+                fields: [
+                    {
+                        name: '💰 Total Profit',
+                        value: `\`\`\`diff\n${profitSign}${formatNumber(stats.totalProfit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📈 Profit/Hour',
+                        value: `\`\`\`fix\n${formatNumber(stats.profitPerHour)} coins/h\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '🔄 Trades',
+                        value: `\`\`\`\n${stats.tradeCount} completed\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '⏱️ Uptime',
+                        value: `\`\`\`\n${formatUptime(stats.uptime)}\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '📊 Avg Profit/Trade',
+                        value: `\`\`\`fix\n${formatNumber(stats.averageProfit)} coins\n\`\`\``,
+                        inline: true
+                    },
+                    {
+                        name: '💵 Current Purse',
+                        value: `\`\`\`fix\n${formatNumber(purse)} coins\n\`\`\``,
+                        inline: true
+                    }
+                ],
+                footer: {
+                    text: `BAF • ${ingameName} • Automated Report`,
                     icon_url: `https://mc-heads.net/avatar/${ingameName}/32.png`
                 }
             }

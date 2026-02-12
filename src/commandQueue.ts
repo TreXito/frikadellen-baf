@@ -78,7 +78,8 @@ export function enqueueCommand(
     interruptible: boolean = false,
     itemName?: string
 ): string | null {
-    // BUG 2: Check bazaar queue limits
+    // Queue limit check only for NORMAL priority bazaar commands (buy orders)
+    // HIGH priority bazaar commands (sell offers) bypass the queue limit
     if (priority === CommandPriority.NORMAL && name.startsWith('Bazaar ')) {
         // Count existing bazaar commands in queue
         const bazaarCommandCount = commandQueue.filter(cmd => 
@@ -86,8 +87,8 @@ export function enqueueCommand(
         ).length
         
         if (bazaarCommandCount >= MAX_BAZAAR_QUEUE_SIZE) {
-            log(`[BAF] Bazaar queue full (${bazaarCommandCount}/${MAX_BAZAAR_QUEUE_SIZE}), skipping recommendation: ${name}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §c[BAF] Bazaar queue full, skipping order`)
+            log(`[BAF] Bazaar queue full (${bazaarCommandCount}/${MAX_BAZAAR_QUEUE_SIZE}), skipping buy order: ${name}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §c[BAF] Bazaar queue full, skipping buy order`)
             return null
         }
         
@@ -106,6 +107,9 @@ export function enqueueCommand(
             }
         }
     }
+    
+    // HIGH priority bazaar commands (sell offers) skip queue limit checks entirely
+    // They always get queued since they free up inventory space
     
     commandIdCounter++
     const id = `cmd_${commandIdCounter}`

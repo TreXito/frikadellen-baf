@@ -1351,7 +1351,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         
         // Re-list cancelled sell offers
         for (const item of relistQueue) {
-            // Defensive check: skip invalid entries (in case lore parsing failed)
+            // Defensive check: skip entries with non-positive amounts or prices from failed lore parsing
             if (item.amount <= 0 || item.pricePerUnit <= 0) {
                 log(`[Startup] Skipping invalid re-list entry for ${item.itemName}`, 'debug')
                 continue
@@ -1374,10 +1374,9 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             }
         }
         
-        // List items from buy orders as sell offers
+        // TODO: Implement automatic selling of buy order items by fetching current prices from Coflnet API
         // Currently skipped because it requires fetching current market prices from Coflnet API
         // The sellQueue contains items from completed/partially filled buy orders
-        // Future enhancement: fetch prices and create sell offers for these items
         if (sellQueue.length > 0) {
             log(`[Startup] Skipping sell creation for ${sellQueue.length} buy order item(s) (requires price fetch)`, 'debug')
         }

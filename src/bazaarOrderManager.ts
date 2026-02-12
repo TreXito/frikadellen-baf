@@ -58,6 +58,9 @@ let isFastCheckMode = false
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
 
+// Flag to track when we're refreshing after limit detection
+let isRefreshingAfterLimitDetection = false
+
 // Constants for claiming filled orders
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
 const CLAIM_DELAY_MS = 75 // Delay in milliseconds between claim attempts
@@ -262,6 +265,8 @@ export function updateMaxTotalOrders(limit: number): void {
             orderLimitReached = false
         }
     }
+    // Set flag to block order placement until refresh completes
+    isRefreshingAfterLimitDetection = true
 }
 
 /**
@@ -277,6 +282,8 @@ export function updateMaxBuyOrders(limit: number): void {
             buyOrderLimitReached = false
         }
     }
+    // Set flag to block order placement until refresh completes
+    isRefreshingAfterLimitDetection = true
 }
 
 /**
@@ -302,6 +309,12 @@ export function getOrderCounts(): { totalOrders: number, buyOrders: number, maxT
  * @returns Object with canPlace flag and reason if false
  */
 export function canPlaceOrder(isBuyOrder: boolean, bot?: MyBot): { canPlace: boolean, reason?: string, needsRefresh?: boolean } {
+    // Check if we're currently refreshing after limit detection
+    if (isRefreshingAfterLimitDetection) {
+        log('[OrderManager] Blocking order placement - refreshing after limit detection', 'debug')
+        return { canPlace: false, reason: 'Refreshing order count after limit detection' }
+    }
+    
     // Check if orders are on cooldown
     if (isBazaarOrderOnCooldown()) {
         const remainingMs = getBazaarOrderCooldownRemaining()
@@ -393,6 +406,8 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
                 await sleep(1000) // Wait 1 second before retry
                 return refreshOrderCounts(bot, retryCount + 1)
             }
+            // Clear the refreshing flag on final failure
+            isRefreshingAfterLimitDetection = false
             return false
         }
         
@@ -414,6 +429,8 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
                 await sleep(1000) // Wait 1 second before retry
                 return refreshOrderCounts(bot, retryCount + 1)
             }
+            // Clear the refreshing flag on final failure
+            isRefreshingAfterLimitDetection = false
             return false
         }
         
@@ -429,6 +446,9 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         bot.state = null
         
+        // Clear the refreshing flag now that refresh is complete
+        isRefreshingAfterLimitDetection = false
+        
         log(`[OrderManager] Order counts refreshed: ${currentBazaarOrders}/${maxTotalOrders} total, ${currentBuyOrders}/${maxBuyOrders} buy orders`, 'info')
         printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Orders: ${currentBazaarOrders}/${maxTotalOrders} total, ${currentBuyOrders}/${maxBuyOrders} buy`)
         return true
@@ -436,6 +456,9 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
         log(`[OrderManager] Error refreshing order counts: ${error}`, 'error')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         bot.state = null
+        
+        // Clear the refreshing flag even on error
+        isRefreshingAfterLimitDetection = false
         
         // Retry if we haven't exceeded max retries
         if (retryCount < MAX_RETRY_ATTEMPTS) {
@@ -723,6 +746,20 @@ async function checkOrders(bot: MyBot): Promise<void> {
     const cancelMinutes = getConfigProperty('BAZAAR_ORDER_CANCEL_MINUTES')
     const cancelTimeoutMs = cancelMinutes * 60 * 1000
     const now = Date.now()
+    
+    // Log current tracked orders for debugging
+    const activeOrders = trackedOrders.filter(o => !o.claimed && !o.cancelled)
+    if (activeOrders.length > 0) {
+        log(`[OrderManager] Currently tracking ${activeOrders.length} active order(s)`, 'debug')
+        activeOrders.forEach(order => {
+            const age = now - order.placedAt
+            const ageMinutes = Math.floor(age / 60000)
+            const isStale = age > cancelTimeoutMs
+            log(`[OrderManager] - ${order.itemName} (${order.isBuyOrder ? 'buy' : 'sell'}): age ${ageMinutes}min, stale: ${isStale}, filled: ${order.isFullyFilled ? 'yes' : 'no'}`, 'debug')
+        })
+    } else {
+        log('[OrderManager] No active orders being tracked', 'debug')
+    }
     
     // Find stale orders that need cancelling
     // Skip orders that are fully filled (isFullyFilled = true)

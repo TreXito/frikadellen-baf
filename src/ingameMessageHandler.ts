@@ -92,8 +92,18 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
-                log('New item sold')
-                claimSoldItem(bot)
+                log('New item sold - queuing claim with HIGH priority')
+                
+                // Queue the claim with HIGH priority so it runs immediately after current task
+                const { enqueueCommand, CommandPriority } = require('./commandQueue')
+                enqueueCommand(
+                    'Claim Sold Auction',
+                    CommandPriority.HIGH,
+                    async () => {
+                        await claimSoldItem(bot)
+                    },
+                    true // interruptible - can be interrupted by AH flips
+                )
 
                 sendWebhookItemSold(
                     text.split(' bought ')[1].split(' for ')[0],

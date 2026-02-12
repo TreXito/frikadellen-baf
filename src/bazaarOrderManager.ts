@@ -40,8 +40,8 @@ let checkTimer: NodeJS.Timeout | null = null
 let isManagingOrders = false
 
 // Dynamic order slot limits (defaults to Hypixel's known limits, updated dynamically)
-let maxTotalOrders = 21 // Default to 21, will be updated from Manage Orders window
-let maxBuyOrders = 7
+let maxTotalOrders = 21 // Default to 21, will be updated from Manage Orders window or Hypixel messages
+let maxBuyOrders = 21 // Default to 21 (conservative high value), will be updated from Hypixel messages
 let currentBazaarOrders = 0
 let currentBuyOrders = 0
 let lastOrderCountUpdate = 0 // Timestamp of last order count update
@@ -340,13 +340,15 @@ export function resetOrderLimitFlags(): void {
  * Should be called before placing orders if count is stale (>2 minutes)
  * @returns Promise<boolean> True if refresh succeeded, false otherwise
  */
-export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
+export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Promise<boolean> {
+    const MAX_RETRIES = 2
+    
     if (bot.state) {
         log('[OrderManager] Bot is busy, cannot refresh order counts', 'debug')
         return false
     }
     
-    log('[OrderManager] Refreshing order counts...', 'debug')
+    log(`[OrderManager] Refreshing order counts... (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`, 'debug')
     bot.state = 'bazaar'
     
     try {
@@ -354,9 +356,19 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
         bot.chat('/bz')
         const bazaarOpened = await waitForNewWindow(bot, 5000)
         if (!bazaarOpened || !bot.currentWindow) {
+            log('[OrderManager] Failed to open bazaar window', 'warn')
             bot.state = null
+            
+            // Retry if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                await sleep(1000) // Wait 1 second before retry
+                return refreshOrderCounts(bot, retryCount + 1)
+            }
             return false
         }
+        
+        // Wait a bit for the window to fully load
+        await sleep(300)
         
         // Click "Manage Orders" at slot 50
         const manageWindow = waitForNewWindow(bot, 5000)
@@ -364,24 +376,41 @@ export async function refreshOrderCounts(bot: MyBot): Promise<boolean> {
         const manageOpened = await manageWindow
         
         if (!manageOpened || !bot.currentWindow) {
+            log('[OrderManager] Failed to open Manage Orders window', 'warn')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
+            
+            // Retry if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                await sleep(1000) // Wait 1 second before retry
+                return refreshOrderCounts(bot, retryCount + 1)
+            }
             return false
         }
         
+        // Wait for window to populate
+        await sleep(300)
+        
         // Count orders in the window
-        countOrdersInWindow(bot.currentWindow)
+        const counts = countOrdersInWindow(bot.currentWindow)
         
         // Close window
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         bot.state = null
         
-        log(`[OrderManager] Order counts refreshed: ${currentBazaarOrders}/${maxTotalOrders} total`, 'info')
+        log(`[OrderManager] Order counts refreshed: ${currentBazaarOrders}/${maxTotalOrders} total, ${currentBuyOrders}/${maxBuyOrders} buy orders`, 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Orders: ${currentBazaarOrders}/${maxTotalOrders} total, ${currentBuyOrders}/${maxBuyOrders} buy`)
         return true
     } catch (error) {
         log(`[OrderManager] Error refreshing order counts: ${error}`, 'error')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         bot.state = null
+        
+        // Retry if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+            await sleep(1000) // Wait 1 second before retry
+            return refreshOrderCounts(bot, retryCount + 1)
+        }
         return false
     }
 }

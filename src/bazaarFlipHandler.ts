@@ -219,23 +219,27 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             printMcChatToConsole('§f[§4BAF§f]: §7Refreshing order count...')
             const refreshed = await refreshOrderCounts(bot)
             if (refreshed) {
-                log('[BAF]: Order count refreshed, retrying order placement', 'info')
+                log('[BAF]: Order count refreshed, proceeding with order placement', 'info')
                 // Check again after refresh
                 const retryCheck = canPlaceOrder(recommendation.isBuyOrder)
-                if (!retryCheck.canPlace) {
+                if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
+                    // Only block if it's a hard limit, not another stale check
                     log(`[BAF]: Cannot place order after refresh - ${retryCheck.reason}`, 'warn')
                     printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${retryCheck.reason}`)
                     return
                 }
+                // If still needs refresh or can place, continue (Hypixel will enforce actual limits)
             } else {
-                log('[BAF]: Failed to refresh order count', 'warn')
-                printMcChatToConsole('§f[§4BAF§f]: §cFailed to refresh order count')
-                return
+                // Refresh failed, but proceed anyway - Hypixel will enforce actual limits dynamically
+                log('[BAF]: Failed to refresh order count, attempting order placement anyway (Hypixel will enforce limits)', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §e[Warning] Order count refresh failed, attempting placement...')
+                // Don't return - continue with order placement
             }
         } else {
-            log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
-            return
+            // This is a hard limit from our counts, still try to log it but consider allowing placement
+            log(`[BAF]: Order slots appear full - ${orderCheck.reason}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §e[Warning] ${orderCheck.reason}, attempting placement...`)
+            // Don't return - let Hypixel enforce the actual limit
         }
     }
 

@@ -308,7 +308,7 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     // Falls back to itemName if itemTag is not available
     const searchTerm = itemTag || itemName
     if (!searchTerm) {
-        throw new Error('[BazaarDebug] ERROR: Both itemTag and itemName are missing from recommendation')
+        throw new Error('Both itemTag and itemName are missing from recommendation')
     }
     if (itemTag) {
         log(`[BazaarDebug] Using itemTag "${itemTag}" for /bz command (faster, skips search results)`, 'info')
@@ -632,7 +632,13 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     const itemSlot = findItemInSearchResults(window, itemName)
                     
                     if (itemSlot === -1) {
-                        // Fallback to slot 11 (first search result position)
+                        // Fallback to slot 11 (first search result position) when no exact match is found.
+                        // This can happen if:
+                        // - The itemName doesn't match any item in search results (typo, changed name)
+                        // - We landed on search results despite using itemTag (server inconsistency)
+                        // - The search results are empty or malformed
+                        // We proceed with the fallback to attempt order placement, which may fail later
+                        // with price failsafe checks if the wrong item was selected.
                         log(`[BazaarDebug] Item not found by name, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`, 'warn')
                         printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`)
                         await sleep(200)

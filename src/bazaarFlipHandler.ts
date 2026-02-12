@@ -8,6 +8,7 @@ import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderMan
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
+import { findItemInSearchResults } from './bazaarHelpers'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -621,28 +622,27 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Search] Looking for §e${itemName}`)
                     currentStep = 'searchResults'
                     
-                    let itemSlot = -1
-                    for (let i = 0; i < window.slots.length; i++) {
-                        const slot = window.slots[i]
-                        const name = removeMinecraftColorCodes(
-                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                        )
-                        if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
-                            itemSlot = i
-                            log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
-                            printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
-                            break
-                        }
-                    }
+                    // Use findItemInSearchResults to prefer exact matches
+                    const itemSlot = findItemInSearchResults(window, itemName)
                     
                     if (itemSlot === -1) {
                         // Fallback to slot 11 (first search result position)
-                        itemSlot = 11
-                        log(`[BazaarDebug] Item not found by name, using fallback slot ${itemSlot}`, 'warn')
-                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
+                        const fallbackSlot = 11
+                        log(`[BazaarDebug] Item not found by name, using fallback slot ${fallbackSlot}`, 'warn')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${fallbackSlot}`)
+                        await sleep(200)
+                        await clickWindow(bot, fallbackSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                    } else {
+                        // Get the item name from the slot for logging
+                        const slot = window.slots[itemSlot]
+                        const name = removeMinecraftColorCodes(
+                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+                        )
+                        log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
+                        await sleep(200)
+                        await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                     }
-                    await sleep(200)
-                    await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                 }
                 // 3. Amount screen - ONLY for buy orders (sell offers skip this step)
                 else if (findSlotWithName(window, 'Custom Amount') !== -1 && isBuyOrder) {

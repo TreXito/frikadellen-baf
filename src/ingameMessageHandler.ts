@@ -211,8 +211,8 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 
                 // Check for "may only have" pattern (current Hypixel message format)
                 const hasMayOnlyHaveMessage = lowerCleanText.includes('may only have')
-                // Check for "reached your maximum" pattern (alternate Hypixel message format)
-                const hasReachedMaximumMessage = lowerCleanText.includes('reached your maximum') || lowerCleanText.includes('reached the maximum')
+                // Check for "reached maximum" pattern (alternate Hypixel message format)
+                const hasReachedMaximumMessage = lowerCleanText.includes('reached') && lowerCleanText.includes('maximum')
                 
                 if (hasMayOnlyHaveMessage || hasReachedMaximumMessage) {
                     let limitDetected = false
@@ -254,7 +254,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                         }
                         
                         // Match patterns like "You reached your maximum of 14 bazaar orders!" (but NOT "buy orders")
-                        const reachedTotalOrderMatch = cleanText.match(/reached (?:your |the )?maximum of (\d+) (?:bazaar )?orders?(?! buy)/i)
+                        const reachedTotalOrderMatch = cleanText.match(/reached (?:your |the )?maximum of (\d+) (?:bazaar )?(?!buy )orders?/i)
                         if (reachedTotalOrderMatch && !reachedBuyOrderMatch) {
                             const limit = parseInt(reachedTotalOrderMatch[1], 10)
                             log(`[BAF]: Detected total order limit (reached maximum): ${limit}`, 'info')

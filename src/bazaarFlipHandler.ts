@@ -10,6 +10,14 @@ import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
 import { getFreeInventorySlots } from './inventoryManager'
 import { recordBuyOrder, recordSellOrder } from './bazaarProfitTracker'
+import {  
+    findItemInSearchResults,
+    findSlotWithName as findSlotByName,
+    clickAndWaitForWindow,
+    clickAndWaitForSign,
+    waitForNewWindow,
+    findAndClick
+} from './bazaarHelpers'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -285,12 +293,29 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
-    // Pass item name for duplicate detection
+    // BUG 2: Pass item name for duplicate detection and add retry wrapper
     enqueueCommand(
         commandName,
         priority,
         async () => {
-            await executeBazaarFlip(bot, recommendation)
+            // First attempt
+            try {
+                await executeBazaarFlip(bot, recommendation)
+            } catch (error) {
+                // BUG 2: If first attempt fails, retry once after 2 seconds
+                log(`[BAF] Bazaar operation failed, retrying in 2 seconds: ${error}`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in 2 seconds...`)
+                await sleep(2000)
+                
+                // Check if AH flips are pending before retry
+                if (areAHFlipsPending()) {
+                    log('[BAF] Skipping retry — AH flips pending', 'info')
+                    throw new Error('AH flips incoming - retry aborted')
+                }
+                
+                // Second attempt - let this one throw if it fails
+                await executeBazaarFlip(bot, recommendation)
+            }
         },
         true, // interruptible - can be interrupted by AH flips
         recommendation.itemName // for duplicate checking
@@ -332,67 +357,16 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
     bot.state = 'bazaar'
-    let operationTimeout = setTimeout(() => {
-        if (bot.state === 'bazaar') {
-            log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
-            log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
-            printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
-            bot.state = null
-            // Note: The placeBazaarOrder function will clean up its own listener on timeout
-        }
-    }, OPERATION_TIMEOUT_MS)
-    const bazaarTracking = {
-        windowOpened: false,
-        retryTimer: null as NodeJS.Timeout | null,
-        openTracker: null as ((packet: any) => void) | null
-    }
 
     try {
-        const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
-        const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
-
-        // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
-        // The /bz command expects display names as shown in Hypixel's bazaar UI
-        const searchTerm = itemName || itemTag
-        if (!itemName && itemTag) {
-            log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
-            log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
-        }
-        bazaarTracking.openTracker = (packet) => {
-            if (bazaarTracking.windowOpened) return
-            bazaarTracking.windowOpened = true
-            log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
-        }
-        bot._client.on('open_window', bazaarTracking.openTracker)
+        const { itemName, amount, pricePerUnit, isBuyOrder } = recommendation
         
         printMcChatToConsole(
-            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
+            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each`
         )
 
-        // CRITICAL: Set up listener BEFORE opening bazaar to catch the first window
-        // Use bot._client.on('open_window') for low-level protocol handling
-        // Do NOT use bot.removeAllListeners('windowOpen') as that breaks mineflayer's internal handler
-        log('[BazaarDebug] Setting up window listener for bazaar order placement', 'info')
-        const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
-        
-        // Small delay to ensure Node.js event loop has processed the listener registration
-        // This guarantees the listener is active before the window opens
-        await sleep(100)
-        
-        // Open bazaar for the item - the listener is now ready to catch this event
-        log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
-        log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
-        bazaarTracking.retryTimer = setTimeout(() => {
-            if (!bazaarTracking.windowOpened && bot.state === 'bazaar') {
-                log(`[BazaarDebug] No bazaar GUI opened after initial /bz command, retrying with "/bz ${searchTerm}"`, 'warn')
-                printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Bazaar GUI did not open, retrying command...`)
-                bot.chat(`/bz ${searchTerm}`)
-            }
-        }, BAZAAR_RETRY_DELAY_MS)
-        bot.chat(`/bz ${searchTerm}`)
-
-        await orderPromise
+        // BUG 2: Use new resilient placeBazaarOrder function
+        await placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
         
         // Record the order for tracking (claiming and cancelling)
         recordOrder(recommendation)
@@ -409,309 +383,108 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     } catch (error) {
         log(`[BazaarDebug] Error handling bazaar flip: ${error}`, 'error')
         printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${error}`)
+        throw error // Re-throw to trigger retry
     } finally {
-        clearTimeout(operationTimeout)
-        if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
-        if (bazaarTracking.openTracker) {
-            bot._client.removeListener('open_window', bazaarTracking.openTracker)
-        }
         bot.state = null
     }
 }
 
 /**
- * Place a bazaar order by navigating through the Hypixel bazaar interface
- * 
- * The bazaar interface has multiple steps:
- * 1. Search results (title: "Bazaar ➜ ..." when opened via /bz <item>)
- * 2. Item detail view (title: "Bazaar ➜ ItemName") with Create Buy Order / Create Sell Offer
- * 3. Amount selection - buy orders only (title: "How many do you want to...")
- * 4. Price selection (title: "How much do you want to pay/be paid")
- * 5. Confirmation (title: "Confirm...")
- * 
- * @param bot The Minecraft bot instance
- * @param itemName Name of the item (used to find it in search results)
- * @param amount Number of items to buy/sell
- * @param pricePerUnit Price per item unit
- * @param isBuyOrder True for buy order, false for sell offer
- * @returns Promise that resolves when the order is placed
+ * BUG 2: Place a bazaar order by navigating through the Hypixel bazaar interface
+ * Now uses resilient helper functions with automatic retries for each step
  */
-function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        let currentStep = 'initial'
-
-        // Helper: find a slot by display name substring
-        const findSlotWithName = (win, searchName: string): number => {
-            for (let i = 0; i < win.slots.length; i++) {
-                const slot = win.slots[i]
-                const name = removeMinecraftColorCodes(
-                    (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                )
-                if (name && name.includes(searchName)) return i
-            }
-            return -1
+async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
+    // Step 1: /bz command — opens new window
+    bot.chat(`/bz ${itemName}`)
+    const bazaarOpened = await waitForNewWindow(bot, 5000)
+    if (!bazaarOpened || !bot.currentWindow) {
+        log(`[BAF] /bz didn't open a window`, 'warn')
+        throw new Error('/bz command failed to open window')
+    }
+    await sleep(300)
+    
+    // Step 2: If search results page, find and click the correct item
+    const title = getWindowTitle(bot.currentWindow)
+    if (title && title.includes('Bazaar')) {
+        // Search results — find exact match using BUG 1 fix
+        const itemSlot = findItemInSearchResults(bot.currentWindow, itemName)
+        if (itemSlot === -1) {
+            log(`[BAF] Item "${itemName}" not found in search results`, 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            throw new Error(`Item "${itemName}" not found in search results`)
         }
-        
-        // Helper: log all slots in current window for debugging
-        const logWindowSlots = (win, title: string) => {
-            log(`[BazaarDebug] === Window Opened: "${title}" ===`, 'info')
-            printMcChatToConsole(`§f[§4BAF§f]: §7[Window] §e${title}`)
-            
-            const importantSlots: any[] = []
-            for (let i = 0; i < win.slots.length; i++) {
-                const slot = win.slots[i]
-                if (slot && slot.type !== 0) { // 0 = air
-                    const name = removeMinecraftColorCodes(
-                        (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || slot.name || 'Unknown'
-                    )
-                    importantSlots.push({ slot: i, name })
-                }
-            }
-            
-            // Log up to MAX_LOGGED_SLOTS important slots to avoid spam
-            const slotsToLog = importantSlots.slice(0, MAX_LOGGED_SLOTS)
-            slotsToLog.forEach(({ slot, name }) => {
-                log(`[BazaarDebug]   Slot ${slot}: ${name}`, 'info')
-            })
-            
-            if (importantSlots.length > MAX_LOGGED_SLOTS) {
-                log(`[BazaarDebug]   ... and ${importantSlots.length - MAX_LOGGED_SLOTS} more slots`, 'info')
-            }
-            
-            log(`[BazaarDebug] === End Window Slots (${importantSlots.length} items) ===`, 'info')
+        // Click item — opens new window or same window updates
+        const clicked = await clickAndWaitForWindow(bot, itemSlot, 3000)
+        if (!clicked) {
+            // Maybe same window updated instead
+            await sleep(400)
         }
-        
-        // Helper: Check for red error messages in window
-        // Window type is from bot.currentWindow (mineflayer Window type)
-        const checkForBazaarErrors = (win: any): string | null => {
-            // Known bazaar error patterns that should abort order placement
-            const knownErrorPatterns = [
-                'cannot place any more',
-                'order limit',
-                'insufficient',
-                'not enough',
-                'maximum orders',
-                'buy order limit',
-                'sell offer limit'
-            ]
-            
-            for (let i = 0; i < win.slots.length; i++) {
-                const slot = win.slots[i]
-                if (!slot || !slot.nbt) continue
-                
-                // Check display name for red text (§c)
-                const rawName = (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                if (rawName.includes('§c')) {
-                    const cleanName = removeMinecraftColorCodes(rawName).toLowerCase()
-                    // Check if it matches known error patterns
-                    for (const pattern of knownErrorPatterns) {
-                        if (cleanName.includes(pattern)) {
-                            const fullCleanName = removeMinecraftColorCodes(rawName)
-                            log(`[BazaarDebug] Detected bazaar error message: ${fullCleanName}`, 'warn')
-                            return fullCleanName
-                        }
-                    }
-                }
-                
-                // Also check lore for red text errors
-                const lore = (slot?.nbt as any)?.value?.display?.value?.Lore?.value?.value
-                if (lore && Array.isArray(lore)) {
-                    for (const loreLine of lore) {
-                        const rawLoreLine = loreLine.toString()
-                        if (rawLoreLine.includes('§c')) {
-                            const cleanLine = removeMinecraftColorCodes(rawLoreLine).toLowerCase()
-                            // Check if it matches known error patterns
-                            for (const pattern of knownErrorPatterns) {
-                                if (cleanLine.includes(pattern)) {
-                                    const fullCleanLine = removeMinecraftColorCodes(rawLoreLine)
-                                    log(`[BazaarDebug] Detected bazaar error in lore: ${fullCleanLine}`, 'warn')
-                                    return fullCleanLine
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return null
+        if (!bot.currentWindow) {
+            throw new Error('Window closed after item selection')
         }
-        
-        // Use low-level open_window event to avoid breaking mineflayer's windowOpen handler
-        const windowListener = async (packet) => {
-            // Wait for mineflayer to process the window and populate bot.currentWindow
-            await sleep(MINEFLAYER_WINDOW_PROCESS_DELAY_MS)
-            
-            const window = bot.currentWindow
-            if (!window) {
-                log('[BazaarDebug] WARNING: bot.currentWindow is null after window packet', 'warn')
-                return
-            }
-            
-            let title = getWindowTitle(window)
-            log(`[BazaarDebug] Window opened: "${title}" at step: ${currentStep}`, 'info')
-            
-            // Log all slots in this window for debugging
-            logWindowSlots(window, title)
-            
-            // Check for red error messages from bazaar
-            const errorMessage = checkForBazaarErrors(window)
-            if (errorMessage) {
-                log(`[BazaarDebug] Bazaar error detected: ${errorMessage}`, 'error')
-                printMcChatToConsole(`§f[§4BAF§f]: §cBazaar error: ${errorMessage}`)
-                printMcChatToConsole(`§f[§4BAF§f]: §cAbandoning order placement due to bazaar error`)
-                bot._client.removeListener('open_window', windowListener)
+    }
+    
+    // Step 3: Item detail page — click Create Buy Order or Create Sell Offer
+    const orderButtonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
+    const orderButtonClicked = await findAndClick(bot, orderButtonName, { waitForNewWindow: true })
+    if (!orderButtonClicked) {
+        log(`[BAF] "${orderButtonName}" button click failed`, 'warn')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        throw new Error(`Failed to click "${orderButtonName}"`)
+    }
+    await sleep(300)
+    
+    // Step 4: Amount step (buy orders only — sell offers skip this)
+    if (isBuyOrder) {
+        // Find and click Custom Amount — this opens a sign
+        const customAmountSlot = findSlotByName(bot.currentWindow, 'Custom Amount')
+        if (customAmountSlot !== -1) {
+            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, Math.floor(amount).toString())
+            if (!amountSigned) {
+                log(`[BAF] Custom Amount sign failed`, 'warn')
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-                reject(new Error(`Bazaar error: ${errorMessage}`))
-                return
+                throw new Error('Failed to set amount')
             }
-
-            try {
-                // BUG 3: Check if AH flips are pending before each window transition
-                if (areAHFlipsPending()) {
-                    log('[BAF] Aborting bazaar operation — AH flips incoming', 'info')
-                    bot._client.removeListener('open_window', windowListener)
-                    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-                    bot.state = null
-                    reject(new Error('AH flips incoming - operation aborted'))
-                    return
-                }
-                
-                // 1. Item detail page - detected by order buttons, works with ANY window title
-                let hasOrderButton = findSlotWithName(window, 'Create Buy Order') !== -1 ||
-                                     findSlotWithName(window, 'Create Sell Offer') !== -1
-
-                if (hasOrderButton && currentStep !== 'selectOrderType') {
-                    const buttonName = isBuyOrder ? 'Create Buy Order' : 'Create Sell Offer'
-                    const slotToClick = findSlotWithName(window, buttonName)
-                    if (slotToClick === -1) throw new Error(`Could not find "${buttonName}" button`)
-                    log(`[BazaarDebug] On item detail page, clicking "${buttonName}" (slot ${slotToClick})`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Action] Clicking §e${buttonName}§7 at slot §b${slotToClick}`)
-                    currentStep = 'selectOrderType'
-                    await sleep(200)
-                    await clickWindow(bot, slotToClick).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                }
-                // 2. Search results page - has "Bazaar" in title
-                else if (title.includes('Bazaar') && currentStep === 'initial') {
-                    // Search results page - find and click the matching item
-                    log(`[BazaarDebug] On search results page, looking for item: "${itemName}"`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Search] Looking for §e${itemName}`)
-                    currentStep = 'searchResults'
-                    
-                    let itemSlot = -1
-                    for (let i = 0; i < window.slots.length; i++) {
-                        const slot = window.slots[i]
-                        const name = removeMinecraftColorCodes(
-                            (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
-                        )
-                        if (name && name.toLowerCase().includes(itemName.toLowerCase())) {
-                            itemSlot = i
-                            log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
-                            printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
-                            break
-                        }
-                    }
-                    
-                    if (itemSlot === -1) {
-                        // Fallback to slot 11 (first search result position)
-                        itemSlot = 11
-                        log(`[BazaarDebug] Item not found by name, using fallback slot ${itemSlot}`, 'warn')
-                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${itemSlot}`)
-                    }
-                    await sleep(200)
-                    await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                }
-                // 3. Amount screen - ONLY for buy orders (sell offers skip this step)
-                else if (findSlotWithName(window, 'Custom Amount') !== -1 && isBuyOrder) {
-                    const customAmountSlot = findSlotWithName(window, 'Custom Amount')
-                    log(`[BazaarDebug] Setting amount to ${amount} via slot ${customAmountSlot}`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Amount] Setting to §e${amount}§7 via slot §b${customAmountSlot}`)
-                    currentStep = 'setAmount'
-                    
-                    // Register sign handler BEFORE clicking to avoid race condition
-                    bot._client.once('open_sign_entity', ({ location }) => {
-                        log(`[BazaarDebug] Sign opened for amount, writing: ${amount}`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing amount: §e${amount}`)
-                        bot._client.write('update_sign', {
-                            location: { x: location.x, y: location.y, z: location.z },
-                            text1: `\"${amount.toString()}\"`,
-                            text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
-                            text3: '{"italic":false,"extra":[""],"text":""}',
-                            text4: '{"italic":false,"extra":[""],"text":""}'
-                        })
-                    })
-                    
-                    // Click Custom Amount at the detected slot
-                    await sleep(200)
-                    await clickWindow(bot, customAmountSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                }
-                // Safety: If Custom Amount appears for a sell offer, skip it
-                else if (findSlotWithName(window, 'Custom Amount') !== -1 && !isBuyOrder) {
-                    log(`[BazaarDebug] WARNING: Custom Amount screen appeared for sell offer - skipping`, 'warn')
-                    printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Unexpected amount screen for sell offer - skipping`)
-                    // Don't process this window further, return to wait for next window
-                    return
-                }
-                // 4. Price screen
-                else if (findSlotWithName(window, 'Custom Price') !== -1) {
-                    const customPriceSlot = findSlotWithName(window, 'Custom Price')
-                    log(`[BazaarDebug] Setting price per unit to ${pricePerUnit.toFixed(1)} via slot ${customPriceSlot}`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Price] Setting to §e${pricePerUnit.toFixed(1)}§7 coins via slot §b${customPriceSlot}`)
-                    currentStep = 'setPrice'
-                    
-                    // Register sign handler BEFORE clicking to avoid race condition
-                    bot._client.once('open_sign_entity', ({ location }) => {
-                        log(`[BazaarDebug] Sign opened for price, writing: ${pricePerUnit.toFixed(1)}`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${pricePerUnit.toFixed(1)}§7 coins`)
-                        bot._client.write('update_sign', {
-                            location: { x: location.x, y: location.y, z: location.z },
-                            text1: `\"${pricePerUnit.toFixed(1)}\"`,
-                            text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
-                            text3: '{"italic":false,"extra":[""],"text":""}',
-                            text4: '{"italic":false,"extra":[""],"text":""}'
-                        })
-                    })
-                    
-                    // Click Custom Price at the detected slot
-                    await sleep(200)
-                    await clickWindow(bot, customPriceSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                }
-                // 5. Confirm screen - click slot 13
-                else if (currentStep === 'setPrice') {
-                    // After setting price, the next window is always the confirm screen.
-                    // The confirm button is at slot 13. It is labeled "Buy Order" for buys
-                    // and "Sell Offer" for sells (NOT "Confirm").
-                    // Do NOT use findSlotWithName to find it because "Buy Order" would also
-                    // match "Create Buy Order" from step 1 via .includes(). Just use slot 13.
-                    log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot 13`, 'info')
-                    printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b13`)
-                    currentStep = 'confirm'
-                    await sleep(200)
-                    await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                    
-                    log(`[BazaarDebug] Order placement complete`, 'info')
-                    
-                    // Send webhook notification
-                    const totalPrice = pricePerUnit * amount
-                    sendWebhookBazaarOrderPlaced(itemName, amount, pricePerUnit, totalPrice, isBuyOrder)
-                    
-                    bot._client.removeListener('open_window', windowListener)
-                    await sleep(500)
-                    resolve()
-                }
-            } catch (error) {
-                log(`[BazaarDebug] Error in window handler at step ${currentStep}: ${error}`, 'error')
-                printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Failed at step ${currentStep}: ${error}`)
-                bot._client.removeListener('open_window', windowListener)
-                reject(error)
-            }
+            // Wait for window to return after sign
+            await waitForNewWindow(bot, 3000)
+            await sleep(300)
         }
-
-        // Use low-level open_window event instead of high-level windowOpen
-        bot._client.on('open_window', windowListener)
-
-        // Set a timeout for the entire operation
-        setTimeout(() => {
-            bot._client.removeListener('open_window', windowListener)
-            reject(new Error(`Bazaar order placement timed out at step: ${currentStep}`))
-        }, 20000)
-    })
+    }
+    
+    // Step 5: Price step — click Custom Price, opens a sign
+    if (!bot.currentWindow) {
+        throw new Error('Window closed before price step')
+    }
+    const customPriceSlot = findSlotByName(bot.currentWindow, 'Custom Price')
+    if (customPriceSlot === -1) {
+        log(`[BAF] Custom Price button not found`, 'warn')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        throw new Error('Custom Price button not found')
+    }
+    
+    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toFixed(1))
+    if (!priceSigned) {
+        log(`[BAF] Custom Price sign failed`, 'warn')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        throw new Error('Failed to set price')
+    }
+    
+    // Wait for confirm window after sign
+    await waitForNewWindow(bot, 3000)
+    await sleep(300)
+    
+    // Step 6: Confirm — click slot 13
+    if (!bot.currentWindow) {
+        throw new Error('Window closed before confirmation')
+    }
+    await clickWindow(bot, 13).catch(() => {})
+    await sleep(500)
+    
+    log(`[BAF] Successfully placed ${isBuyOrder ? 'buy order' : 'sell offer'} for ${amount}x ${itemName}`, 'info')
+    
+    // Send webhook notification
+    const totalPrice = pricePerUnit * amount
+    sendWebhookBazaarOrderPlaced(itemName, amount, pricePerUnit, totalPrice, isBuyOrder)
+    
+    if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
 }

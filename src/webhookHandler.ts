@@ -219,7 +219,7 @@ export function sendWebhookItemPurchased(itemName: string, price: string, whitel
     if (flip && flip.id) {
         webhookData.embeds[0].fields.push({
             name: '🔗 Auction Link',
-            value: `[View on Coflnet](https://sky.coflnet.com/auction/${flip.id})`,
+            value: `[View on Coflnet](https://sky.coflnet.com/auction/${flip.id}?refId=9KKPN9)`,
             inline: false
         })
     }
@@ -328,7 +328,7 @@ export function sendWebhookItemSold(itemName: string, price: string, purchasedBy
         if (auctionId) {
             webhookData.embeds[0].fields.push({
                 name: '🔗 Auction Link',
-                value: `[View on Coflnet](https://sky.coflnet.com/auction/${auctionId})`,
+                value: `[View on Coflnet](https://sky.coflnet.com/auction/${auctionId}?refId=9KKPN9)`,
                 inline: false
             })
         }

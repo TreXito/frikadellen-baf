@@ -293,37 +293,44 @@ export function interruptCurrentCommand(bot: MyBot): boolean {
     log(`[CommandQueue] Interrupting: ${currentCommand.name} for higher priority operation`, 'warn')
     printMcChatToConsole(`§f[§4BAF§f]: §e[CommandQueue] Interrupting: §c${currentCommand.name}`)
     
+    // BUG 3: Close any open window
+    if (bot.currentWindow) {
+        bot.closeWindow(bot.currentWindow)
+    }
+    
     // Abort any active order management
     const { abortOrderManagement } = require('./bazaarOrderManager')
     abortOrderManagement(bot)
     
-    // Re-queue the interrupted command with updated timestamp
+    // BUG 3: Re-queue the interrupted command, maintaining priority order
     const requeued: QueuedCommand = {
         ...currentCommand,
         queuedAt: Date.now()
     }
     
-    // Insert after all commands with the same or higher priority
-    // This maintains FIFO ordering within the same priority level
-    let insertIndex = commandQueue.length // Default to end of queue
+    // Insert at the appropriate position based on priority
+    // For commands with same priority as interrupted command, insert at front of that priority group
+    // This ensures interrupted operation runs before other same-priority operations
+    let insertIndex = 0
     for (let i = 0; i < commandQueue.length; i++) {
-        // Only insert before lower priority commands
-        if (commandQueue[i].priority > requeued.priority) {
-            insertIndex = i
+        // Insert after higher priority commands but before same or lower priority
+        if (commandQueue[i].priority < requeued.priority) {
+            insertIndex = i + 1
+        } else {
             break
         }
     }
     
     commandQueue.splice(insertIndex, 0, requeued)
     
-    log(`[CommandQueue] Re-queued interrupted command: ${requeued.name}`, 'info')
+    log(`[CommandQueue] Re-queued interrupted command at position ${insertIndex}: ${requeued.name}`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[CommandQueue] Re-queued: §e${requeued.name}`)
     
     // Reset processing flag to allow new command to start
     isProcessing = false
     currentCommand = null
     
-    // Reset bot state
+    // BUG 3: Reset bot state
     if (bot.state && bot.state !== 'purchasing') {
         log(`[CommandQueue] Resetting bot state from "${bot.state}" to null after interruption`, 'info')
         bot.state = null

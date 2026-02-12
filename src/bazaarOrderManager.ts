@@ -1293,7 +1293,7 @@ export function abortOrderManagement(bot: MyBot): void {
  * 
  * @returns Object with counts of cancelled and re-listed orders
  */
-export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, relisted: number }> {
+export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, relisted: number, claimed: number }> {
     log('[Startup] Checking and managing existing orders...', 'info')
     printMcChatToConsole('§f[§4BAF§f]: §7[Startup] Managing existing orders...')
     
@@ -1301,6 +1301,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
     const { placeBazaarOrder } = await import('./bazaarFlipHandler')
     
     let cancelledCount = 0
+    let claimedCount = 0
     let relistedCount = 0
     
     try {
@@ -1309,7 +1310,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         const bazaarOpened = await waitForNewWindow(bot, 5000)
         if (!bazaarOpened || !bot.currentWindow) {
             log('[Startup] Bazaar window did not open', 'warn')
-            return { cancelled: 0, relisted: 0 }
+            return { cancelled: 0, relisted: 0, claimed: 0 }
         }
         await sleep(50)
         
@@ -1321,142 +1322,132 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         
         if (!bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
-            return { cancelled: 0, relisted: 0 }
+            return { cancelled: 0, relisted: 0, claimed: 0 }
         }
         
         // Queues for re-listing
         const relistQueue: { itemName: string, pricePerUnit: number, amount: number }[] = []
         const sellQueue: { itemName: string, amount: number }[] = []
         
-        // STEP 1: Collect all orders from the window FIRST (before cancelling any)
-        // This prevents issues with slot indices shifting after each cancellation
-        interface OrderToCancel {
-            itemName: string
-            isBuy: boolean
-            orderInfo: { filled: number, remaining: number, pricePerUnit: number }
-        }
-        const ordersToCancel: OrderToCancel[] = []
-        
-        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-            const slot = bot.currentWindow.slots[i]
-            if (!slot || !slot.nbt) continue
+        // BUG FIX #1: Always find the FIRST order, process it, then loop back
+        // Never store slot positions across cancellations - they shift after each cancel
+        while (true) {
+            if (!bot.currentWindow) break
             
-            const name = removeMinecraftColorCodes(getSlotName(slot))
-            if (!name.startsWith('BUY ') && !name.startsWith('SELL ')) continue
-            
-            const isBuy = name.startsWith('BUY ')
-            const itemName = name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
-            
-            // Parse lore for fill status and price
-            const lore = getSlotLore(slot)
-            const orderInfo = parseOrderLore(lore)
-            
-            ordersToCancel.push({ itemName, isBuy, orderInfo })
-            log(`[Startup] Found order to cancel: ${isBuy ? 'BUY' : 'SELL'} ${itemName}`, 'debug')
-        }
-        
-        log(`[Startup] Found ${ordersToCancel.length} order(s) to cancel`, 'info')
-        
-        // STEP 2: Cancel each order by searching for it in the window
-        // This approach handles slot shifting correctly (same as cancelAllStaleOrders)
-        for (const order of ordersToCancel) {
-            // Find the order in the CURRENT window (slots may have shifted)
-            const searchPrefix = order.isBuy ? 'BUY' : 'SELL'
-            let orderSlot = -1
+            // Find the FIRST stale order in the current window (re-scan every iteration)
+            let foundOrder: { slot: number, name: string, isBuy: boolean } | null = null
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
                 if (!slot || !slot.nbt) continue
                 const name = removeMinecraftColorCodes(getSlotName(slot))
-                if (name.includes(searchPrefix) && name.toLowerCase().includes(order.itemName.toLowerCase())) {
-                    orderSlot = i
-                    break
-                }
+                if (!name.startsWith('BUY ') && !name.startsWith('SELL ')) continue
+                
+                // This is an order — cancel ALL orders during startup (they're from a previous session)
+                foundOrder = { slot: i, name, isBuy: name.startsWith('BUY ') }
+                break
             }
             
-            if (orderSlot === -1) {
-                log(`[Startup] ${order.itemName} not found in window (may have been auto-claimed), skipping`, 'debug')
-                continue
-            }
+            if (!foundOrder) break // No more orders to process
             
-            // Click the order to open it
-            await clickWindow(bot, orderSlot).catch(() => {})
-            await sleep(100)
+            const itemName = foundOrder.name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
+            
+            // Read the lore BEFORE clicking (from the Manage Orders list view)
+            // Parse fill status, price etc from the lore
+            // Safety check: ensure slot still exists and has NBT data (window could have changed)
+            const slot = bot.currentWindow.slots[foundOrder.slot]
+            if (!slot || !slot.nbt) {
+                log(`[Startup] Slot ${foundOrder.slot} no longer valid, re-scanning`, 'debug')
+                continue // Re-scan from beginning
+            }
+            const lore = getSlotLore(slot)
+            const orderInfo = parseOrderLore(lore)
+            
+            // Click the order — window transitions to order detail view
+            await clickWindow(bot, foundOrder.slot).catch((err) => {
+                log(`[Startup] Failed to click order slot ${foundOrder.slot} for ${itemName}: ${err}`, 'warn')
+            })
+            await sleep(400)
             
             if (!bot.currentWindow) break
             
-            // Click Cancel Order at slot 13
-            await clickWindow(bot, 13).catch(() => {})
-            await sleep(100)
+            // Find Cancel Order button
+            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
             
-            cancelledCount++
-            
-            if (!order.isBuy) {
-                // Sell offer cancelled — add to re-list queue
-                if (order.orderInfo.remaining > 0 && order.orderInfo.pricePerUnit > 0) {
-                    relistQueue.push({
-                        itemName: order.itemName,
-                        pricePerUnit: order.orderInfo.pricePerUnit,
-                        amount: order.orderInfo.remaining
-                    })
-                    log(`[Startup] Will re-list: ${order.orderInfo.remaining}x ${order.itemName} at ${order.orderInfo.pricePerUnit}`, 'debug')
+            if (cancelSlot !== -1) {
+                // Cancel it
+                await clickWindow(bot, cancelSlot).catch((err) => {
+                    log(`[Startup] Failed to click cancel button (slot ${cancelSlot}) for ${itemName}: ${err}`, 'warn')
+                })
+                await sleep(400)
+                
+                // Track for re-listing
+                if (!foundOrder.isBuy) {
+                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
+                        relistQueue.push({ itemName, pricePerUnit: orderInfo.pricePerUnit, amount: orderInfo.remaining })
+                    }
+                } else if (orderInfo.filled > 0) {
+                    sellQueue.push({ itemName, amount: orderInfo.filled })
                 }
+                
+                cancelledCount++
+                log(`[Startup] Cancelled ${foundOrder.isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
             } else {
-                // Buy order cancelled — sell any claimed items
-                if (order.orderInfo.filled > 0) {
-                    sellQueue.push({
-                        itemName: order.itemName,
-                        amount: order.orderInfo.filled
-                    })
-                    log(`[Startup] Will sell ${order.orderInfo.filled}x ${order.itemName} from filled buy order`, 'debug')
+                // No cancel button — fully filled, just claimed
+                if (foundOrder.isBuy) {
+                    // Use filled amount (how many items were bought and need to be sold)
+                    // Fallback to total order amount if filled field is 0 (shouldn't happen for fully filled orders)
+                    const amount = orderInfo.filled || orderInfo.amount
+                    if (amount > 0) {
+                        sellQueue.push({ itemName, amount })
+                    }
                 }
+                claimedCount++
+                log(`[Startup] Claimed fully filled order for ${itemName}`, 'info')
             }
             
-            log(`[Startup] Cancelled ${order.isBuy ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
+            // CRITICAL: After cancel/claim, the window returns to the Manage Orders list
+            // with the cancelled order REMOVED and all slots SHIFTED
+            // Wait for the window to update before the next iteration
+            await sleep(400)
             
-            // Wait for window to return to Manage Orders list
-            await sleep(100)
-            if (!bot.currentWindow) break
+            // The while loop will now re-scan from the beginning with updated slot positions
         }
         
         // Close Manage Orders
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         await sleep(50)
         
-        // Re-list cancelled sell offers
+        // BUG FIX #2: Re-list cancelled sell offers NOW (inside startup function, not as queued commands)
         for (const item of relistQueue) {
-            // Defensive check: skip entries with non-positive amounts or prices from failed lore parsing
-            if (item.amount <= 0 || item.pricePerUnit <= 0) {
-                log(`[Startup] Skipping invalid re-list entry for ${item.itemName}`, 'debug')
-                continue
-            }
+            if (item.amount <= 0 || item.pricePerUnit <= 0) continue
             
-            log(`[Startup] Re-listing sell offer: ${item.amount}x ${item.itemName} at ${item.pricePerUnit}`, 'info')
+            log(`[Startup] Re-listing ${item.amount}x ${item.itemName} at ${item.pricePerUnit}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${item.itemName}`)
             
             try {
                 await placeBazaarOrder(bot, item.itemName, item.amount, item.pricePerUnit, false)
                 relistedCount++
-                await sleep(100)
+                await sleep(500)
             } catch (err) {
                 log(`[Startup] Failed to re-list ${item.itemName}: ${err}`, 'warn')
             }
         }
         
-        // TODO: Implement automatic selling of buy order items by fetching current prices from Coflnet API
+        // Sell items from filled buy orders (would require fetching current prices from API)
         // Currently skipped because it requires fetching current market prices from Coflnet API
-        // The sellQueue contains items from completed/partially filled buy orders
         if (sellQueue.length > 0) {
             log(`[Startup] Skipping sell creation for ${sellQueue.length} buy order item(s) (requires price fetch)`, 'debug')
         }
         
-        log(`[Startup] Order management complete - cancelled ${cancelledCount}, re-listed ${relistedCount}`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount} order(s), re-listed ${relistedCount}`)
+        log(`[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`, 'info')
+        log(`[Startup] Details: cancelled ${cancelledCount}, claimed ${claimedCount}, re-listed ${relistedCount}`, 'debug')
+        printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`)
         
-        return { cancelled: cancelledCount, relisted: relistedCount }
+        return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }
         
     } catch (error) {
         log(`[Startup] Error during order management: ${error}`, 'error')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return { cancelled: cancelledCount, relisted: relistedCount }
+        return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }
     }
 }

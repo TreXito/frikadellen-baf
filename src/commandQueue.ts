@@ -170,6 +170,13 @@ async function processQueue(bot: MyBot): Promise<void> {
             continue
         }
         
+        // BUG FIX #3: Check if bot is in startup phase
+        if (bot.state === 'startup') {
+            // Don't process commands during startup
+            await sleep(150)
+            continue
+        }
+        
         // Check if bot is in purchasing state (AH flip in progress)
         // This is the ONLY state that should block everything
         if (bot.state === 'purchasing') {

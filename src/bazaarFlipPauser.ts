@@ -127,6 +127,11 @@ export function resumeBazaarFlips(): void {
  * @param bot The Minecraft bot instance (optional, used to abort order management)
  */
 export function checkAndPauseForAHFlip(message: string, enableBazaarFlips: boolean, enableAHFlips: boolean, bot?: MyBot): void {
+    // BUG FIX #3: Don't pause during startup phase
+    if (bot && bot.state === 'startup') {
+        return
+    }
+    
     if (isAHFlipIncomingMessage(message)) {
         log('Detected AH flip incoming message', 'info')
         if (enableBazaarFlips && enableAHFlips) {

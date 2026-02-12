@@ -302,12 +302,14 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
     const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
 
-    // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
-    // The /bz command expects display names as shown in Hypixel's bazaar UI
-    const searchTerm = itemName || itemTag
-    if (!itemName && itemTag) {
-        log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
-        log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
+    // Prefer itemTag (internal ID like "FLAWED_PERIDOT_GEM") over itemName for /bz command
+    // Using itemTag skips the search results page and goes directly to the item, which is faster
+    // Falls back to itemName if itemTag is not available
+    const searchTerm = itemTag || itemName
+    if (itemTag) {
+        log(`[BazaarDebug] Using itemTag "${itemTag}" for /bz command (faster, skips search results)`, 'info')
+    } else {
+        log(`[BazaarDebug] itemTag not available, using itemName "${itemName}" for /bz command`, 'info')
     }
 
     // Retry loop for order placement

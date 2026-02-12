@@ -24,6 +24,9 @@ let bazaarLimitResetTimer: NodeJS.Timeout | null = null
 // Debounce timer for order count refresh after limit detection
 let orderRefreshDebounceTimer: NodeJS.Timeout | null = null
 
+// Bazaar order cooldown tracking
+let bazaarOrderCooldownUntil: number = 0 // Timestamp when cooldown expires
+
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
     bot.on('message', (message: ChatMessage, type) => {
@@ -284,6 +287,18 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             
+            // Detect "Placing orders is on cooldown for up to 1 minute!" message
+            if (text.includes('[Bazaar]') && text.includes('cooldown')) {
+                const cleanText = removeMinecraftColorCodes(text)
+                log('[BAF]: Detected bazaar order cooldown message', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §c[Cooldown] Bazaar orders on cooldown - waiting 1 minute')
+                
+                // Set cooldown to expire in 1 minute (60 seconds)
+                bazaarOrderCooldownUntil = Date.now() + 60000
+                
+                log(`[BAF]: Bazaar order cooldown set until ${new Date(bazaarOrderCooldownUntil).toISOString()}`, 'info')
+            }
+            
             // Detect "You don't have the space required to claim that!" message
             if (text.includes("You don't have the space required to claim that!")) {
                 log('[BAF]: Inventory full detected - triggering inventory management', 'warn')
@@ -306,6 +321,23 @@ export async function registerIngameMessageHandler(bot: MyBot) {
  */
 export function isBazaarDailyLimitReached(): boolean {
     return bazaarDailyLimitReached
+}
+
+/**
+ * Check if bazaar orders are on cooldown
+ * @returns true if on cooldown, false otherwise
+ */
+export function isBazaarOrderOnCooldown(): boolean {
+    return Date.now() < bazaarOrderCooldownUntil
+}
+
+/**
+ * Get the remaining cooldown time in milliseconds
+ * @returns milliseconds until cooldown expires, or 0 if not on cooldown
+ */
+export function getBazaarOrderCooldownRemaining(): number {
+    const remaining = bazaarOrderCooldownUntil - Date.now()
+    return remaining > 0 ? remaining : 0
 }
 
 export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promise<boolean> {

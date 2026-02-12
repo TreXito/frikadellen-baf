@@ -341,14 +341,14 @@ export function resetOrderLimitFlags(): void {
  * @returns Promise<boolean> True if refresh succeeded, false otherwise
  */
 export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Promise<boolean> {
-    const MAX_RETRIES = 2
+    const MAX_RETRY_ATTEMPTS = 2 // Total of 3 attempts (initial + 2 retries)
     
     if (bot.state) {
         log('[OrderManager] Bot is busy, cannot refresh order counts', 'debug')
         return false
     }
     
-    log(`[OrderManager] Refreshing order counts... (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`, 'debug')
+    log(`[OrderManager] Refreshing order counts... (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS + 1})`, 'debug')
     bot.state = 'bazaar'
     
     try {
@@ -360,7 +360,7 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
             bot.state = null
             
             // Retry if we haven't exceeded max retries
-            if (retryCount < MAX_RETRIES) {
+            if (retryCount < MAX_RETRY_ATTEMPTS) {
                 await sleep(1000) // Wait 1 second before retry
                 return refreshOrderCounts(bot, retryCount + 1)
             }
@@ -381,7 +381,7 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
             bot.state = null
             
             // Retry if we haven't exceeded max retries
-            if (retryCount < MAX_RETRIES) {
+            if (retryCount < MAX_RETRY_ATTEMPTS) {
                 await sleep(1000) // Wait 1 second before retry
                 return refreshOrderCounts(bot, retryCount + 1)
             }
@@ -391,7 +391,9 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
         // Wait for window to populate
         await sleep(300)
         
-        // Count orders in the window (updates global state: currentBazaarOrders, currentBuyOrders)
+        // Count orders in the window
+        // Updates global state: currentBazaarOrders, currentBuyOrders, lastOrderCountUpdate
+        // May also update maxTotalOrders and maxBuyOrders if observed counts exceed current max
         countOrdersInWindow(bot.currentWindow)
         
         // Close window
@@ -407,7 +409,7 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
         bot.state = null
         
         // Retry if we haven't exceeded max retries
-        if (retryCount < MAX_RETRIES) {
+        if (retryCount < MAX_RETRY_ATTEMPTS) {
             await sleep(1000) // Wait 1 second before retry
             return refreshOrderCounts(bot, retryCount + 1)
         }

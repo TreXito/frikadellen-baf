@@ -156,13 +156,13 @@ async function processQueue(bot: MyBot): Promise<void> {
     while (true) {
         if (commandQueue.length === 0) {
             // No commands to process, wait and check again
-            await sleep(50)
+            await sleep(75)
             continue
         }
         
         if (isProcessing) {
             // Already processing a command, wait
-            await sleep(50)
+            await sleep(75)
             continue
         }
         

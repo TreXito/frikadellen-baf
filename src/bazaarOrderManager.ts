@@ -338,6 +338,8 @@ export function resetOrderLimitFlags(): void {
 /**
  * Refresh order counts by opening Manage Orders window
  * Should be called before placing orders if count is stale (>2 minutes)
+ * @param bot The Minecraft bot instance
+ * @param retryCount Internal parameter for retry logic (defaults to 0, do not set manually)
  * @returns Promise<boolean> True if refresh succeeded, false otherwise
  */
 export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Promise<boolean> {

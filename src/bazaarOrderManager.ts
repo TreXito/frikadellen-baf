@@ -1364,7 +1364,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             // Click the order — window transitions to order detail view
             await clickWindow(bot, foundOrder.slot).catch((err) => {
-                log(`[Startup] Failed to click order slot: ${err}`, 'warn')
+                log(`[Startup] Failed to click order slot ${foundOrder.slot} for ${itemName}: ${err}`, 'warn')
             })
             await sleep(400)
             
@@ -1376,7 +1376,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (cancelSlot !== -1) {
                 // Cancel it
                 await clickWindow(bot, cancelSlot).catch((err) => {
-                    log(`[Startup] Failed to click cancel button: ${err}`, 'warn')
+                    log(`[Startup] Failed to click cancel button (slot ${cancelSlot}) for ${itemName}: ${err}`, 'warn')
                 })
                 await sleep(400)
                 
@@ -1394,8 +1394,8 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             } else {
                 // No cancel button — fully filled, just claimed
                 if (foundOrder.isBuy) {
-                    // Use filled amount for consistency
-                    // Fallback to orderInfo.amount if lore parsing fails for filled field
+                    // Use filled amount (how many items were bought and need to be sold)
+                    // Fallback to total order amount if filled field is 0 (shouldn't happen for fully filled orders)
                     const amount = orderInfo.filled || orderInfo.amount
                     if (amount > 0) {
                         sellQueue.push({ itemName, amount })

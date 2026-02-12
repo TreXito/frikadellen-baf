@@ -565,8 +565,12 @@ async function onWebsocketMessage(msg) {
 /**
  * Runs the startup workflow after joining SkyBlock
  * Order: Cookie check → Discover orders → Execute orders → Start accepting flips
+ * BUG FIX #3: Keeps bot.state = 'startup' throughout to prevent interruptions
  */
 async function runStartupWorkflow() {
+    // BUG FIX #3: Set startup state to prevent interruptions during entire startup phase
+    bot.state = 'startup'
+    
     let ordersFound = 0
     
     log('========================================', 'info')
@@ -658,6 +662,9 @@ async function runStartupWorkflow() {
     printMcChatToConsole('§f[§4BAF§f]: §6========================================')
     printMcChatToConsole('§f[§4BAF§f]: §a§lStartup Workflow Complete - Ready!')
     printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    
+    // BUG FIX #3: Clear startup state - bot can now accept flips and commands
+    bot.state = null
     
     // Send webhook notification about startup complete
     sendWebhookStartupComplete(ordersFound)

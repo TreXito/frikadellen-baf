@@ -197,6 +197,12 @@ export function parseBazaarFlipMessage(message: string): BazaarFlipRecommendatio
  * @param recommendation The parsed bazaar flip recommendation
  */
 export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation: BazaarFlipRecommendation) {
+    // BUG FIX #3: Ignore flip recommendations during startup phase
+    if (bot.state === 'startup') {
+        log('[BazaarDebug] Ignoring bazaar flip during startup phase', 'debug')
+        return
+    }
+    
     // Check if bazaar flips are enabled in config
     if (!getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
         log('[BazaarDebug] Bazaar flips are disabled in config', 'warn')

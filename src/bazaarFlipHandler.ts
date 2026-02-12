@@ -247,11 +247,35 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     // Feature 6: Check if bot can afford the order
     const totalPrice = recommendation.totalPrice || (recommendation.pricePerUnit * recommendation.amount)
     const currentPurse = getCurrentPurse()
-    if (currentPurse > 0 && totalPrice > currentPurse) {
-        log(`[BAF]: Cannot place order - insufficient funds (need ${totalPrice.toFixed(0)}, have ${currentPurse.toFixed(0)})`, 'warn')
-        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - insufficient funds`)
-        return
+    
+    // TEMPORARY: Verbose debug logging to diagnose purse parsing issue
+    log(`[PurseDebug] currentPurse = ${currentPurse}`, 'info')
+    log(`[PurseDebug] bot.scoreboard keys = ${Object.keys(bot.scoreboard || {})}`, 'info')
+    log(`[PurseDebug] bot.scoreboard.sidebar = ${!!bot.scoreboard?.sidebar}`, 'info')
+    if (bot.scoreboard?.sidebar) {
+        log(`[PurseDebug] sidebar.items count = ${bot.scoreboard.sidebar.items?.length}`, 'info')
+        // Log first 5 items to see the structure
+        const items = bot.scoreboard.sidebar.items || []
+        for (let i = 0; i < Math.min(5, items.length); i++) {
+            const item = items[i]
+            log(`[PurseDebug] item[${i}] = ${JSON.stringify({
+                name: item?.name,
+                displayName: item?.displayName?.toString?.(),
+                displayNameText: item?.displayName?.getText?.(null),
+                value: item?.value,
+                keys: Object.keys(item || {})
+            })}`, 'info')
+        }
     }
+    
+    // TEMPORARY: Don't block orders on purse check until we fix parsing
+    // TODO: re-enable when purse parsing works
+    // if (currentPurse > 0 && totalPrice > currentPurse) {
+    //     log(`[BAF]: Cannot place order - insufficient funds (need ${totalPrice.toFixed(0)}, have ${currentPurse.toFixed(0)})`, 'warn')
+    //     printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - insufficient funds`)
+    //     return
+    // }
+    log(`[BAF] Purse check: ${currentPurse} vs cost ${totalPrice} (check disabled until parsing fixed)`, 'debug')
 
     // Check if bazaar flips are paused due to incoming AH flip
     if (areBazaarFlipsPaused()) {

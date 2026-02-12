@@ -2,7 +2,7 @@ import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
 import { getConfigProperty } from './configHelper'
-import { areBazaarFlipsPaused } from './bazaarFlipPauser'
+import { areBazaarFlipsPaused, areAHFlipsPending } from './bazaarFlipPauser'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { sendWebhookBazaarOrderCancelled, sendWebhookBazaarOrderClaimed } from './webhookHandler'
 
@@ -532,7 +532,7 @@ export function stopOrderManager(): void {
 
 /**
  * Check for orders that need to be cancelled due to timeout
- * Cancels ALL stale orders at once by queueing them with delays
+ * Cancels ALL stale orders in a single batch operation
  */
 async function checkOrders(bot: MyBot): Promise<void> {
     if (isManagingOrders) {
@@ -567,24 +567,15 @@ async function checkOrders(bot: MyBot): Promise<void> {
     log(`[OrderManager] Found ${staleOrders.length} stale order(s) to cancel`, 'info')
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s) - cancelling all`)
     
-    // Cancel ALL stale orders at once
-    staleOrders.forEach((orderToCancel, index) => {
-        const ageMinutes = Math.floor((now - orderToCancel.placedAt) / 60000)
-        log(`[OrderManager] Queuing cancellation of stale ${orderToCancel.isBuyOrder ? 'buy order' : 'sell offer'} for ${orderToCancel.itemName} (age: ${ageMinutes} minutes)`, 'info')
-        
-        // Add a delay between operations to avoid overwhelming the command queue
-        setTimeout(() => {
-            const commandName = `Cancel Order: ${orderToCancel.itemName}`
-            enqueueCommand(
-                commandName,
-                CommandPriority.LOW,
-                async () => {
-                    await cancelSingleOrder(bot, orderToCancel)
-                },
-                true // interruptible - can be interrupted by AH flips
-            )
-        }, index * BATCH_CANCEL_DELAY_MS)
-    })
+    // Queue a SINGLE command to cancel all stale orders in one Manage Orders session
+    enqueueCommand(
+        `Cancel All Stale Orders (${staleOrders.length})`,
+        CommandPriority.LOW,
+        async () => {
+            await cancelAllStaleOrders(bot, staleOrders)
+        },
+        true // interruptible - can be interrupted by AH flips
+    )
 }
 
 /**
@@ -760,6 +751,137 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
         bot.on('windowOpen', windowHandler)
         bot.chat('/bz')
     })
+}
+
+/**
+ * Cancel ALL stale orders in a single Manage Orders session
+ * Opens Manage Orders once, then loops through all stale orders cancelling them one by one
+ */
+async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]): Promise<void> {
+    if (staleOrders.length === 0) return
+
+    log(`[OrderManager] Found ${staleOrders.length} stale order(s) - cancelling in single session`, 'info')
+
+    isManagingOrders = true
+    bot.state = 'bazaar'
+
+    try {
+        // Step 1: Open /bz
+        bot.chat('/bz')
+        const bazaarOpened = await waitForNewWindow(bot, 5000)
+        if (!bazaarOpened || !bot.currentWindow) {
+            log('[OrderManager] Bazaar window did not open', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return
+        }
+        await sleep(300)
+
+        // Step 2: Click Manage Orders — new window opens
+        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
+        if (manageSlot === -1) {
+            log('[OrderManager] Could not find Manage Orders button', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return
+        }
+
+        const manageOpened = waitForNewWindow(bot, 5000)
+        await clickWindow(bot, manageSlot).catch(() => {})
+        await manageOpened
+        await sleep(300)
+
+        if (!bot.currentWindow) {
+            log('[OrderManager] Manage Orders window did not open', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return
+        }
+
+        // Step 3: Update real order count from what we see
+        const orderCount = countOrdersInWindow(bot.currentWindow)
+        currentBazaarOrders = orderCount.total
+
+        // Step 4: Cancel each stale order one by one, WITHOUT closing Manage Orders
+        for (const order of staleOrders) {
+            // Check if AH flips incoming — abort if so
+            if (areAHFlipsPending()) {
+                log('[OrderManager] AH flips incoming, aborting cancellation', 'info')
+                break
+            }
+
+            // Find the order in the CURRENT window
+            const searchPrefix = order.isBuyOrder ? 'BUY' : 'SELL'
+            let orderSlot = -1
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (!slot || !slot.nbt) continue
+                const name = removeMinecraftColorCodes(getSlotName(slot))
+                if (name.includes(searchPrefix) && name.toLowerCase().includes(order.itemName.toLowerCase())) {
+                    orderSlot = i
+                    break
+                }
+            }
+
+            if (orderSlot === -1) {
+                log(`[OrderManager] ${order.itemName} not found in Manage Orders, removing from tracking`, 'debug')
+                order.cancelled = true
+                continue
+            }
+
+            // Click the order — same window updates
+            await clickWindow(bot, orderSlot).catch(() => {})
+            await sleep(WINDOW_UPDATE_DELAY_MS)
+
+            if (!bot.currentWindow) break
+
+            // Find and click Cancel Order
+            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
+            if (cancelSlot !== -1) {
+                await clickWindow(bot, cancelSlot).catch(() => {})
+                await sleep(300)
+                
+                const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+                log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
+                printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+                
+                // Send webhook notification
+                sendWebhookBazaarOrderCancelled(
+                    order.itemName,
+                    order.amount,
+                    order.pricePerUnit,
+                    order.isBuyOrder,
+                    ageMinutes,
+                    order.filled || 0,
+                    order.totalAmount || order.amount
+                )
+            } else {
+                log(`[OrderManager] No Cancel Order for ${order.itemName} — may be fully filled`, 'info')
+            }
+
+            order.cancelled = true
+
+            // After cancelling, the window should return to the Manage Orders list
+            // Wait a moment for it to refresh
+            await sleep(300)
+
+            if (!bot.currentWindow) break
+        }
+
+        // Close window when done
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        
+        // Clean up tracked orders
+        cleanupTrackedOrders()
+        
+    } catch (error) {
+        log(`[OrderManager] Error in cancelAllStaleOrders: ${error}`, 'error')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+    } finally {
+        bot.state = null
+        isManagingOrders = false
+    }
 }
 
 /**

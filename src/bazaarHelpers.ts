@@ -113,7 +113,7 @@ async function waitForWindowChange(bot: MyBot, beforeSlots: string[], timeout: n
  * BUG 2: Click a slot and wait for a NEW window to open.
  * Retries the click if the window doesn't open within timeout.
  */
-export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 2000, maxRetries = 2): Promise<boolean> {
+export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 1500, maxRetries = 2): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         if (areAHFlipsPending()) return false
         
@@ -125,7 +125,7 @@ export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 
         
         if (attempt <= maxRetries) {
             log(`[BAF] Window didn't open after clicking slot ${slot}, retrying (${attempt}/${maxRetries})`, 'debug')
-            await sleep(150)
+            await sleep(100)
         }
     }
     return false
@@ -136,7 +136,7 @@ export async function clickAndWaitForWindow(bot: MyBot, slot: number, timeout = 
  * Detects update by checking if slot contents change.
  * Retries click if nothing changes.
  */
-export async function clickAndWaitForUpdate(bot: MyBot, slot: number, timeout = 1500, maxRetries = 2): Promise<boolean> {
+export async function clickAndWaitForUpdate(bot: MyBot, slot: number, timeout = 1200, maxRetries = 2): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         if (areAHFlipsPending()) return false
         if (!bot.currentWindow) return false
@@ -153,7 +153,7 @@ export async function clickAndWaitForUpdate(bot: MyBot, slot: number, timeout = 
         
         if (attempt <= maxRetries) {
             log(`[BAF] Window didn't update after clicking slot ${slot}, retrying (${attempt}/${maxRetries})`, 'debug')
-            await sleep(150)
+            await sleep(100)
         }
     }
     return false
@@ -168,7 +168,7 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
     timeout?: number,
     maxRetries?: number
 } = {}): Promise<boolean> {
-    const { waitForNewWindow: expectNewWindow = false, timeout = 2000, maxRetries = 2 } = opts
+    const { waitForNewWindow: expectNewWindow = false, timeout = 1500, maxRetries = 2 } = opts
     
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         if (areAHFlipsPending()) return false
@@ -177,15 +177,15 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
         // Try to find the button — poll briefly if not found
         let slot = -1
         const findStart = Date.now()
-        while (slot === -1 && Date.now() - findStart < 1000) {
+        while (slot === -1 && Date.now() - findStart < 800) {
             slot = findSlotWithName(bot.currentWindow, buttonName)
-            if (slot === -1) await sleep(100)
+            if (slot === -1) await sleep(50)
         }
         
         if (slot === -1) {
             if (attempt <= maxRetries) {
                 log(`[BAF] Button "${buttonName}" not found, retrying (${attempt}/${maxRetries})`, 'debug')
-                await sleep(200)
+                await sleep(100)
                 continue
             }
             log(`[BAF] Button "${buttonName}" not found after ${maxRetries + 1} attempts`, 'warn')
@@ -202,7 +202,7 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
         
         if (attempt <= maxRetries) {
             log(`[BAF] Click on "${buttonName}" didn't produce expected result, retrying (${attempt}/${maxRetries})`, 'debug')
-            await sleep(150)
+            await sleep(100)
         }
     }
     return false
@@ -212,7 +212,7 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
  * BUG 2: Register sign listener BEFORE clicking, then click and wait for sign.
  * Retries if sign doesn't open.
  */
-export async function clickAndWaitForSign(bot: MyBot, slot: number, value: string, timeout = 500, maxRetries = 2): Promise<boolean> {
+export async function clickAndWaitForSign(bot: MyBot, slot: number, value: string, timeout = 400, maxRetries = 2): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         if (areAHFlipsPending()) return false
         
@@ -245,7 +245,7 @@ export async function clickAndWaitForSign(bot: MyBot, slot: number, value: strin
         
         if (attempt <= maxRetries) {
             log(`[BAF] Sign didn't open after clicking slot ${slot}, retrying (${attempt}/${maxRetries})`, 'debug')
-            await sleep(200)
+            await sleep(100)
         }
     }
     return false

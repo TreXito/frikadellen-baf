@@ -4,7 +4,7 @@ import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from '.
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
-import { recordOrder, canPlaceOrder } from './bazaarOrderManager'
+import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { isBazaarDailyLimitReached } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
@@ -209,9 +209,30 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     // Check if we can place the order (dynamic slot checking)
     const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
     if (!orderCheck.canPlace) {
-        log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
-        printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
-        return
+        // If order count needs refresh, attempt to refresh and try again
+        if (orderCheck.needsRefresh) {
+            log('[BAF]: Order count is stale, refreshing...', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §7Refreshing order count...')
+            const refreshed = await refreshOrderCounts(bot)
+            if (refreshed) {
+                log('[BAF]: Order count refreshed, retrying order placement', 'info')
+                // Check again after refresh
+                const retryCheck = canPlaceOrder(recommendation.isBuyOrder)
+                if (!retryCheck.canPlace) {
+                    log(`[BAF]: Cannot place order after refresh - ${retryCheck.reason}`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${retryCheck.reason}`)
+                    return
+                }
+            } else {
+                log('[BAF]: Failed to refresh order count', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §cFailed to refresh order count')
+                return
+            }
+        } else {
+            log(`[BAF]: Cannot place order - ${orderCheck.reason}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${orderCheck.reason}`)
+            return
+        }
     }
 
     // Feature 6: Check if bot can afford the order

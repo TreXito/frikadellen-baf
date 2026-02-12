@@ -18,6 +18,7 @@ const MINEFLAYER_WINDOW_PROCESS_DELAY_MS = 300 // Time to wait for mineflayer to
 const BAZAAR_RETRY_DELAY_MS = 2000
 const MAX_ORDER_PLACEMENT_RETRIES = 3 // Maximum number of retries for order placement
 const RETRY_BACKOFF_BASE_MS = 1000 // Base delay for exponential backoff between retries
+const FIRST_SEARCH_RESULT_SLOT = 11 // Fallback slot for first item in bazaar search results
 // Price failsafe thresholds
 const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 90% of order price
 const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
@@ -629,11 +630,10 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     
                     if (itemSlot === -1) {
                         // Fallback to slot 11 (first search result position)
-                        const fallbackSlot = 11
-                        log(`[BazaarDebug] Item not found by name, using fallback slot ${fallbackSlot}`, 'warn')
-                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${fallbackSlot}`)
+                        log(`[BazaarDebug] Item not found by name, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`, 'warn')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Item not found, using fallback slot ${FIRST_SEARCH_RESULT_SLOT}`)
                         await sleep(200)
-                        await clickWindow(bot, fallbackSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                        await clickWindow(bot, FIRST_SEARCH_RESULT_SLOT).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
                     } else {
                         // Get the item name from the slot for logging
                         const slot = window.slots[itemSlot]

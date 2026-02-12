@@ -302,18 +302,29 @@ export function interruptCurrentCommand(bot: MyBot): boolean {
     const { abortOrderManagement } = require('./bazaarOrderManager')
     abortOrderManagement(bot)
     
-    // BUG 3: Re-queue the interrupted command at the FRONT (before same or lower priority)
+    // BUG 3: Re-queue the interrupted command, maintaining priority order
     const requeued: QueuedCommand = {
         ...currentCommand,
         queuedAt: Date.now()
     }
     
-    // Insert at the FRONT of the queue (at position 0)
-    // This ensures interrupted operations are processed immediately after the AH flip
-    commandQueue.unshift(requeued)
+    // Insert at the appropriate position based on priority
+    // For commands with same priority as interrupted command, insert at front of that priority group
+    // This ensures interrupted operation runs before other same-priority operations
+    let insertIndex = 0
+    for (let i = 0; i < commandQueue.length; i++) {
+        // Insert after higher priority commands but before same or lower priority
+        if (commandQueue[i].priority < requeued.priority) {
+            insertIndex = i + 1
+        } else {
+            break
+        }
+    }
     
-    log(`[CommandQueue] Re-queued interrupted command at FRONT: ${requeued.name}`, 'info')
-    printMcChatToConsole(`§f[§4BAF§f]: §7[CommandQueue] Re-queued at FRONT: §e${requeued.name}`)
+    commandQueue.splice(insertIndex, 0, requeued)
+    
+    log(`[CommandQueue] Re-queued interrupted command at position ${insertIndex}: ${requeued.name}`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §7[CommandQueue] Re-queued: §e${requeued.name}`)
     
     // Reset processing flag to allow new command to start
     isProcessing = false

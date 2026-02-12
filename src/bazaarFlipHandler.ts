@@ -439,7 +439,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
         // Find and click Custom Amount — this opens a sign
         const customAmountSlot = findSlotByName(bot.currentWindow, 'Custom Amount')
         if (customAmountSlot !== -1) {
-            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, amount.toString())
+            const amountSigned = await clickAndWaitForSign(bot, customAmountSlot, Math.floor(amount).toString())
             if (!amountSigned) {
                 log(`[BAF] Custom Amount sign failed`, 'warn')
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
@@ -462,7 +462,7 @@ async function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pr
         throw new Error('Custom Price button not found')
     }
     
-    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toString())
+    const priceSigned = await clickAndWaitForSign(bot, customPriceSlot, pricePerUnit.toFixed(1))
     if (!priceSigned) {
         log(`[BAF] Custom Price sign failed`, 'warn')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)

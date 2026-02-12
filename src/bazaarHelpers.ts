@@ -50,16 +50,6 @@ export function findItemInSearchResults(window: any, itemName: string): number {
             log(`[BAF] Found exact match for "${itemName}" at slot ${i}`, 'info')
             return i
         }
-        
-        // Only accept partial if target fully matches as a standalone word boundary
-        // "Redstone Dust" should NOT match "Enchanted Redstone Dust"
-        // But allow matching if the slot name is a shorter version of what we're looking for
-        if (slotName.includes(cleanTarget) && cleanTarget.includes(slotName)) {
-            if (bestScore < 2) { 
-                bestSlot = i
-                bestScore = 2 
-            }
-        }
     }
     
     // BUG 1: If no exact match found, log the mismatch and return -1
@@ -237,7 +227,7 @@ export async function clickAndWaitForSign(bot: MyBot, slot: number, value: strin
                 clearTimeout(timer)
                 bot._client.write('update_sign', {
                     location,
-                    text1: JSON.stringify(value),
+                    text1: `\"${value}\"`,
                     text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                     text3: '{"italic":false,"extra":[""],"text":""}',
                     text4: '{"italic":false,"extra":[""],"text":""}'

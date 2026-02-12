@@ -9,6 +9,7 @@ import { trackFlipPurchase } from './flipTracker'
 import { claimFilledOrders, markOrderClaimed, refreshOrderCounts, updateMaxTotalOrders, updateMaxBuyOrders } from './bazaarOrderManager'
 import { handleInventoryFull } from './inventoryManager'
 import { clearAHFlipsPending } from './bazaarFlipPauser'
+import { enqueueCommand, CommandPriority } from './commandQueue'
 
 // if nothing gets bought for 1 hours, send a report
 let errorTimeout
@@ -92,8 +93,17 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
-                log('New item sold')
-                claimSoldItem(bot)
+                log('New item sold - queuing claim with HIGH priority')
+                
+                // Queue the claim with HIGH priority so it runs immediately after current task
+                enqueueCommand(
+                    'Claim Sold Auction',
+                    CommandPriority.HIGH,
+                    async () => {
+                        await claimSoldItem(bot)
+                    },
+                    true // interruptible - can be interrupted by AH flips
+                )
 
                 sendWebhookItemSold(
                     text.split(' bought ')[1].split(' for ')[0],

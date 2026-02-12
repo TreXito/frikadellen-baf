@@ -212,19 +212,25 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
  * BUG 2: Register sign listener BEFORE clicking, then click and wait for sign.
  * Retries if sign doesn't open.
  */
-export async function clickAndWaitForSign(bot: MyBot, slot: number, value: string, timeout = 300, maxRetries = 2): Promise<boolean> {
+export async function clickAndWaitForSign(bot: MyBot, slot: number, value: string, timeout = 600, maxRetries = 3): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
         if (areAHFlipsPending()) return false
+        
+        const attemptStartTime = Date.now()
         
         // Register sign handler BEFORE clicking
         const signPromise = new Promise<boolean>((resolve) => {
             const timer = setTimeout(() => {
                 bot._client.removeListener('open_sign_entity', handler)
+                const elapsed = Date.now() - attemptStartTime
+                log(`[BAF] Sign timeout after ${elapsed}ms (attempt ${attempt}/${maxRetries + 1})`, 'debug')
                 resolve(false)
             }, timeout)
             
             const handler = ({ location }: any) => {
                 clearTimeout(timer)
+                const elapsed = Date.now() - attemptStartTime
+                log(`[BAF] Sign opened successfully in ${elapsed}ms, setting value: ${value}`, 'debug')
                 bot._client.write('update_sign', {
                     location,
                     text1: `\"${value}\"`,
@@ -245,8 +251,9 @@ export async function clickAndWaitForSign(bot: MyBot, slot: number, value: strin
         
         if (attempt <= maxRetries) {
             log(`[BAF] Sign didn't open after clicking slot ${slot}, retrying (${attempt}/${maxRetries})`, 'debug')
-            await sleep(50)
+            await sleep(100)
         }
     }
+    log(`[BAF] Failed to open sign after ${maxRetries + 1} attempts for slot ${slot}`, 'warn')
     return false
 }

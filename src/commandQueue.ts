@@ -169,7 +169,7 @@ async function processQueue(bot: MyBot): Promise<void> {
         // Check if bot is in grace period
         if (bot.state === 'gracePeriod') {
             // Don't process commands during grace period
-            await sleep(100)
+            await sleep(150)
             continue
         }
         

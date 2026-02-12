@@ -55,7 +55,7 @@ const CLAIM_RETRY_DELAY_MS = 5000
 
 // Constants for claiming filled orders
 const MAX_CLAIM_ATTEMPTS = 3 // Maximum number of times to click an item slot to claim
-const CLAIM_DELAY_MS = 50 // Delay in milliseconds between claim attempts
+const CLAIM_DELAY_MS = 75 // Delay in milliseconds between claim attempts
 
 // Delay before immediate order check to ensure command queue is ready
 const IMMEDIATE_CHECK_DELAY_MS = 100

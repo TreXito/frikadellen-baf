@@ -177,7 +177,7 @@ export async function findAndClick(bot: MyBot, buttonName: string, opts: {
         // Try to find the button — poll briefly if not found
         let slot = -1
         const findStart = Date.now()
-        while (slot === -1 && Date.now() - findStart < 500) {
+        while (slot === -1 && Date.now() - findStart < 600) {
             slot = findSlotWithName(bot.currentWindow, buttonName)
             if (slot === -1) await sleep(50)
         }

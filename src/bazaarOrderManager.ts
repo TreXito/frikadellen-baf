@@ -5,6 +5,12 @@ import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, areAHFlipsPending } from './bazaarFlipPauser'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 import { sendWebhookBazaarOrderCancelled, sendWebhookBazaarOrderClaimed } from './webhookHandler'
+import {
+    findSlotWithName as findSlotByName,
+    clickAndWaitForWindow,
+    clickAndWaitForUpdate,
+    findAndClick
+} from './bazaarHelpers'
 
 /**
  * Represents a tracked bazaar order
@@ -644,7 +650,26 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     log('[OrderManager] Clicking Manage Orders (slot 50)', 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Opening Manage Orders...`)
                     await sleep(150)
-                    await clickWindow(bot, 50).catch(err => log(`[OrderManager] Error clicking Manage Orders: ${err}`, 'error'))
+                    
+                    if (areAHFlipsPending()) {
+                        log('[OrderManager] AH flips pending, aborting claim', 'info')
+                        bot.removeListener('windowOpen', windowHandler)
+                        bot.state = null
+                        isManagingOrders = false
+                        clearTimeout(timeout)
+                        reject(new Error('AH flips pending'))
+                        return
+                    }
+                    
+                    const success = await clickAndWaitForWindow(bot, 50)
+                    if (!success) {
+                        log('[OrderManager] Failed to open Manage Orders window', 'error')
+                        bot.removeListener('windowOpen', windowHandler)
+                        bot.state = null
+                        isManagingOrders = false
+                        clearTimeout(timeout)
+                        reject(new Error('Failed to open Manage Orders'))
+                    }
                     return
                 }
                 
@@ -656,6 +681,11 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                     let claimedAny = false
                     
                     for (let i = 0; i < window.slots.length; i++) {
+                        if (areAHFlipsPending()) {
+                            log('[OrderManager] AH flips pending, stopping claim loop', 'info')
+                            break
+                        }
+                        
                         const slot = window.slots[i]
                         const name = removeMinecraftColorCodes(
                             (slot?.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
@@ -686,35 +716,34 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                             log(`[OrderManager] Claiming order: slot ${i}, item: ${name}`, 'info')
                             printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Claiming §e${name}`)
                             
-                            await clickWindow(bot, i).catch(() => {})
-                            claimedAny = true
-                            await sleep(400) // Transaction processing time
-                            
-                            // Click again for partial claims (may fail if already fully claimed)
-                            try { 
-                                await clickWindow(bot, i)
-                                await sleep(400) // Transaction processing time
-                            } catch (e) { 
-                                // Expected: already fully claimed or transaction rejected
-                                log(`[OrderManager] Second claim click failed (likely already claimed): ${e}`, 'debug')
-                            }
-                            
-                            // Mark as claimed in our tracking
-                            const orderType = name.startsWith('BUY ')
-                            const extractedName = name.replace(/^(BUY|SELL) /, '')
-                            markOrderClaimed(extractedName, orderType)
-                            
-                            // Send webhook notification only if we have valid order details
-                            if (orderAmount > 0 && pricePerUnit > 0) {
-                                sendWebhookBazaarOrderClaimed(
-                                    extractedName,
-                                    orderAmount,
-                                    pricePerUnit,
-                                    orderType
-                                )
-                            } else {
-                                // Expected behavior when lore parsing fails - log at info level
-                                log(`[OrderManager] Webhook skipped - order details not available from lore (amount: ${orderAmount}, price: ${pricePerUnit})`, 'info')
+                            const claimed = await clickAndWaitForUpdate(bot, i, 400)
+                            if (claimed) {
+                                claimedAny = true
+                                
+                                // Click again for partial claims (may fail if already fully claimed)
+                                if (!areAHFlipsPending()) {
+                                    await clickAndWaitForUpdate(bot, i, 400).catch(() => {
+                                        log(`[OrderManager] Second claim click failed (likely already claimed)`, 'debug')
+                                    })
+                                }
+                                
+                                // Mark as claimed in our tracking
+                                const orderType = name.startsWith('BUY ')
+                                const extractedName = name.replace(/^(BUY|SELL) /, '')
+                                markOrderClaimed(extractedName, orderType)
+                                
+                                // Send webhook notification only if we have valid order details
+                                if (orderAmount > 0 && pricePerUnit > 0) {
+                                    sendWebhookBazaarOrderClaimed(
+                                        extractedName,
+                                        orderAmount,
+                                        pricePerUnit,
+                                        orderType
+                                    )
+                                } else {
+                                    // Expected behavior when lore parsing fails - log at info level
+                                    log(`[OrderManager] Webhook skipped - order details not available from lore (amount: ${orderAmount}, price: ${pricePerUnit})`, 'info')
+                                }
                             }
                         }
                     }
@@ -905,6 +934,13 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         // Step 1: Open /bz — this opens a NEW window
         bot.chat('/bz')
         
+        if (areAHFlipsPending()) {
+            log('[OrderManager] AH flips pending, aborting cancel', 'info')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
         // Wait for the bazaar window to open
         const bazaarWindow = await waitForNewWindow(bot, 5000)
         if (!bazaarWindow) {
@@ -923,23 +959,18 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        // Step 2: Click "Manage Orders" — this opens a NEW window
-        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-        if (manageSlot === -1) {
-            log('[OrderManager] Could not find Manage Orders button', 'warn')
+        if (areAHFlipsPending()) {
+            log('[OrderManager] AH flips pending, aborting cancel', 'info')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
             return false
         }
         
-        // Register listener BEFORE clicking
-        const manageWindow = waitForNewWindow(bot, 5000)
-        await clickWindow(bot, manageSlot).catch(() => {})
-        
-        const manageResult = await manageWindow
-        if (!manageResult) {
-            log('[OrderManager] Manage Orders window did not open', 'warn')
+        // Step 2: Click "Manage Orders" using resilient helper — this opens a NEW window
+        const manageSuccess = await findAndClick(bot, 'Manage Orders', { waitForNewWindow: true, timeout: 5000 })
+        if (!manageSuccess) {
+            log('[OrderManager] Could not find or click Manage Orders button', 'warn')
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
@@ -950,6 +981,14 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         
         if (!bot.currentWindow) {
             log('[OrderManager] bot.currentWindow is null after Manage Orders', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        if (areAHFlipsPending()) {
+            log('[OrderManager] AH flips pending, aborting cancel', 'info')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
             return false
@@ -982,15 +1021,35 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return true
         }
         
-        // Step 4: Click the order slot — SAME WINDOW UPDATES, NO NEW WINDOW
-        await clickWindow(bot, orderSlot).catch(() => {})
+        if (areAHFlipsPending()) {
+            log('[OrderManager] AH flips pending, aborting cancel', 'info')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
         
-        // CRITICAL: Just wait. Do NOT listen for open_window. The window updates in-place.
-        await sleep(WINDOW_UPDATE_DELAY_MS)
+        // Step 4: Click the order slot using resilient helper — SAME WINDOW UPDATES
+        const orderClickSuccess = await clickAndWaitForUpdate(bot, orderSlot, 2000)
+        if (!orderClickSuccess) {
+            log('[OrderManager] Failed to click order or window did not update', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
         
         // Step 5: Now check the SAME bot.currentWindow for "Cancel Order"
         if (!bot.currentWindow) {
             log('[OrderManager] Window closed after clicking order', 'warn')
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        if (areAHFlipsPending()) {
+            log('[OrderManager] AH flips pending, aborting cancel', 'info')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             bot.state = null
             isManagingOrders = false
             return false
@@ -1009,24 +1068,26 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return true
         }
         
-        // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
-        await clickWindow(bot, cancelSlot).catch(() => {})
-        await sleep(300) // Transaction processing time
-        
-        log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
-        
-        // Send webhook notification
-        const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
-        sendWebhookBazaarOrderCancelled(
-            order.itemName,
-            order.amount,
-            order.pricePerUnit,
-            order.isBuyOrder,
-            ageMinutes,
-            order.filled || 0,
-            order.totalAmount || order.amount
-        )
+        // Step 6: Click "Cancel Order" using resilient helper — SAME WINDOW UPDATES
+        const cancelSuccess = await clickAndWaitForUpdate(bot, cancelSlot, 300)
+        if (cancelSuccess) {
+            log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
+            printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+            
+            // Send webhook notification
+            const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
+            sendWebhookBazaarOrderCancelled(
+                order.itemName,
+                order.amount,
+                order.pricePerUnit,
+                order.isBuyOrder,
+                ageMinutes,
+                order.filled || 0,
+                order.totalAmount || order.amount
+            )
+        } else {
+            log(`[OrderManager] Cancel button click may not have succeeded`, 'warn')
+        }
         
         // Close window and clean up
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)

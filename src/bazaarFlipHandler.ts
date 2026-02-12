@@ -6,7 +6,7 @@ import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
 import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderManager'
 import { enqueueCommand, CommandPriority } from './commandQueue'
-import { isBazaarDailyLimitReached } from './ingameMessageHandler'
+import { isBazaarDailyLimitReached, isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
 import { findItemInSearchResults } from './bazaarHelpers'
 
@@ -210,8 +210,23 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         return
     }
 
-    // Check if we can place the order (dynamic slot checking)
-    const orderCheck = canPlaceOrder(recommendation.isBuyOrder)
+    // Check if bazaar orders are on cooldown
+    if (isBazaarOrderOnCooldown()) {
+        const remainingMs = getBazaarOrderCooldownRemaining()
+        const remainingSeconds = Math.ceil(remainingMs / 1000)
+        log(`[BAF]: Bazaar orders on cooldown for ${remainingSeconds} more seconds, queuing order`, 'warn')
+        printMcChatToConsole(`§f[§4BAF§f]: §e[Cooldown] Waiting ${remainingSeconds}s, then will retry order`)
+        
+        // Queue the order to retry after cooldown expires
+        setTimeout(() => {
+            log('[BAF]: Cooldown expired, retrying queued order', 'info')
+            handleBazaarFlipRecommendation(bot, recommendation)
+        }, remainingMs + 1000) // Add 1 second buffer
+        return
+    }
+
+    // Check if we can place the order (dynamic slot checking) - pass bot for fast check mode
+    const orderCheck = canPlaceOrder(recommendation.isBuyOrder, bot)
     if (!orderCheck.canPlace) {
         // If order count needs refresh, attempt to refresh and try again
         if (orderCheck.needsRefresh) {
@@ -221,12 +236,19 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             if (refreshed) {
                 log('[BAF]: Order count refreshed, proceeding with order placement', 'info')
                 // Check again after refresh
-                const retryCheck = canPlaceOrder(recommendation.isBuyOrder)
+                const retryCheck = canPlaceOrder(recommendation.isBuyOrder, bot)
                 // Block only if it's a confirmed hard limit (not stale, not can place)
                 if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
-                    // Hard limit confirmed after refresh
-                    log(`[BAF]: Cannot place order after refresh - ${retryCheck.reason}`, 'warn')
-                    printMcChatToConsole(`§f[§4BAF§f]: §cCannot place order - ${retryCheck.reason}`)
+                    // Hard limit confirmed - wait for slot to be freed
+                    log(`[BAF]: Order limit reached - ${retryCheck.reason}`, 'warn')
+                    printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${retryCheck.reason} - waiting for slot to free up`)
+                    
+                    // Queue the order to retry after a slot becomes available
+                    // Fast check mode is now enabled, so slots will be checked frequently
+                    setTimeout(() => {
+                        log('[BAF]: Retrying order after waiting for slot', 'info')
+                        handleBazaarFlipRecommendation(bot, recommendation)
+                    }, 15000) // Retry every 15 seconds when at limit
                     return
                 }
                 // Otherwise continue with order placement (Hypixel will enforce actual limits)
@@ -237,10 +259,17 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
                 // Don't return - continue with order placement
             }
         } else {
-            // This is a hard limit from our counts, but still attempt placement
-            log(`[BAF]: Order slots appear full - ${orderCheck.reason}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §e[Warning] ${orderCheck.reason}, attempting placement...`)
-            // Don't return - let Hypixel enforce the actual limit
+            // This is a hard limit from our counts - wait for slot to be freed
+            log(`[BAF]: Order limit reached - ${orderCheck.reason}`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${orderCheck.reason} - waiting for slot to free up`)
+            
+            // Queue the order to retry after a slot becomes available
+            // Fast check mode is now enabled, so slots will be checked frequently
+            setTimeout(() => {
+                log('[BAF]: Retrying order after waiting for slot', 'info')
+                handleBazaarFlipRecommendation(bot, recommendation)
+            }, 15000) // Retry every 15 seconds when at limit
+            return
         }
     }
 

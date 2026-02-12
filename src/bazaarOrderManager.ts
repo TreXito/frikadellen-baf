@@ -11,6 +11,7 @@ import {
     clickAndWaitForUpdate,
     findAndClick
 } from './bazaarHelpers'
+import { isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
 
 /**
  * Represents a tracked bazaar order
@@ -49,6 +50,10 @@ let lastOrderCountUpdate = 0 // Timestamp of last order count update
 // Flag to track if we hit a limit (to avoid spamming attempts)
 let orderLimitReached = false
 let buyOrderLimitReached = false
+
+// Faster check timer when at order limit
+let fastCheckTimer: NodeJS.Timeout | null = null
+let isFastCheckMode = false
 
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
@@ -293,9 +298,18 @@ export function getOrderCounts(): { totalOrders: number, buyOrders: number, maxT
  * Check if we can place a new order based on current counts
  * If the order count is stale (>2 minutes), returns false to trigger refresh
  * @param isBuyOrder Whether the order is a buy order
+ * @param bot Optional bot instance to enable fast check mode when at limit
  * @returns Object with canPlace flag and reason if false
  */
-export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?: string, needsRefresh?: boolean } {
+export function canPlaceOrder(isBuyOrder: boolean, bot?: MyBot): { canPlace: boolean, reason?: string, needsRefresh?: boolean } {
+    // Check if orders are on cooldown
+    if (isBazaarOrderOnCooldown()) {
+        const remainingMs = getBazaarOrderCooldownRemaining()
+        const remainingSeconds = Math.ceil(remainingMs / 1000)
+        log(`[OrderManager] Bazaar orders on cooldown for ${remainingSeconds} more seconds`, 'debug')
+        return { canPlace: false, reason: `Bazaar orders on cooldown (${remainingSeconds}s remaining)` }
+    }
+    
     // Check if order count is stale (older than 2 minutes)
     const now = Date.now()
     const twoMinutes = 2 * 60 * 1000
@@ -308,11 +322,24 @@ export function canPlaceOrder(isBuyOrder: boolean): { canPlace: boolean, reason?
     
     // Use current counts from last Manage Orders scan
     if (currentBazaarOrders >= maxTotalOrders) {
+        // Enable fast check mode to free up slots faster
+        if (bot && !isFastCheckMode) {
+            enableFastCheckMode(bot)
+        }
         return { canPlace: false, reason: `Total order slots full (${currentBazaarOrders}/${maxTotalOrders})` }
     }
     
     if (isBuyOrder && currentBuyOrders >= maxBuyOrders) {
+        // Enable fast check mode to free up slots faster
+        if (bot && !isFastCheckMode) {
+            enableFastCheckMode(bot)
+        }
         return { canPlace: false, reason: `Buy order slots full (${currentBuyOrders}/${maxBuyOrders})` }
+    }
+    
+    // If we have available slots and fast check mode is enabled, disable it
+    if (isFastCheckMode) {
+        stopFastCheckMode()
     }
     
     return { canPlace: true }
@@ -636,6 +663,44 @@ export function stopOrderManager(): void {
         clearInterval(checkTimer)
         checkTimer = null
         log('[OrderManager] Stopped order management timer', 'info')
+    }
+    stopFastCheckMode()
+}
+
+/**
+ * Enable fast check mode - checks orders more frequently when at limit
+ * This helps free up slots faster by claiming/cancelling orders more often
+ */
+function enableFastCheckMode(bot: MyBot): void {
+    if (isFastCheckMode) {
+        log('[OrderManager] Fast check mode already enabled', 'debug')
+        return
+    }
+    
+    const normalIntervalSeconds = getConfigProperty('BAZAAR_ORDER_CHECK_INTERVAL_SECONDS')
+    const fastIntervalSeconds = Math.max(10, normalIntervalSeconds / 4) // 4x faster, minimum 10 seconds
+    
+    log(`[OrderManager] Enabling fast check mode (checking every ${fastIntervalSeconds}s instead of ${normalIntervalSeconds}s)`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §e[OrderManager] Fast check enabled - checking every ${fastIntervalSeconds}s`)
+    
+    isFastCheckMode = true
+    
+    // Start fast check timer
+    fastCheckTimer = setInterval(async () => {
+        await checkOrders(bot)
+    }, fastIntervalSeconds * 1000)
+}
+
+/**
+ * Disable fast check mode and return to normal interval
+ */
+function stopFastCheckMode(): void {
+    if (fastCheckTimer) {
+        clearInterval(fastCheckTimer)
+        fastCheckTimer = null
+        isFastCheckMode = false
+        log('[OrderManager] Disabled fast check mode', 'info')
+        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Fast check disabled - returning to normal interval`)
     }
 }
 

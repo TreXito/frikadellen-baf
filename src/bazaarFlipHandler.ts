@@ -409,6 +409,9 @@ export async function placeBazaarOrder(bot: MyBot, itemName: string, amount: num
     // Step 2: If search results page, find and click the correct item
     const title = getWindowTitle(bot.currentWindow)
     if (title && title.includes('Bazaar')) {
+        // Wait for search results to populate after window opens
+        await sleep(500)
+        
         // Search results — find exact match using BUG 1 fix
         const itemSlot = findItemInSearchResults(bot.currentWindow, itemName)
         if (itemSlot === -1) {

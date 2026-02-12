@@ -289,11 +289,11 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     // Queue the bazaar flip with priority based on order type
     // Sell offers get HIGH priority (process first), buy orders get NORMAL priority
     // This ensures sell offers (which free inventory) are processed before buy orders
+    // Operations are NOT interruptible - they must complete once started
     const orderType = recommendation.isBuyOrder ? 'BUY' : 'SELL'
     const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
-    // BUG 2: Pass item name for duplicate detection and add retry wrapper
     enqueueCommand(
         commandName,
         priority,
@@ -302,22 +302,16 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
             try {
                 await executeBazaarFlip(bot, recommendation)
             } catch (error) {
-                // BUG 2: If first attempt fails, retry once after a short delay
+                // If first attempt fails, retry once after a short delay
                 log(`[BAF] Bazaar operation failed, retrying in ${BAZAAR_RETRY_DELAY_MS}ms: ${error}`, 'warn')
                 printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in ${BAZAAR_RETRY_DELAY_MS}ms...`)
                 await sleep(BAZAAR_RETRY_DELAY_MS)
-                
-                // Check if AH flips are pending before retry
-                if (areAHFlipsPending()) {
-                    log('[BAF] Skipping retry — AH flips pending', 'info')
-                    throw new Error('AH flips incoming - retry aborted')
-                }
                 
                 // Second attempt - let this one throw if it fails
                 await executeBazaarFlip(bot, recommendation)
             }
         },
-        true, // interruptible - can be interrupted by AH flips
+        false, // NOT interruptible - operations must complete once started
         recommendation.itemName // for duplicate checking
     )
 }
@@ -325,16 +319,9 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
 /**
  * Execute a bazaar flip operation
  * This is the actual implementation that runs from the queue
+ * Operations run to completion without interruption
  */
 async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommendation): Promise<void> {
-    // BUG 3: Check if AH flips are pending before starting
-    if (areAHFlipsPending()) {
-        log('[BAF] Aborting bazaar operation — AH flips incoming', 'info')
-        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        bot.state = null
-        throw new Error('AH flips incoming - operation aborted')
-    }
-    
     // Double-check bot state before execution (queue should handle this, but safety check)
     if (bot.state) {
         log(`[BazaarDebug] Bot is busy (state: ${bot.state}), cannot execute flip`, 'warn')

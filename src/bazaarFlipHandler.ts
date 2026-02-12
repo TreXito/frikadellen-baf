@@ -293,12 +293,29 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
     const priority = recommendation.isBuyOrder ? CommandPriority.NORMAL : CommandPriority.HIGH
     const commandName = `Bazaar ${orderType}: ${recommendation.amount}x ${recommendation.itemName}`
     
-    // Pass item name for duplicate detection
+    // BUG 2: Pass item name for duplicate detection and add retry wrapper
     enqueueCommand(
         commandName,
         priority,
         async () => {
-            await executeBazaarFlip(bot, recommendation)
+            // First attempt
+            try {
+                await executeBazaarFlip(bot, recommendation)
+            } catch (error) {
+                // BUG 2: If first attempt fails, retry once after 2 seconds
+                log(`[BAF] Bazaar operation failed, retrying in 2 seconds: ${error}`, 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[BAF] Retrying bazaar operation in 2 seconds...`)
+                await sleep(2000)
+                
+                // Check if AH flips are pending before retry
+                if (areAHFlipsPending()) {
+                    log('[BAF] Skipping retry — AH flips pending', 'info')
+                    throw new Error('AH flips incoming - retry aborted')
+                }
+                
+                // Second attempt - let this one throw if it fails
+                await executeBazaarFlip(bot, recommendation)
+            }
         },
         true, // interruptible - can be interrupted by AH flips
         recommendation.itemName // for duplicate checking
@@ -340,67 +357,16 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     printMcChatToConsole(`§f[§4BAF§f]: §7━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
     bot.state = 'bazaar'
-    let operationTimeout = setTimeout(() => {
-        if (bot.state === 'bazaar') {
-            log("[BazaarDebug] ERROR: Timeout waiting for bazaar order placement (20 seconds)", 'error')
-            log("[BazaarDebug] This usually means the /bz command didn't open a window or the window detection failed", 'error')
-            printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bazaar order timed out - check if /bz command works`)
-            bot.state = null
-            // Note: The placeBazaarOrder function will clean up its own listener on timeout
-        }
-    }, OPERATION_TIMEOUT_MS)
-    const bazaarTracking = {
-        windowOpened: false,
-        retryTimer: null as NodeJS.Timeout | null,
-        openTracker: null as ((packet: any) => void) | null
-    }
 
     try {
-        const { itemName, itemTag, amount, pricePerUnit, totalPrice, isBuyOrder } = recommendation
-        const displayTotalPrice = totalPrice ? totalPrice.toFixed(0) : (pricePerUnit * amount).toFixed(0)
-
-        // Use itemName (display name like "Flawed Peridot Gemstone") if available, otherwise fall back to itemTag
-        // The /bz command expects display names as shown in Hypixel's bazaar UI
-        const searchTerm = itemName || itemTag
-        if (!itemName && itemTag) {
-            log(`[BazaarDebug] WARNING: itemName not provided, using itemTag "${itemTag}" as fallback`, 'warn')
-            log(`[BazaarDebug] This may not work if /bz expects display names instead of internal IDs`, 'warn')
-        }
-        bazaarTracking.openTracker = (packet) => {
-            if (bazaarTracking.windowOpened) return
-            bazaarTracking.windowOpened = true
-            log(`[BazaarDebug] [Tracker] Detected open_window for bazaar flip: id=${packet?.windowId} type=${packet?.windowType} rawTitle=${JSON.stringify(packet?.windowTitle)}`, 'info')
-        }
-        bot._client.on('open_window', bazaarTracking.openTracker)
+        const { itemName, amount, pricePerUnit, isBuyOrder } = recommendation
         
         printMcChatToConsole(
-            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each (total: ${displayTotalPrice})`
+            `§f[§4BAF§f]: §fPlacing ${isBuyOrder ? 'buy' : 'sell'} order for ${amount}x ${itemName} at ${pricePerUnit.toFixed(1)} coins each`
         )
 
-        // CRITICAL: Set up listener BEFORE opening bazaar to catch the first window
-        // Use bot._client.on('open_window') for low-level protocol handling
-        // Do NOT use bot.removeAllListeners('windowOpen') as that breaks mineflayer's internal handler
-        log('[BazaarDebug] Setting up window listener for bazaar order placement', 'info')
-        const orderPromise = placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
-        
-        // Small delay to ensure Node.js event loop has processed the listener registration
-        // This guarantees the listener is active before the window opens
-        await sleep(100)
-        
-        // Open bazaar for the item - the listener is now ready to catch this event
-        log(`[BazaarDebug] Opening bazaar with command: /bz ${searchTerm}`, 'info')
-        log(`[BazaarDebug] Using search term: "${searchTerm}" (itemTag: ${itemTag || 'not provided'}, itemName: ${itemName})`, 'info')
-        printMcChatToConsole(`§f[§4BAF§f]: §7[Command] Executing §b/bz ${searchTerm}`)
-        bazaarTracking.retryTimer = setTimeout(() => {
-            if (!bazaarTracking.windowOpened && bot.state === 'bazaar') {
-                log(`[BazaarDebug] No bazaar GUI opened after initial /bz command, retrying with "/bz ${searchTerm}"`, 'warn')
-                printMcChatToConsole(`§f[§4BAF§f]: §c[Warning] Bazaar GUI did not open, retrying command...`)
-                bot.chat(`/bz ${searchTerm}`)
-            }
-        }, BAZAAR_RETRY_DELAY_MS)
-        bot.chat(`/bz ${searchTerm}`)
-
-        await orderPromise
+        // BUG 2: Use new resilient placeBazaarOrder function
+        await placeBazaarOrder(bot, itemName, amount, pricePerUnit, isBuyOrder)
         
         // Record the order for tracking (claiming and cancelling)
         recordOrder(recommendation)
@@ -417,12 +383,8 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     } catch (error) {
         log(`[BazaarDebug] Error handling bazaar flip: ${error}`, 'error')
         printMcChatToConsole(`§f[§4BAF§f]: §cFailed to place bazaar order: ${error}`)
+        throw error // Re-throw to trigger retry
     } finally {
-        clearTimeout(operationTimeout)
-        if (bazaarTracking.retryTimer) clearTimeout(bazaarTracking.retryTimer)
-        if (bazaarTracking.openTracker) {
-            bot._client.removeListener('open_window', bazaarTracking.openTracker)
-        }
         bot.state = null
     }
 }

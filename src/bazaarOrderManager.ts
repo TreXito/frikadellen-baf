@@ -922,6 +922,22 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                 const extractedName = name.replace(/^(BUY|SELL) /, '')
                                 markOrderClaimed(extractedName, orderType)
                                 
+                                // PROFIT TRACKING FIX: Record filled order for profit tracking
+                                if (orderAmount > 0 && pricePerUnit > 0) {
+                                    try {
+                                        const { recordBuyOrder, recordSellOrder } = await import('./bazaarProfitTracker')
+                                        if (orderType) {
+                                            // Buy order filled - we paid money to get items
+                                            recordBuyOrder(extractedName, pricePerUnit, orderAmount)
+                                        } else {
+                                            // Sell order filled - we received money for items
+                                            recordSellOrder(extractedName, pricePerUnit, orderAmount)
+                                        }
+                                    } catch (err) {
+                                        log(`[OrderManager] Failed to record filled order for profit tracking: ${err}`, 'warn')
+                                    }
+                                }
+                                
                                 // Send webhook notification only if we have valid order details
                                 if (orderAmount > 0 && pricePerUnit > 0) {
                                     sendWebhookBazaarOrderClaimed(

@@ -844,18 +844,6 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     
                     log(`[BazaarDebug] Order placement complete`, 'info')
                     
-                    // PROFIT TRACKING FIX: Record order for profit tracking
-                    try {
-                        const { recordBuyOrder, recordSellOrder } = await import('./bazaarProfitTracker')
-                        if (isBuyOrder) {
-                            recordBuyOrder(itemName, pricePerUnit, amount)
-                        } else {
-                            recordSellOrder(itemName, pricePerUnit, amount)
-                        }
-                    } catch (err) {
-                        log(`[BazaarDebug] Failed to record order for profit tracking: ${err}`, 'warn')
-                    }
-                    
                     // Send webhook notification
                     const totalPrice = pricePerUnit * amount
                     sendWebhookBazaarOrderPlaced(itemName, amount, pricePerUnit, totalPrice, isBuyOrder)

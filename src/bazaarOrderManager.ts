@@ -796,13 +796,14 @@ async function checkOrders(bot: MyBot): Promise<void> {
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s) - cancelling all`)
     
     // Queue a SINGLE command to cancel all stale orders in one Manage Orders session
+    // Use HIGH priority because order management should not be interrupted by bazaar flips
     enqueueCommand(
         `Cancel All Stale Orders (${staleOrders.length})`,
-        CommandPriority.LOW,
+        CommandPriority.HIGH,
         async () => {
             await cancelAllStaleOrders(bot, staleOrders)
         },
-        true // interruptible - can be interrupted by AH flips
+        false // NOT interruptible - order management is critical
     )
 }
 

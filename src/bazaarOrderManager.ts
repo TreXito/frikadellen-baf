@@ -12,6 +12,7 @@ import {
     findAndClick
 } from './bazaarHelpers'
 import { isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
+import { recordBuyOrder, recordSellOrder } from './bazaarProfitTracker'
 
 /**
  * Represents a tracked bazaar order
@@ -925,7 +926,6 @@ async function executeClaimFilledOrders(bot: MyBot, itemName?: string, isBuyOrde
                                 // PROFIT TRACKING FIX: Record filled order for profit tracking
                                 if (orderAmount > 0 && pricePerUnit > 0) {
                                     try {
-                                        const { recordBuyOrder, recordSellOrder } = await import('./bazaarProfitTracker')
                                         if (orderType) {
                                             // Buy order filled - we paid money to get items
                                             recordBuyOrder(extractedName, pricePerUnit, orderAmount)

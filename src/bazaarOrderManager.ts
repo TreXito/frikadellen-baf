@@ -103,13 +103,66 @@ function getSlotLore(slot: any): string[] {
 /**
  * Helper: Find a slot by display name substring
  */
-function findSlotWithName(win: any, searchName: string): number {
-    for (let i = 0; i < win.slots.length; i++) {
-        const slot = win.slots[i]
+function findSlotWithName(window: any, searchName: string, searchAll = false): number {
+    const maxSlots = searchAll ? window.slots.length : Math.min(54, window.slots.length)
+    for (let i = 0; i < maxSlots; i++) {
+        const slot = window.slots[i]
+        if (!slot || !slot.nbt) continue
         const name = removeMinecraftColorCodes(getSlotName(slot))
-        if (name && name.includes(searchName)) return i
+        if (name && name.includes(searchName)) {
+            return i
+        }
     }
     return -1
+}
+
+/**
+ * Helper: Poll for Cancel button in chest window after clicking an order
+ * Scans slots 0-53 (chest only, not player inventory) for up to 3 seconds
+ * Returns the slot number or -1 if not found
+ * Logs window contents if button not found for debugging
+ */
+async function pollForCancelButton(bot: MyBot, contextLabel: string): Promise<number> {
+    let cancelSlot = -1
+    const pollStart = Date.now()
+    
+    while (Date.now() - pollStart < 3000) { // poll for up to 3 seconds
+        if (!bot.currentWindow) break
+        
+        // Scan ONLY the chest portion of the window (slots 0-53), NOT player inventory
+        for (let i = 0; i < Math.min(54, bot.currentWindow.slots.length); i++) {
+            const slot = bot.currentWindow.slots[i]
+            if (!slot || !slot.nbt) continue
+            
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            // Check for any button name containing "Cancel"
+            // This matches "Cancel Order", "Cancel Buy Order", "Cancel Sell Offer", etc.
+            if (name && name.includes('Cancel')) {
+                cancelSlot = i
+                break
+            }
+        }
+        
+        if (cancelSlot !== -1) break
+        await sleep(100) // check every 100ms
+    }
+    
+    // Log window contents if button not found (for debugging)
+    if (cancelSlot === -1 && bot.currentWindow) {
+        const windowContents = []
+        for (let i = 0; i < Math.min(54, bot.currentWindow.slots.length); i++) {
+            const slot = bot.currentWindow.slots[i]
+            if (!slot || !slot.nbt) continue
+            
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            if (name) {
+                windowContents.push(`slot ${i}: "${name}"`)
+            }
+        }
+        log(`[${contextLabel}] Cancel not found. Window contents: ${windowContents.join(', ')}`, 'warn')
+    }
+    
+    return cancelSlot
 }
 
 /**
@@ -1096,56 +1149,22 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             // Click the order — same window updates
             await clickWindow(bot, orderSlot).catch(() => {})
             
-            // Give the window time to update before polling (increased from 200ms to 400ms for reliability)
-            await sleep(400)
+            // Wait and POLL for the Cancel Order button to appear
+            const cancelSlot = await pollForCancelButton(bot, 'OrderManager')
             
-            // BUG FIX: Poll until slot 13 contains "Cancel Order" button
-            let cancelButtonFound = false
-            let pollAttempts = 0
-            log(`[OrderManager] Polling for Cancel Order button in slot 13 for ${order.itemName}`, 'debug')
-            
-            while (pollAttempts < MAX_CANCEL_BUTTON_POLL_ATTEMPTS) {
-                pollAttempts++ // Increment at start so attempt numbers are 1-indexed
-                
-                if (!bot.currentWindow || bot.currentWindow.slots.length <= 13) {
-                    log(`[OrderManager] Window closed or invalid during polling (attempt ${pollAttempts})`, 'warn')
-                    break
-                }
-                
-                const slot13 = bot.currentWindow.slots[13]
-                if (slot13 && slot13.nbt) {
-                    const slotName = removeMinecraftColorCodes(getSlotName(slot13))
-                    log(`[OrderManager] Slot 13 content (attempt ${pollAttempts}): "${slotName}"`, 'debug')
-                    if (slotName && slotName.includes('Cancel Order')) {
-                        cancelButtonFound = true
-                        log(`[OrderManager] Cancel button found after ${(pollAttempts - 1) * CANCEL_BUTTON_POLL_INTERVAL_MS}ms (attempt ${pollAttempts})`, 'info')
-                        break
-                    }
-                } else {
-                    log(`[OrderManager] Slot 13 is empty or has no NBT data (attempt ${pollAttempts})`, 'debug')
-                }
-                
-                await sleep(CANCEL_BUTTON_POLL_INTERVAL_MS)
-            }
-            
-            if (!cancelButtonFound) {
-                log(`[OrderManager] Cancel Order button not found in slot 13 after ${pollAttempts * CANCEL_BUTTON_POLL_INTERVAL_MS}ms (${pollAttempts} attempts), skipping`, 'warn')
+            if (cancelSlot !== -1) {
+                log(`[OrderManager] Found cancel button at slot ${cancelSlot}`, 'debug')
+                await clickWindow(bot, cancelSlot).catch(() => {})
+                await sleep(400)
+                log(`[OrderManager] Cancelled order`, 'info')
+            } else {
                 printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Cancel button not found - retrying later`)
-                // Try to go back to manage orders list
-                if (bot.currentWindow) {
-                    log(`[OrderManager] Attempting to click Go Back (slot 49) to return to order list`, 'debug')
-                    await clickWindow(bot, 49).catch(() => {}) // Click "Go Back" if available
-                    await sleep(200)
-                }
                 continue
             }
 
             if (!bot.currentWindow) break
 
-            // Click Cancel Order at slot 13
-            log(`[OrderManager] Clicking Cancel Order button in slot 13 for ${order.itemName}`, 'debug')
-            await clickWindow(bot, 13).catch(() => {})
-            await sleep(200) // Wait longer for cancellation to process
+            await sleep(200) // Wait for cancellation to process
             
             const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
             log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
@@ -1280,7 +1299,7 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        // Step 5: Now check the SAME bot.currentWindow for "Cancel Order"
+        // Step 5: Wait and POLL for the Cancel Order button to appear
         if (!bot.currentWindow) {
             log('[OrderManager] Window closed after clicking order', 'warn')
             bot.state = null
@@ -1288,8 +1307,19 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
             return false
         }
         
-        // Step 6: Click "Cancel Order" at slot 13 — SAME WINDOW UPDATES
-        const cancelSuccess = await clickAndWaitForUpdate(bot, 13, 300)
+        const cancelSlot = await pollForCancelButton(bot, 'OrderManager')
+        
+        if (cancelSlot === -1) {
+            log('[OrderManager] Cancel button not found after polling', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            bot.state = null
+            isManagingOrders = false
+            return false
+        }
+        
+        // Step 6: Click "Cancel Order" button — SAME WINDOW UPDATES
+        log(`[OrderManager] Found cancel button at slot ${cancelSlot}, clicking`, 'debug')
+        const cancelSuccess = await clickAndWaitForUpdate(bot, cancelSlot, 300)
         if (cancelSuccess) {
             log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
@@ -1511,14 +1541,12 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             await clickWindow(bot, foundOrder.slot).catch((err) => {
                 log(`[Startup] Failed to click order slot ${foundOrder.slot} for ${foundOrder.itemName}: ${err}`, 'warn')
             })
-            await sleep(400)
             
-            if (!bot.currentWindow) break
-            
-            // Find Cancel Order button
-            const cancelSlot = findSlotWithName(bot.currentWindow, 'Cancel Order')
+            // Wait and POLL for the Cancel Order button to appear
+            const cancelSlot = await pollForCancelButton(bot, 'Startup')
             
             if (cancelSlot !== -1) {
+                log(`[Startup] Found cancel button at slot ${cancelSlot}`, 'debug')
                 // Cancel it
                 await clickWindow(bot, cancelSlot).catch((err) => {
                     log(`[Startup] Failed to click cancel button (slot ${cancelSlot}) for ${foundOrder.itemName}: ${err}`, 'warn')

@@ -114,7 +114,8 @@ export function enqueueCommand(
     // - Other commands use FIFO to maintain order
     let insertIndex = commandQueue.length
     const isBazaarOrder = name.startsWith('Bazaar ')
-    const isBazaarSellOrder = isBazaarOrder && name.startsWith('Bazaar SELL:')
+    // Check for 'SELL:' after 'Bazaar ' prefix (avoiding redundant string scanning)
+    const isBazaarSellOrder = isBazaarOrder && name.substring(7, 12) === 'SELL:'
     
     for (let i = 0; i < commandQueue.length; i++) {
         if (commandQueue[i].priority > priority) {

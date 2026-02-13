@@ -1069,6 +1069,9 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             // Click the order — same window updates
             await clickWindow(bot, orderSlot).catch(() => {})
             
+            // Give the window time to update before polling
+            await sleep(200)
+            
             // BUG FIX: Poll until slot 13 contains "Cancel Order" button
             let cancelButtonFound = false
             let pollAttempts = 0

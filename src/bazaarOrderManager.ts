@@ -1333,10 +1333,11 @@ export function abortOrderManagement(bot: MyBot, forceAbort: boolean = true): vo
 
 /**
  * FEATURE 1: Startup Order Management
- * Discovers existing orders and immediately cancels stale ones, re-listing sell offers
+ * Discovers existing orders and immediately cancels them
  * This runs BEFORE normal operations begin (keeps bot.state = 'startup')
+ * Orders are cancelled but NOT re-listed - Coflnet will provide new recommendations
  * 
- * @returns Object with counts of cancelled and re-listed orders
+ * @returns Object with counts of cancelled and claimed orders
  */
 export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, claimed: number }> {
     log('[Startup] Checking and managing existing orders...', 'info')

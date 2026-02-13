@@ -839,8 +839,46 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     log(`[BazaarDebug] Confirming bazaar ${isBuyOrder ? 'buy' : 'sell'} order at slot 13`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Confirm] Placing ${isBuyOrder ? 'buy' : 'sell'} order at slot §b13`)
                     currentStep = 'confirm'
+                    
+                    // Set up listener to catch order rejection messages
+                    let orderRejected = false
+                    let rejectionReason = ''
+                    const chatListener = (message: any) => {
+                        const text = message.toString()
+                        if (text.includes('[Bazaar]')) {
+                            // Check for order limit messages
+                            if (text.includes('maximum') && text.includes('orders')) {
+                                orderRejected = true
+                                rejectionReason = 'Order limit reached'
+                                log(`[BazaarDebug] Order rejected: ${text}`, 'warn')
+                            }
+                            // Check for cooldown messages
+                            else if (text.includes('cooldown')) {
+                                orderRejected = true
+                                rejectionReason = 'Orders on cooldown'
+                                log(`[BazaarDebug] Order rejected: ${text}`, 'warn')
+                            }
+                        }
+                    }
+                    bot.on('message', chatListener)
+                    
                     await sleep(200)
                     await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                    
+                    // Wait to see if Hypixel sends a rejection message
+                    await sleep(1000) // Wait 1 second for server response
+                    
+                    // Clean up chat listener
+                    bot.removeListener('message', chatListener)
+                    
+                    if (orderRejected) {
+                        log(`[BazaarDebug] Order placement failed: ${rejectionReason}`, 'error')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Order placement failed: ${rejectionReason}`)
+                        bot._client.removeListener('open_window', windowListener)
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        reject(new Error(rejectionReason))
+                        return
+                    }
                     
                     log(`[BazaarDebug] Order placement complete`, 'info')
                     

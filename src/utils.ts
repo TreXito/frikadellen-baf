@@ -62,6 +62,46 @@ export function removeMinecraftColorCodes(text: string) {
     return text?.replace(/§[0-9a-fk-or]/gi, '')
 }
 
+/**
+ * Extract the SkyBlock display name from an item (BUG 2 FIX)
+ * Reads from NBT display name first (Hypixel's custom name), falls back to vanilla names
+ * This correctly handles enchanted books like "Dedication I" instead of "Enchanted Book"
+ * 
+ * @param item The item to extract the display name from
+ * @returns The display name, or 'Unknown' if not found
+ */
+export function getItemDisplayName(item: any): string {
+    // Priority 1: NBT display name (this is what Hypixel sets)
+    const nbtName = item?.nbt?.value?.display?.value?.Name?.value
+    if (nbtName) {
+        // NBT name may be JSON formatted: {"text":"","extra":[{"text":"Dedication I"}]}
+        try {
+            const parsed = JSON.parse(nbtName)
+            const text = parsed.text || ''
+            const extra = parsed.extra?.map((e: any) => typeof e === 'string' ? e : e.text || '').join('') || ''
+            return removeMinecraftColorCodes(text + extra).trim()
+        } catch (e) {
+            // Not JSON, just a plain string with color codes
+            // Import log function inline to avoid circular dependencies
+            const { log } = require('./logger')
+            log(`[Utils] Failed to parse NBT name as JSON, using as plain string: ${e}`, 'debug')
+            return removeMinecraftColorCodes(nbtName).trim()
+        }
+    }
+    
+    // Priority 2: customName 
+    if (item?.customName) {
+        return removeMinecraftColorCodes(item.customName.toString()).trim()
+    }
+    
+    // Priority 3: displayName (vanilla name — least preferred)
+    if (item?.displayName) {
+        return removeMinecraftColorCodes(item.displayName).trim()
+    }
+    
+    return item?.name || 'Unknown'
+}
+
 export function isSkin(itemName: string): boolean {
     const lowerName = itemName?.toLowerCase() || ''
     return lowerName.includes('skin') || lowerName.includes('✦')

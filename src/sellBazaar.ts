@@ -1,6 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
+import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 
 // Constants
@@ -141,13 +141,9 @@ function scanInventoryForBazaarItems(bot: MyBot): Array<{ itemTag: string; displ
         const itemTag = (item.nbt as any)?.value?.ExtraAttributes?.value?.id?.value
         if (!itemTag) continue // Skip non-SkyBlock items
 
-        // Extract display name
-        let displayName = (item.nbt as any)?.value?.display?.value?.Name?.value
-        if (displayName) {
-            displayName = removeMinecraftColorCodes(displayName)
-        } else {
-            displayName = itemTag // Fallback to item tag
-        }
+        // Extract display name using getItemDisplayName() helper (BUG 2 FIX)
+        // This correctly handles enchanted books by reading NBT display name
+        const displayName = getItemDisplayName(item) || itemTag
 
         // Group by item tag and sum amounts
         const existing = itemMap.get(itemTag)

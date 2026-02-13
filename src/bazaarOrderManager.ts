@@ -1338,9 +1338,9 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         // Click Manage Orders at slot 50
         const manageOpened = waitForNewWindow(bot, 5000)
         await clickWindow(bot, 50).catch(() => {})
-        await manageOpened
+        const manageResult = await manageOpened
         
-        if (!bot.currentWindow) {
+        if (!manageResult || !bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
             return { cancelled: 0, relisted: 0, claimed: 0 }
         }

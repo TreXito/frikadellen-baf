@@ -109,10 +109,12 @@ export function enqueueCommand(
     
     // Insert command in priority order (lower priority value = higher actual priority)
     // Within same priority:
-    // - Bazaar orders use LIFO (newest first) to prioritize fresh recommendations when at limit
+    // - SELL orders (HIGH priority) use FIFO to systematically clear inventory in order received
+    // - BUY orders (NORMAL priority) use LIFO (newest first) to prioritize fresh profit opportunities
     // - Other commands use FIFO to maintain order
     let insertIndex = commandQueue.length
     const isBazaarOrder = name.startsWith('Bazaar ')
+    const isBazaarSellOrder = isBazaarOrder && name.includes('SELL')
     
     for (let i = 0; i < commandQueue.length; i++) {
         if (commandQueue[i].priority > priority) {
@@ -120,13 +122,13 @@ export function enqueueCommand(
             insertIndex = i
             break
         } else if (commandQueue[i].priority === priority) {
-            // Same priority - different behavior for bazaar vs other commands
-            if (isBazaarOrder) {
-                // For bazaar orders, insert at this position (LIFO - newest first)
+            // Same priority - different behavior based on order type
+            if (isBazaarOrder && !isBazaarSellOrder) {
+                // For BUY orders, use LIFO (insert at this position - newest first)
                 insertIndex = i
                 break
             }
-            // For non-bazaar commands, continue to maintain FIFO (insertIndex stays at end)
+            // For SELL orders and non-bazaar commands, continue to maintain FIFO (insertIndex stays at end)
         }
     }
     

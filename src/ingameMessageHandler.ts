@@ -479,6 +479,25 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         return loreData.map((line: any) => removeMinecraftColorCodes(line.toString()))
     }
     
+    // BUG 4 FIX: Helper to detect claimable (sold/ended) auctions vs active auctions
+    function isClaimableAuction(slot: any): boolean {
+        if (!slot || !slot.nbt) return false
+        const lore = getSlotLore(slot)
+        if (!lore || lore.length === 0) return false
+        
+        const loreText = lore.join(' ').toLowerCase()
+        
+        // MUST have one of these to be claimable
+        const claimableIndicators = ['sold', 'ended', 'expired', 'click to claim', 'claim your']
+        const hasClaimable = claimableIndicators.some(indicator => loreText.includes(indicator))
+        
+        // Must NOT have these — these indicate active auctions
+        const activeIndicators = ['ends in', 'buy it now', 'starting bid']
+        const isActive = activeIndicators.some(indicator => loreText.includes(indicator))
+        
+        return hasClaimable && !isActive
+    }
+    
     function findSlotWithName(win: any, searchName: string): number {
         for (let i = 0; i < win.slots.length; i++) {
             const slot = win.slots[i]
@@ -584,6 +603,53 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         while (true) {
             if (!bot.currentWindow) break
             
+            // BUG 4 FIX: Verify we're still in Manage Auctions
+            const currentTitle = getWindowTitle(bot.currentWindow)
+            if (!currentTitle || !currentTitle.includes('Manage Auctions')) {
+                log(`[Startup] Not in Manage Auctions (title: ${currentTitle}), reopening`, 'warn')
+                if (bot.currentWindow) {
+                    try {
+                        bot.closeWindow(bot.currentWindow)
+                    } catch(e) {}
+                }
+                await sleep(300)
+                
+                // Reopen /ah → Manage Auctions
+                bot.chat('/ah')
+                const ahOpened = await waitForNewWindow(bot, 5000)
+                if (!ahOpened || !bot.currentWindow) break
+                await sleep(300)
+                
+                // Poll for /ah window slots
+                let pollAttempts = 0
+                while (pollAttempts < 20) {
+                    if (!bot.currentWindow) break
+                    let hasItems = false
+                    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                        const slot = bot.currentWindow.slots[i]
+                        if (slot && slot.name && slot.name !== 'air') {
+                            const name = removeMinecraftColorCodes(getSlotName(slot))
+                            if (name && name === 'Manage Auctions') {
+                                hasItems = true
+                                break
+                            }
+                        }
+                    }
+                    if (hasItems) break
+                    await sleep(100)
+                    pollAttempts++
+                }
+                
+                const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Auctions')
+                if (manageSlot === -1) break
+                const managePromise = waitForNewWindow(bot, 5000)
+                await clickWindow(bot, manageSlot).catch(() => {})
+                await managePromise
+                await sleep(300)
+                if (!bot.currentWindow) break
+                continue // restart the scan
+            }
+            
             // First check for "Claim All" button (highest priority)
             const claimAllSlot = findSlotWithName(bot.currentWindow, 'Claim All')
             if (claimAllSlot !== -1) {
@@ -594,26 +660,24 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 break // After Claim All, we're done
             }
             
-            // Find the FIRST claimable item (re-scan every iteration)
+            // BUG 4 FIX: Find the FIRST claimable item (re-scan every iteration) using proper detection
             let foundClaimable = -1
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
                 if (!slot || !slot.nbt) continue
                 const name = removeMinecraftColorCodes(getSlotName(slot))
                 
-                // Skip navigation items
-                if (!name || name === 'Close' || name === 'Go Back' || name.includes('Arrow')) continue
+                // Skip navigation items and control buttons
+                if (!name || name === 'Close' || name === 'Go Back' || name.includes('Arrow') || 
+                    name === 'Create Auction' || name === 'View Bids' || name === 'Past Auctions') continue
                 
-                // Check lore for sold/ended/expired auctions
-                const lore = getSlotLore(slot)
-                const loreText = lore.join(' ').toLowerCase()
-                
-                // Look for claimable auctions
-                if (loreText.includes('sold') || loreText.includes('ended') || 
-                    loreText.includes('expired') || loreText.includes('click to claim') ||
-                    loreText.includes('claim')) {
+                // BUG 4 FIX: Use isClaimableAuction to distinguish sold from active auctions
+                if (isClaimableAuction(slot)) {
                     foundClaimable = i
+                    log(`[Startup] Found claimable: ${name} at slot ${i}`, 'debug')
                     break
+                } else {
+                    log(`[Startup] Skipping active auction: ${name} at slot ${i}`, 'debug')
                 }
             }
             
@@ -623,13 +687,78 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             }
             
             // Click the claimable slot
-            log(`[Startup] Clicking claimable auction at slot ${foundClaimable}`, 'debug')
+            const slotName = removeMinecraftColorCodes(getSlotName(bot.currentWindow.slots[foundClaimable]))
+            log(`[Startup] Clicking claimable auction "${slotName}" at slot ${foundClaimable}`, 'debug')
             await clickWindow(bot, foundClaimable).catch(() => {})
             await sleep(400)
             
-            // After clicking, a detail window may open
+            // BUG 4 FIX: After clicking, check if we accidentally opened an active auction
             if (bot.currentWindow) {
                 const title = getWindowTitle(bot.currentWindow)
+                
+                // BUG 4 FIX: If we opened "BIN Auction View", it's an active auction - close and skip
+                if (title && title.includes('BIN Auction View') && !title.includes('Confirm')) {
+                    log(`[Startup] Accidentally opened active auction (${slotName}), closing`, 'warn')
+                    bot.closeWindow(bot.currentWindow)
+                    await sleep(300)
+                    
+                    // Reopen Manage Auctions and continue
+                    bot.chat('/ah')
+                    const reopened = await waitForNewWindow(bot, 5000)
+                    if (!reopened || !bot.currentWindow) break
+                    await sleep(300)
+                    
+                    // Poll for /ah window slots
+                    let pollAttempts = 0
+                    while (pollAttempts < 20) {
+                        if (!bot.currentWindow) break
+                        let hasItems = false
+                        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                            const slot = bot.currentWindow.slots[i]
+                            if (slot && slot.name && slot.name !== 'air') {
+                                const name = removeMinecraftColorCodes(getSlotName(slot))
+                                if (name && name === 'Manage Auctions') {
+                                    hasItems = true
+                                    break
+                                }
+                            }
+                        }
+                        if (hasItems) break
+                        await sleep(100)
+                        pollAttempts++
+                    }
+                    
+                    const manageSlot2 = findSlotWithName(bot.currentWindow, 'Manage Auctions')
+                    if (manageSlot2 === -1) break
+                    
+                    const managePromise2 = waitForNewWindow(bot, 5000)
+                    await clickWindow(bot, manageSlot2).catch(() => {})
+                    await managePromise2
+                    await sleep(300)
+                    
+                    // Poll for Manage Auctions window slots
+                    pollAttempts = 0
+                    while (pollAttempts < 20) {
+                        if (!bot.currentWindow) break
+                        let hasContent = false
+                        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                            const slot = bot.currentWindow.slots[i]
+                            if (!slot || !slot.nbt) continue
+                            const name = removeMinecraftColorCodes(getSlotName(slot))
+                            if (name && name !== '' && name !== 'Close' && name !== 'Go Back') {
+                                hasContent = true
+                                break
+                            }
+                        }
+                        if (hasContent) break
+                        await sleep(100)
+                        pollAttempts++
+                    }
+                    
+                    continue // restart the scan
+                }
+                
+                // Otherwise, this is a detail view for a sold auction - look for claim button
                 if (title && (title.includes('Confirm') || title.includes('BIN Auction View') || title.includes('Auction View'))) {
                     log('[Startup] Detail view opened, looking for claim button', 'debug')
                     // This is a detail/confirm view — look for claim button

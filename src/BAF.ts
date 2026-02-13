@@ -372,12 +372,17 @@ async function onWebsocketMessage(msg) {
                 // Check if this is an AH flip incoming message and pause if needed
                 checkAndPauseForAHFlip(da.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'), bot)
                 
-                // Check if this is a bazaar flip recommendation
-                const bazaarFlip = parseBazaarFlipMessage(da.text)
-                if (bazaarFlip) {
-                    log('[BazaarDebug] Detected bazaar flip recommendation from chat message', 'info')
-                    log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
-                    handleBazaarFlipRecommendation(bot, bazaarFlip)
+                // BUG 2 FIX: Ignore bazaar flips during startup
+                if (bot.state === 'startup') {
+                    log('[Websocket] Ignoring bazaar flip during startup', 'debug')
+                } else {
+                    // Check if this is a bazaar flip recommendation
+                    const bazaarFlip = parseBazaarFlipMessage(da.text)
+                    if (bazaarFlip) {
+                        log('[BazaarDebug] Detected bazaar flip recommendation from chat message', 'info')
+                        log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
+                        handleBazaarFlipRecommendation(bot, bazaarFlip)
+                    }
                 }
                 
                 if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
@@ -423,12 +428,17 @@ async function onWebsocketMessage(msg) {
             // Check if this is an AH flip incoming message and pause if needed
             checkAndPauseForAHFlip(data.text, getConfigProperty('ENABLE_BAZAAR_FLIPS'), getConfigProperty('ENABLE_AH_FLIPS'), bot)
             
-            // Check if this is a bazaar flip recommendation
-            const bazaarFlip = parseBazaarFlipMessage(data.text)
-            if (bazaarFlip) {
-                log('[BazaarDebug] Detected bazaar flip recommendation from writeToChat message', 'info')
-                log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
-                handleBazaarFlipRecommendation(bot, bazaarFlip)
+            // BUG 2 FIX: Ignore bazaar flips during startup
+            if (bot.state === 'startup') {
+                log('[Websocket] Ignoring bazaar flip during startup', 'debug')
+            } else {
+                // Check if this is a bazaar flip recommendation
+                const bazaarFlip = parseBazaarFlipMessage(data.text)
+                if (bazaarFlip) {
+                    log('[BazaarDebug] Detected bazaar flip recommendation from writeToChat message', 'info')
+                    log(`[BazaarDebug] Parsed: ${bazaarFlip.amount}x ${bazaarFlip.itemName} @ ${bazaarFlip.pricePerUnit.toFixed(1)} coins`, 'info')
+                    handleBazaarFlipRecommendation(bot, bazaarFlip)
+                }
             }
             
             if (getConfigProperty('USE_COFL_CHAT') || !isCoflChat) {
@@ -479,6 +489,11 @@ async function onWebsocketMessage(msg) {
             break
         case 'bazaarFlip':
             log(message, 'debug')
+            // BUG 2 FIX: Ignore bazaar flips during startup
+            if (bot.state === 'startup') {
+                log('[Websocket] Ignoring bazaarFlip during startup', 'debug')
+                break
+            }
             const parsedBazaarFlip = parseBazaarFlipJson(data)
             if (parsedBazaarFlip) {
                 handleBazaarFlipRecommendation(bot, parsedBazaarFlip)
@@ -491,6 +506,13 @@ async function onWebsocketMessage(msg) {
             log(`[BazaarDebug] Raw data type: ${typeof data}`, 'info')
             log(`[BazaarDebug] Raw data: ${JSON.stringify(data)}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[Websocket] Received bazaar flip recommendation`)
+            
+            // BUG 2 FIX: Ignore placeOrder during startup
+            if (bot.state === 'startup') {
+                log('[Websocket] Ignoring placeOrder during startup', 'debug')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Startup] Ignoring flip during startup`)
+                break
+            }
             
             if (!bot || !bot.username) {
                 log('[BazaarDebug] Bot not initialized, ignoring placeOrder', 'warn')
@@ -514,6 +536,13 @@ async function onWebsocketMessage(msg) {
             log(`[BazaarDebug] Raw data: ${JSON.stringify(data)}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §7[Websocket] Received bazaar flip recommendation`)
             
+            // BUG 2 FIX: Ignore bzRecommend during startup
+            if (bot.state === 'startup') {
+                log('[Websocket] Ignoring bzRecommend during startup', 'debug')
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Startup] Ignoring flip during startup`)
+                break
+            }
+            
             if (!bot || !bot.username) {
                 log('[BazaarDebug] Bot not initialized, ignoring bzRecommend', 'warn')
                 printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Bot not initialized, cannot process recommendation`)
@@ -533,6 +562,13 @@ async function onWebsocketMessage(msg) {
         case 'getbazaarflips':
             log(`[BazaarDebug] Received getbazaarflips response`, 'info')
             log(`[BazaarDebug] Response data: ${JSON.stringify(data)}`, 'debug')
+            
+            // BUG 2 FIX: Ignore getbazaarflips during startup
+            if (bot.state === 'startup') {
+                log('[Websocket] Ignoring getbazaarflips during startup', 'debug')
+                break
+            }
+            
             // Handle response from /cofl getbazaarflips command
             // Data could be a single recommendation or an array of recommendations
             if (Array.isArray(data)) {

@@ -1434,27 +1434,52 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                     // SELL OFFER: Items come back to inventory after cancel.
                     // IMMEDIATELY re-list before cancelling the next order.
                     if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
-                        // Close current window (should be back at Manage Orders or closed already)
-                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-                        await sleep(300)
+                        // Step 1: Close the current Manage Orders window FIRST
+                        log('[Startup] Closing Manage Orders window before re-listing', 'debug')
+                        if (bot.currentWindow) {
+                            try {
+                                bot.closeWindow(bot.currentWindow)
+                            } catch (e) {
+                                log(`[Startup] Error closing window: ${e}`, 'warn')
+                            }
+                        }
+                        await sleep(500)
                         
-                        // Re-list NOW — this moves items OUT of inventory back to bazaar
-                        log(`[Startup] Re-listing ${itemName} immediately (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
+                        // Step 2: Verify window is closed
+                        if (bot.currentWindow) {
+                            log('[Startup] Window still open after close, forcing', 'warn')
+                            try { 
+                                bot.closeWindow(bot.currentWindow) 
+                            } catch(e) {
+                                log(`[Startup] Error force-closing window: ${e}`, 'warn')
+                            }
+                            await sleep(500)
+                        }
+                        
+                        // Step 3: NOW place the sell offer — this runs /bz ItemName internally
+                        log(`[Startup] Re-listing ${itemName} — running /bz flow (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${itemName}§7 immediately`)
                         
                         try {
                             await placeBazaarOrder(bot, itemName, orderInfo.remaining, orderInfo.pricePerUnit, false)
+                            log(`[Startup] Successfully re-listed ${itemName}`, 'info')
                             relistedCount++
                         } catch (err) {
                             log(`[Startup] Failed to re-list ${itemName}: ${err}`, 'warn')
-                            if (bot.currentWindow) {
-                                try { bot.closeWindow(bot.currentWindow) } catch(e) {}
-                            }
                         }
                         
-                        await sleep(300)
+                        // Step 4: Make sure any window from the sell flow is closed
+                        if (bot.currentWindow) {
+                            try { 
+                                bot.closeWindow(bot.currentWindow) 
+                            } catch(e) {
+                                log(`[Startup] Error closing window after re-list: ${e}`, 'debug')
+                            }
+                            await sleep(300)
+                        }
                         
-                        // Re-open /bz → Manage Orders to continue with next order
+                        // Step 5: ONLY NOW reopen /bz → Manage Orders to continue with next order
+                        log('[Startup] Reopening Manage Orders for next order', 'debug')
                         bot.chat('/bz')
                         const reopened = await waitForNewWindow(bot, 5000)
                         if (!reopened || !bot.currentWindow) {

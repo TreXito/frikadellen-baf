@@ -131,6 +131,12 @@ function clickSlot(bot: MyBot, slot: number, windowId: number, itemId: number) {
 
 
 export async function flipHandler(bot: MyBot, flip: Flip) {
+    // BUG 3 FIX: Ignore AH flips during startup
+    if (bot.state === 'startup') {
+        log('[FlipHandler] Ignoring AH flip during startup', 'debug')
+        return
+    }
+    
     // Check if AH flips are enabled in config
     if (!getConfigProperty('ENABLE_AH_FLIPS')) {
         log('AH flips are disabled in config', 'debug')

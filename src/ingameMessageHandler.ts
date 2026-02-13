@@ -33,9 +33,6 @@ let bazaarOrderCooldownUntil: number = 0 // Timestamp when cooldown expires
 // It doesn't need to be reset because if items were stashed once, the user should check
 let hasStashedItems = false
 
-// Store the last auction sold clickEvent for direct claiming
-let lastAuctionClickCommand: string | null = null
-
 /**
  * Export function to check if items are in stash (for future use)
  */
@@ -119,23 +116,26 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 log('New item sold - queuing claim with HIGH priority')
                 
                 // Extract clickEvent if present (for direct auction access)
-                lastAuctionClickCommand = null
+                let auctionClickCommand: string | null = null
                 if (message.json && message.json.extra) {
                     for (const part of message.json.extra) {
                         if (part.clickEvent && part.clickEvent.action === 'run_command') {
-                            lastAuctionClickCommand = part.clickEvent.value
-                            log(`[AH] Found clickEvent command: ${lastAuctionClickCommand}`, 'debug')
+                            auctionClickCommand = part.clickEvent.value
+                            log(`[AH] Found clickEvent command: ${auctionClickCommand}`, 'debug')
                             break
                         }
                     }
                 }
+                
+                // Capture the command in closure to avoid race conditions
+                const capturedClickCommand = auctionClickCommand
                 
                 // Queue the claim with HIGH priority so it runs immediately after current task
                 enqueueCommand(
                     'Claim Sold Auction',
                     CommandPriority.HIGH,
                     async () => {
-                        await claimSoldItem(bot, lastAuctionClickCommand)
+                        await claimSoldItem(bot, capturedClickCommand)
                     },
                     true // interruptible - can be interrupted by AH flips
                 )
@@ -543,14 +543,14 @@ async function claimSoldItemDirect(bot: MyBot, clickCommand: string): Promise<bo
         // Wait for window to populate
         await sleep(300)
         let pollAttempts = 0
-        while (pollAttempts < 20) { // max 2 seconds
+        while (pollAttempts < 20) { // max 2.3 seconds (300ms initial + 20*100ms)
             if (!bot.currentWindow) break
             let hasContent = false
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
                 if (slot && slot.nbt) {
                     const name = removeMinecraftColorCodes(getSlotName(slot))
-                    if (name && name !== '' && name !== 'Close' && name !== 'Go Back') {
+                    if (name && name !== 'Close' && name !== 'Go Back') {
                         hasContent = true
                         break
                     }

@@ -80,8 +80,11 @@ export function getItemDisplayName(item: any): string {
             const text = parsed.text || ''
             const extra = parsed.extra?.map((e: any) => typeof e === 'string' ? e : e.text || '').join('') || ''
             return removeMinecraftColorCodes(text + extra).trim()
-        } catch {
+        } catch (e) {
             // Not JSON, just a plain string with color codes
+            // Import log function inline to avoid circular dependencies
+            const { log } = require('./logger')
+            log(`[Utils] Failed to parse NBT name as JSON, using as plain string: ${e}`, 'debug')
             return removeMinecraftColorCodes(nbtName).trim()
         }
     }

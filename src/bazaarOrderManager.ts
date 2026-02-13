@@ -1325,7 +1325,8 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             return { cancelled: 0, relisted: 0, claimed: 0 }
         }
         
-        // Queues for later processing (buy orders only - sell orders handled immediately)
+        // Queues for later processing
+        // This tracks items from filled buy orders that need to be sold later
         const sellQueue: { itemName: string, amount: number }[] = []
         
         // BUG 1 FIX: Process ONE order at a time
@@ -1422,9 +1423,12 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                             log('[Startup] Manage Orders button not found after re-opening', 'warn')
                             break
                         }
-                        const manageOpened = waitForNewWindow(bot, 5000)
                         await clickWindow(bot, manageSlot).catch(() => {})
-                        await manageOpened
+                        const manageOpened = await waitForNewWindow(bot, 5000)
+                        if (!manageOpened) {
+                            log('[Startup] Manage Orders window did not open after clicking', 'warn')
+                            break
+                        }
                         await sleep(300)
                         
                         if (!bot.currentWindow) {

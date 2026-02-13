@@ -678,7 +678,8 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                         for (let i = 0; i < window.slots.length; i++) {
                             const slot = window.slots[i]
                             if (!slot || !slot.nbt) continue
-                            const name = removeMinecraftColorCodes(getSlotName(slot))
+                            // getSlotName() already applies removeMinecraftColorCodes via getItemDisplayName()
+                            const name = getSlotName(slot)
                             if (name && name !== '' && name !== 'close' && name !== 'Close') {
                                 availableItems.push(`slot ${i}: ${name}`)
                             }
@@ -693,7 +694,8 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     
                     // Get the item name from the slot for logging
                     const slot = window.slots[itemSlot]
-                    const name = removeMinecraftColorCodes(getSlotName(slot))
+                    // getSlotName() already applies removeMinecraftColorCodes via getItemDisplayName()
+                    const name = getSlotName(slot)
                     log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
                     await sleep(200)

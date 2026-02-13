@@ -1390,6 +1390,10 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         // This tracks items from filled buy orders that need to be sold later
         const sellQueue: { itemName: string, amount: number }[] = []
         
+        // Track items that have already been processed during startup to prevent infinite loops
+        // When an item is cancelled and re-listed, we don't want to process it again
+        const processedItems = new Set<string>()
+        
         // BUG 1 FIX: Process ONE order at a time
         // For SELL orders: cancel → immediately re-list → re-open Manage Orders → continue
         // For BUY orders: cancel → track items for later → continue
@@ -1398,21 +1402,32 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (!bot.currentWindow) break
             
             // Find the FIRST order in the current window (re-scan every iteration)
-            let foundOrder: { slot: number, name: string, isBuy: boolean } | null = null
+            let foundOrder: { slot: number, name: string, isBuy: boolean, itemName: string } | null = null
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
                 if (!slot || !slot.nbt) continue
                 const name = removeMinecraftColorCodes(getSlotName(slot))
                 if (!name.startsWith('BUY ') && !name.startsWith('SELL ')) continue
                 
+                // Extract item name for deduplication check
+                const itemName = name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
+                
+                // Skip items that have already been processed during startup
+                if (processedItems.has(itemName)) {
+                    log(`[Startup] Skipping already processed item: ${itemName}`, 'debug')
+                    continue
+                }
+                
                 // This is an order — cancel ALL orders during startup (they're from a previous session)
-                foundOrder = { slot: i, name, isBuy: name.startsWith('BUY ') }
+                foundOrder = { slot: i, name, isBuy: name.startsWith('BUY '), itemName }
                 break
             }
             
             if (!foundOrder) break // No more orders to process
             
-            const itemName = foundOrder.name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
+            // Mark this item as processed to prevent re-processing after re-listing
+            processedItems.add(foundOrder.itemName)
+            log(`[Startup] Processing item: ${foundOrder.itemName} (total processed: ${processedItems.size})`, 'debug')
             
             // Read the lore BEFORE clicking (from the Manage Orders list view)
             // Safety check: ensure slot still exists and has NBT data
@@ -1426,7 +1441,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             
             // Click the order — window transitions to order detail view
             await clickWindow(bot, foundOrder.slot).catch((err) => {
-                log(`[Startup] Failed to click order slot ${foundOrder.slot} for ${itemName}: ${err}`, 'warn')
+                log(`[Startup] Failed to click order slot ${foundOrder.slot} for ${foundOrder.itemName}: ${err}`, 'warn')
             })
             await sleep(400)
             
@@ -1438,12 +1453,12 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (cancelSlot !== -1) {
                 // Cancel it
                 await clickWindow(bot, cancelSlot).catch((err) => {
-                    log(`[Startup] Failed to click cancel button (slot ${cancelSlot}) for ${itemName}: ${err}`, 'warn')
+                    log(`[Startup] Failed to click cancel button (slot ${cancelSlot}) for ${foundOrder.itemName}: ${err}`, 'warn')
                 })
                 await sleep(400)
                 
                 cancelledCount++
-                log(`[Startup] Cancelled ${foundOrder.isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
+                log(`[Startup] Cancelled ${foundOrder.isBuy ? 'buy order' : 'sell offer'} for ${foundOrder.itemName}`, 'info')
                 
                 // BUG 1 FIX: IMMEDIATELY re-list sell offers to prevent inventory overflow
                 if (!foundOrder.isBuy) {
@@ -1473,15 +1488,15 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                         }
                         
                         // Step 3: NOW place the sell offer — this runs /bz ItemName internally
-                        log(`[Startup] Re-listing ${itemName} — running /bz flow (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${itemName}§7 immediately`)
+                        log(`[Startup] Re-listing ${foundOrder.itemName} — running /bz flow (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${foundOrder.itemName}§7 immediately`)
                         
                         try {
-                            await placeBazaarOrder(bot, itemName, orderInfo.remaining, orderInfo.pricePerUnit, false)
-                            log(`[Startup] Successfully re-listed ${itemName}`, 'info')
+                            await placeBazaarOrder(bot, foundOrder.itemName, orderInfo.remaining, orderInfo.pricePerUnit, false)
+                            log(`[Startup] Successfully re-listed ${foundOrder.itemName}`, 'info')
                             relistedCount++
                         } catch (err) {
-                            log(`[Startup] Failed to re-list ${itemName}: ${err}`, 'warn')
+                            log(`[Startup] Failed to re-list ${foundOrder.itemName}: ${err}`, 'warn')
                         }
                         
                         // Step 4: Make sure any window from the sell flow is closed
@@ -1571,7 +1586,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                     // BUY ORDER: Coins refunded, no inventory impact.
                     // If partially filled, items were claimed — those need selling later
                     if (orderInfo.filled > 0) {
-                        sellQueue.push({ itemName, amount: orderInfo.filled })
+                        sellQueue.push({ itemName: foundOrder.itemName, amount: orderInfo.filled })
                     }
                 }
             } else {
@@ -1579,11 +1594,11 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                 if (foundOrder.isBuy) {
                     const amount = orderInfo.filled || orderInfo.amount
                     if (amount > 0) {
-                        sellQueue.push({ itemName, amount })
+                        sellQueue.push({ itemName: foundOrder.itemName, amount })
                     }
                 }
                 claimedCount++
-                log(`[Startup] Claimed fully filled order for ${itemName}`, 'info')
+                log(`[Startup] Claimed fully filled order for ${foundOrder.itemName}`, 'info')
             }
             
             // Wait for the window to update before the next iteration

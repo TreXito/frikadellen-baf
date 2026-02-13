@@ -563,115 +563,151 @@ async function onWebsocketMessage(msg) {
 }
 
 /**
+ * BUG 3 FIX: Timeout wrapper for async operations
+ * Wraps a promise with a timeout and ensures cleanup on timeout
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, name: string): Promise<T | undefined> {
+    return Promise.race([
+        promise,
+        sleep(ms).then(() => {
+            log(`[Startup] ${name} timed out after ${ms / 1000}s`, 'warn')
+            printMcChatToConsole(`§f[§4BAF§f]: §c[Startup] ${name} timed out`)
+            if (bot.currentWindow) {
+                try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+            }
+            return undefined
+        })
+    ])
+}
+
+/**
  * Runs the startup workflow after joining SkyBlock
  * Order: Cookie check → Discover orders → Execute orders → Start accepting flips
  * BUG FIX #3: Keeps bot.state = 'startup' throughout to prevent interruptions
+ * BUG FIX #3: All steps wrapped with timeouts to prevent infinite hangs
  */
 async function runStartupWorkflow() {
     // BUG FIX #3: Set startup state to prevent interruptions during entire startup phase
     bot.state = 'startup'
     
+    // BUG 3 FIX: Global timeout for entire startup workflow (2 minutes)
+    const startupTimeout = setTimeout(() => {
+        log('[Startup] Startup timed out after 2 minutes! Forcing completion.', 'error')
+        printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Workflow timed out! Forcing completion.')
+        if (bot.currentWindow) {
+            try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+        }
+        bot.state = null
+    }, 120000) // 2 minutes
+    
     let ordersFound = 0
     
-    log('========================================', 'info')
-    log('Starting BAF Startup Workflow', 'info')
-    log('========================================', 'info')
-    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
-    printMcChatToConsole('§f[§4BAF§f]: §6Starting BAF Startup Workflow')
-    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
-    
-    // Step 1: Check and buy cookie if needed
-    log('[Startup] Step 1/4: Checking cookie status...', 'info')
-    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 1/4: §fChecking cookie status...')
     try {
-        await checkAndBuyCookie(bot)
-        log('[Startup] Cookie check complete', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Cookie check complete')
-    } catch (err) {
-        log(`[Startup] Cookie check error: ${err}`, 'error')
-        printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Cookie check error')
-    }
-    
-    await sleep(1000)
-    
-    // Step 2: Manage existing orders (cancel stale ones and re-list) - FEATURE 1
-    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        log('[Startup] Step 2/4: Managing existing orders...', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fManaging existing orders...')
-        try {
-            const result = await startupOrderManagement(bot)
-            ordersFound = result.cancelled
-            log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
-            printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Order management complete`)
-        } catch (err) {
-            log(`[Startup] Order management error: ${err}`, 'error')
-            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Order management error')
-        }
-    } else {
-        log('[Startup] Step 2/4: Skipping order management (Bazaar flips disabled)', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §7Skipped (Bazaar flips disabled)')
-    }
-    
-    await sleep(1000)
-    
-    // Step 3: Claim sold items from offline sales
-    log('[Startup] Step 3/4: Claiming sold items...', 'info')
-    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 3/4: §fClaiming sold items...')
-    try {
-        await claimSoldItem(bot)
-        log('[Startup] Sold items claim complete', 'info')
-        printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim complete')
-    } catch (err) {
-        log(`[Startup] Claim sold items error: ${err}`, 'error')
-        printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Claim sold items error')
-    }
-    
-    await sleep(2000)
-    
-    // Step 4: Ready to accept flips
-    log('[Startup] Step 4/4: Starting flip acceptance...', 'info')
-    printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 4/4: §fStarting flip acceptance...')
-    
-    // Get websocket for requesting flips
-    const wss = await getCurrentWebsocket()
-    
-    // Start bazaar order manager if bazaar flips are enabled
-    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        // Pass true to trigger immediate check if orders were discovered at startup
-        startOrderManager(bot, ordersFound > 0)
+        log('========================================', 'info')
+        log('Starting BAF Startup Workflow', 'info')
+        log('========================================', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+        printMcChatToConsole('§f[§4BAF§f]: §6Starting BAF Startup Workflow')
+        printMcChatToConsole('§f[§4BAF§f]: §6========================================')
         
-        // Start auto-requesting bazaar flips every 5 minutes (Feature 5)
-        startBazaarFlipRequests(wss)
-    }
-    
-    // Request bazaar flips if enabled (initial request)
-    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+        // Step 1: Check and buy cookie if needed (15 second timeout)
+        log('[Startup] Step 1/4: Checking cookie status...', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 1/4: §fChecking cookie status...')
+        try {
+            await withTimeout(checkAndBuyCookie(bot), 15000, 'Cookie check')
+            log('[Startup] Cookie check complete', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Cookie check complete')
+        } catch (err) {
+            log(`[Startup] Cookie check error: ${err}`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Cookie check error')
+        }
+        
         await sleep(1000)
-        log('[Startup] Requesting bazaar flip recommendations...', 'info')
-        wss.send(
-            JSON.stringify({
-                type: 'getbazaarflips',
-                data: JSON.stringify('')
-            })
-        )
-    }
-    
-    log('========================================', 'info')
-    log('Startup Workflow Complete - Ready!', 'info')
-    log('========================================', 'info')
-    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
-    printMcChatToConsole('§f[§4BAF§f]: §a§lStartup Workflow Complete - Ready!')
-    printMcChatToConsole('§f[§4BAF§f]: §6========================================')
-    
-    // BUG FIX #3: Clear startup state - bot can now accept flips and commands
-    bot.state = null
-    
-    // Send webhook notification about startup complete
-    sendWebhookStartupComplete(ordersFound)
-    
-    // Start profit tracking timer if bazaar flips are enabled
-    if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
-        startProfitReportTimer()
+        
+        // Step 2: Manage existing orders (cancel stale ones and re-list) - FEATURE 1 (90 second timeout)
+        if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+            log('[Startup] Step 2/4: Managing existing orders...', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fManaging existing orders...')
+            try {
+                const result = await withTimeout(startupOrderManagement(bot), 90000, 'Order management')
+                if (result) {
+                    ordersFound = result.cancelled
+                    log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
+                    printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Order management complete`)
+                }
+            } catch (err) {
+                log(`[Startup] Order management error: ${err}`, 'error')
+                printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Order management error')
+            }
+        } else {
+            log('[Startup] Step 2/4: Skipping order management (Bazaar flips disabled)', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §7Skipped (Bazaar flips disabled)')
+        }
+        
+        await sleep(1000)
+        
+        // Step 3: Claim sold items from offline sales (30 second timeout)
+        log('[Startup] Step 3/4: Claiming sold items...', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 3/4: §fClaiming sold items...')
+        try {
+            await withTimeout(claimSoldItem(bot), 30000, 'Sold items claim')
+            log('[Startup] Sold items claim complete', 'info')
+            printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim complete')
+        } catch (err) {
+            log(`[Startup] Claim sold items error: ${err}`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Claim sold items error')
+        }
+        
+        await sleep(2000)
+        
+        // Step 4: Ready to accept flips
+        log('[Startup] Step 4/4: Starting flip acceptance...', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 4/4: §fStarting flip acceptance...')
+        
+        // Get websocket for requesting flips
+        const wss = await getCurrentWebsocket()
+        
+        // Start bazaar order manager if bazaar flips are enabled
+        if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+            // Pass true to trigger immediate check if orders were discovered at startup
+            startOrderManager(bot, ordersFound > 0)
+            
+            // Start auto-requesting bazaar flips every 5 minutes (Feature 5)
+            startBazaarFlipRequests(wss)
+        }
+        
+        // Request bazaar flips if enabled (initial request)
+        if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+            await sleep(1000)
+            log('[Startup] Requesting bazaar flip recommendations...', 'info')
+            wss.send(
+                JSON.stringify({
+                    type: 'getbazaarflips',
+                    data: JSON.stringify('')
+                })
+            )
+        }
+        
+        log('========================================', 'info')
+        log('Startup Workflow Complete - Ready!', 'info')
+        log('========================================', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+        printMcChatToConsole('§f[§4BAF§f]: §a§lStartup Workflow Complete - Ready!')
+        printMcChatToConsole('§f[§4BAF§f]: §6========================================')
+    } finally {
+        // Clear the global timeout
+        clearTimeout(startupTimeout)
+        
+        // BUG FIX #3: Clear startup state - bot can now accept flips and commands
+        bot.state = null
+        
+        // Send webhook notification about startup complete
+        sendWebhookStartupComplete(ordersFound)
+        
+        // Start profit tracking timer if bazaar flips are enabled
+        if (getConfigProperty('ENABLE_BAZAAR_FLIPS')) {
+            startProfitReportTimer()
+        }
     }
 }
 

@@ -28,6 +28,9 @@ let orderRefreshDebounceTimer: NodeJS.Timeout | null = null
 // Bazaar order cooldown tracking
 let bazaarOrderCooldownUntil: number = 0 // Timestamp when cooldown expires
 
+// BUG 2: Stashed items tracking
+let hasStashedItems = false
+
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()
     bot.on('message', (message: ChatMessage, type) => {
@@ -212,6 +215,14 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                     log('[BAF]: Bazaar daily sell limit reset', 'info')
                     printMcChatToConsole('§f[§4BAF§f]: §aBazaar daily sell limit reset')
                 }, 24 * 60 * 60 * 1000) // 24 hours
+            }
+            
+            // BUG 2: Detect stashed items messages
+            const cleanMessage = removeMinecraftColorCodes(text).toLowerCase()
+            if (cleanMessage.includes('stashed away')) {
+                hasStashedItems = true
+                log('[BAF] ⚠ Items detected in stash! Inventory may have been full.', 'warn')
+                printMcChatToConsole('§f[§4BAF§f]: §e⚠ Items are in stash! Free inventory space and pick up manually.')
             }
             
             // Detect bazaar order limit messages to dynamically update limits
@@ -430,97 +441,178 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
     })
 }
 
+/**
+ * BUG 1 FIX: Claim all sold auction items
+ * Properly processes the Manage Auctions window to claim all sold items
+ * Loops through items and re-scans after each claim (slots shift after claiming)
+ */
 export async function claimSoldItem(bot: MyBot): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-        if (bot.state) {
-            log('Currently busy with something else (' + bot.state + ') -> not claiming sold item')
-            setTimeout(async () => {
-                let result = await claimSoldItem(bot)
-                resolve(result)
-            }, 1000)
-            return
+    log('[Startup] Claiming sold AH items...', 'info')
+    
+    // Helper functions (local to avoid circular dependencies)
+    function getSlotName(slot: any): string {
+        if (!slot || !slot.nbt) return ''
+        return (slot.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+    }
+    
+    function getSlotLore(slot: any): string[] {
+        if (!slot || !slot.nbt) return []
+        const loreData = (slot.nbt as any)?.value?.display?.value?.Lore?.value?.value
+        if (!loreData || !Array.isArray(loreData)) return []
+        return loreData.map((line: any) => removeMinecraftColorCodes(line.toString()))
+    }
+    
+    function findSlotWithName(win: any, searchName: string): number {
+        for (let i = 0; i < win.slots.length; i++) {
+            const slot = win.slots[i]
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            if (name && name.includes(searchName)) return i
         }
-
-        let timeout = setTimeout(() => {
-            log('Seems something went wrong while claiming sold item. Removing lock')
-            bot.removeListener('windowOpen', windowHandler)
-            bot.state = null
-            resolve(false)
-        }, 10000)
-
-        const windowHandler = async (window) => {
-            let title = getWindowTitle(window)
-            if (title.toString().includes('Auction House')) {
-                // Add a small delay to ensure the window is fully loaded before clicking
-                await sleep(300)
-                clickWindow(bot, 15).catch(err => {
-                    log(`Error clicking manage auctions slot: ${err}`, 'error')
-                    // Clean up on error
-                    bot.removeListener('windowOpen', windowHandler)
-                    bot.state = null
-                    clearTimeout(timeout)
-                    resolve(false)
-                })
-            }
-            if (title.toString().includes('Manage Auctions')) {
-                log('Claiming sold auction...')
-                let clickSlot
-
-                for (let i = 0; i < window.slots.length; i++) {
-                    const item = window.slots[i] as any
-                    
-                    // Check for "Claim All" cauldron first (highest priority)
-                    if (item && item.name === 'cauldron' && (item.nbt as any).value?.display?.value?.Name?.value?.toString().includes('Claim All')) {
-                        log(item)
-                        log('Found cauldron to claim all sold auctions -> clicking index ' + item.slot)
-                        clickWindow(bot, item.slot).catch(err => log(`Error clicking claim all sold slot: ${err}`, 'error'))
-                        clearTimeout(timeout)
-                        bot.removeListener('windowOpen', windowHandler)
-                        bot.state = null
-                        resolve(true)
-                        return
-                    }
-                    
-                    // Look for sold items (items with "Sold for" in lore)
-                    // Skip expired items - those are handled separately
-                    const loreStr = item?.nbt?.value?.display?.value?.Lore ? JSON.stringify(item.nbt.value.display.value.Lore) : ''
-                    if (loreStr.includes('Sold for') && !loreStr.includes('Expired!')) {
-                        clickSlot = item.slot
-                    }
-                }
-
-                if (!clickSlot) {
-                    log('No sold auctions found')
-                    clearTimeout(timeout)
-                    bot.removeListener('windowOpen', windowHandler)
-                    bot.state = null
-                    bot.closeWindow(window)
-                    resolve(false)
-                    return
-                }
-                log('Clicking auction to claim, index: ' + clickSlot)
-                log(JSON.stringify(window.slots[clickSlot]))
-
-                clickWindow(bot, clickSlot).catch(err => log(`Error clicking sold auction slot: ${err}`, 'error'))
-            }
-            if (title == 'BIN Auction View') {
-                log('Clicking slot 31, claiming purchased auction')
-                clickWindow(bot, 31).catch(err => log(`Error claiming sold auction: ${err}`, 'error'))
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', windowHandler)
-                bot.state = null
-                bot.closeWindow(window)
+        return -1
+    }
+    
+    function waitForNewWindow(bot: MyBot, timeout: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                bot._client.removeListener('open_window', handler)
+                resolve(false)
+            }, timeout)
+            
+            const handler = () => {
+                clearTimeout(timer)
+                bot._client.removeListener('open_window', handler)
                 resolve(true)
             }
-        }
-
-        // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
-        // This prevents stale handlers from claim/sell operations from interfering
-        bot.removeAllListeners('windowOpen')
-        bot.state = 'claiming'
-        bot.on('windowOpen', windowHandler)
+            
+            bot._client.once('open_window', handler)
+        })
+    }
+    
+    try {
+        // Open /ah window
         bot.chat('/ah')
-    })
+        const ahOpened = await waitForNewWindow(bot, 5000)
+        if (!ahOpened || !bot.currentWindow) {
+            log('[Startup] /ah window did not open', 'warn')
+            return false
+        }
+        await sleep(300)
+        
+        // Click "Manage Auctions"
+        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Auctions')
+        if (manageSlot === -1) {
+            log('[Startup] Manage Auctions button not found', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            return false
+        }
+        
+        await clickWindow(bot, manageSlot).catch(() => {})
+        const manageOpened = await waitForNewWindow(bot, 5000)
+        if (!manageOpened) {
+            log('[Startup] Manage Auctions window did not open', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            return false
+        }
+        await sleep(300)
+        
+        if (!bot.currentWindow) return false
+        
+        // Now we're in the Manage Auctions window
+        // Process all claimable items - re-scan after each claim
+        let claimedCount = 0
+        
+        while (true) {
+            if (!bot.currentWindow) break
+            
+            // First check for "Claim All" button (highest priority)
+            const claimAllSlot = findSlotWithName(bot.currentWindow, 'Claim All')
+            if (claimAllSlot !== -1) {
+                log('[Startup] Found "Claim All" button, using it', 'info')
+                await clickWindow(bot, claimAllSlot).catch(() => {})
+                await sleep(800)
+                claimedCount++ // Count as one bulk claim
+                break // After Claim All, we're done
+            }
+            
+            // Find the FIRST claimable item (re-scan every iteration)
+            let foundClaimable = -1
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (!slot || !slot.nbt) continue
+                const name = removeMinecraftColorCodes(getSlotName(slot))
+                
+                // Skip navigation items
+                if (!name || name === 'Close' || name === 'Go Back' || name.includes('Arrow')) continue
+                
+                // Check lore for sold/ended/expired auctions
+                const lore = getSlotLore(slot)
+                const loreText = lore.join(' ').toLowerCase()
+                
+                // Look for claimable auctions
+                if (loreText.includes('sold') || loreText.includes('ended') || 
+                    loreText.includes('expired') || loreText.includes('click to claim') ||
+                    loreText.includes('claim')) {
+                    foundClaimable = i
+                    break
+                }
+            }
+            
+            if (foundClaimable === -1) {
+                log('[Startup] No more claimable auctions found', 'debug')
+                break // Nothing left to claim
+            }
+            
+            // Click the claimable slot
+            log(`[Startup] Clicking claimable auction at slot ${foundClaimable}`, 'debug')
+            await clickWindow(bot, foundClaimable).catch(() => {})
+            await sleep(400)
+            
+            // After clicking, a detail window may open
+            if (bot.currentWindow) {
+                const title = getWindowTitle(bot.currentWindow)
+                if (title && (title.includes('Confirm') || title.includes('BIN Auction View') || title.includes('Auction View'))) {
+                    log('[Startup] Detail view opened, looking for claim button', 'debug')
+                    // This is a detail/confirm view — look for claim button
+                    const claimSlot = findSlotWithName(bot.currentWindow, 'Claim')
+                    if (claimSlot !== -1) {
+                        await clickWindow(bot, claimSlot).catch(() => {})
+                        await sleep(400)
+                        claimedCount++
+                    }
+                }
+            }
+            
+            await sleep(300)
+            
+            // The window should return to the auction list
+            // If it closed, reopen to check for more
+            if (!bot.currentWindow) {
+                log('[Startup] Window closed after claim, reopening to check for more', 'debug')
+                bot.chat('/ah')
+                const reopened = await waitForNewWindow(bot, 5000)
+                if (!reopened || !bot.currentWindow) break
+                await sleep(300)
+                
+                const manageSlot2 = findSlotWithName(bot.currentWindow, 'Manage Auctions')
+                if (manageSlot2 === -1) break
+                await clickWindow(bot, manageSlot2).catch(() => {})
+                const manageOpened2 = await waitForNewWindow(bot, 5000)
+                if (!manageOpened2) break
+                await sleep(300)
+            }
+        }
+        
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        log(`[Startup] Claimed ${claimedCount} sold auction(s)`, 'info')
+        return claimedCount > 0
+        
+    } catch (error) {
+        log(`[Startup] Error claiming sold items: ${error}`, 'error')
+        if (bot.currentWindow) {
+            try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+        }
+        return false
+    }
 }
 
 function claimExpiredAuction(bot, slot) {

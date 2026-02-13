@@ -155,7 +155,7 @@ async function pollForCancelButton(bot: MyBot, contextLabel: string): Promise<nu
             if (!slot || !slot.nbt) continue
             
             const name = removeMinecraftColorCodes(getSlotName(slot))
-            if (name && name !== '') {
+            if (name) {
                 windowContents.push(`slot ${i}: "${name}"`)
             }
         }
@@ -1164,7 +1164,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
             if (!bot.currentWindow) break
 
-            await sleep(200) // Wait longer for cancellation to process
+            await sleep(200) // Wait for cancellation to process
             
             const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
             log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')

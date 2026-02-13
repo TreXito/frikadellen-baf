@@ -1078,6 +1078,8 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             log(`[OrderManager] Polling for Cancel Order button in slot 13 for ${order.itemName}`, 'debug')
             
             while (pollAttempts < MAX_CANCEL_BUTTON_POLL_ATTEMPTS) {
+                pollAttempts++ // Increment at start so attempt numbers are 1-indexed
+                
                 if (!bot.currentWindow || bot.currentWindow.slots.length <= 13) {
                     log(`[OrderManager] Window closed or invalid during polling (attempt ${pollAttempts})`, 'warn')
                     break
@@ -1089,8 +1091,7 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
                     log(`[OrderManager] Slot 13 content (attempt ${pollAttempts}): "${slotName}"`, 'debug')
                     if (slotName && slotName.includes('Cancel Order')) {
                         cancelButtonFound = true
-                        log(`[OrderManager] Cancel button found after ${pollAttempts * CANCEL_BUTTON_POLL_INTERVAL_MS}ms`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Found Cancel Order button`)
+                        log(`[OrderManager] Cancel button found after ${(pollAttempts - 1) * CANCEL_BUTTON_POLL_INTERVAL_MS}ms (attempt ${pollAttempts})`, 'info')
                         break
                     }
                 } else {
@@ -1098,7 +1099,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
                 }
                 
                 await sleep(CANCEL_BUTTON_POLL_INTERVAL_MS)
-                pollAttempts++
             }
             
             if (!cancelButtonFound) {

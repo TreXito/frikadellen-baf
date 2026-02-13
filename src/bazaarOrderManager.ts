@@ -1390,6 +1390,10 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         // This tracks items from filled buy orders that need to be sold later
         const sellQueue: { itemName: string, amount: number }[] = []
         
+        // Track items that have already been processed during startup to prevent infinite loops
+        // When an item is cancelled and re-listed, we don't want to process it again
+        const processedItems = new Set<string>()
+        
         // BUG 1 FIX: Process ONE order at a time
         // For SELL orders: cancel → immediately re-list → re-open Manage Orders → continue
         // For BUY orders: cancel → track items for later → continue
@@ -1405,6 +1409,15 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                 const name = removeMinecraftColorCodes(getSlotName(slot))
                 if (!name.startsWith('BUY ') && !name.startsWith('SELL ')) continue
                 
+                // Extract item name for deduplication check
+                const itemName = name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
+                
+                // Skip items that have already been processed during startup
+                if (processedItems.has(itemName)) {
+                    log(`[Startup] Skipping already processed item: ${itemName}`, 'debug')
+                    continue
+                }
+                
                 // This is an order — cancel ALL orders during startup (they're from a previous session)
                 foundOrder = { slot: i, name, isBuy: name.startsWith('BUY ') }
                 break
@@ -1413,6 +1426,10 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             if (!foundOrder) break // No more orders to process
             
             const itemName = foundOrder.name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
+            
+            // Mark this item as processed to prevent re-processing after re-listing
+            processedItems.add(itemName)
+            log(`[Startup] Processing item: ${itemName} (total processed: ${processedItems.size})`, 'debug')
             
             // Read the lore BEFORE clicking (from the Manage Orders list view)
             // Safety check: ensure slot still exists and has NBT data

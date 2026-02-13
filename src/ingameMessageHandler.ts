@@ -854,12 +854,13 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         }
         
         if (iterations >= MAX_ITERATIONS) {
-            log(`[Startup] Hit max iteration limit (${MAX_ITERATIONS}) while claiming auctions - possible stuck loop prevented`, 'warn')
-            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Auction claim loop limit reached - stopped to prevent hang')
+            log(`[Startup] Hit max iteration limit (${MAX_ITERATIONS}) while claiming auctions - possible stuck loop prevented`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Auction claim loop limit reached!')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Some auctions may not have been claimed - check manually')
         }
         
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        log(`[Startup] Claimed ${claimedCount} sold auction(s), processed ${processedItems.size} item(s)`, 'info')
+        log(`[Startup] Claimed ${claimedCount} sold auction(s), processed ${processedItems.size} item(s) in ${iterations} iteration(s)`, 'info')
         return claimedCount > 0
         
     } catch (error) {

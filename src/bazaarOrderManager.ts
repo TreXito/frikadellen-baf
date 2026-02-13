@@ -675,7 +675,11 @@ export function startOrderManager(bot: MyBot, checkImmediately: boolean = false)
     }
     
     checkTimer = setInterval(async () => {
-        await checkOrders(bot)
+        try {
+            await checkOrders(bot)
+        } catch (error) {
+            log(`[OrderManager] Error in checkOrders timer: ${error}`, 'error')
+        }
     }, intervalSeconds * 1000)
 }
 
@@ -711,7 +715,11 @@ function enableFastCheckMode(bot: MyBot): void {
     
     // Start fast check timer
     fastCheckTimer = setInterval(async () => {
-        await checkOrders(bot)
+        try {
+            await checkOrders(bot)
+        } catch (error) {
+            log(`[OrderManager] Error in fast check timer: ${error}`, 'error')
+        }
     }, fastIntervalSeconds * 1000)
 }
 
@@ -1059,13 +1067,43 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
             // Click the order — same window updates
             await clickWindow(bot, orderSlot).catch(() => {})
-            await sleep(WINDOW_UPDATE_DELAY_MS)
+            
+            // BUG FIX: Poll until slot 13 contains "Cancel Order" button (max 2 seconds)
+            let cancelButtonFound = false
+            let pollAttempts = 0
+            while (pollAttempts < 20) { // max 2 seconds (20 * 100ms)
+                if (!bot.currentWindow) break
+                
+                const slot13 = bot.currentWindow.slots[13]
+                if (slot13 && slot13.nbt) {
+                    const slotName = removeMinecraftColorCodes(getSlotName(slot13))
+                    if (slotName && slotName.includes('Cancel Order')) {
+                        cancelButtonFound = true
+                        log(`[OrderManager] Cancel button found after ${pollAttempts * 100}ms`, 'debug')
+                        break
+                    }
+                }
+                
+                await sleep(100)
+                pollAttempts++
+            }
+            
+            if (!cancelButtonFound) {
+                log(`[OrderManager] Cancel Order button not found in slot 13 after ${pollAttempts * 100}ms, skipping`, 'warn')
+                // Try to go back to manage orders list
+                if (bot.currentWindow) {
+                    await clickWindow(bot, 49).catch(() => {}) // Click "Go Back" if available
+                    await sleep(200)
+                }
+                continue
+            }
 
             if (!bot.currentWindow) break
 
-            // Click Cancel Order at slot 13 (per bazaar slot reference)
+            // Click Cancel Order at slot 13
+            log(`[OrderManager] Clicking Cancel Order button in slot 13 for ${order.itemName}`, 'debug')
             await clickWindow(bot, 13).catch(() => {})
-            await sleep(100)
+            await sleep(200) // Wait longer for cancellation to process
             
             const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)
             log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')

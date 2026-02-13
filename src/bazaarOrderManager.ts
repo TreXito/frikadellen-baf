@@ -1329,9 +1329,16 @@ export function isOrderManagerBusy(): boolean {
 
 /**
  * Abort current order management operation (e.g., when AH flip arrives)
+ * @param forceAbort If false, won't abort during critical operations (cancel+re-list flow)
  */
-export function abortOrderManagement(bot: MyBot): void {
+export function abortOrderManagement(bot: MyBot, forceAbort: boolean = true): void {
     if (isManagingOrders) {
+        // Don't abort during critical order management operations unless forced
+        if (!forceAbort) {
+            log('[OrderManager] Skipping abort - critical order management in progress', 'debug')
+            return
+        }
+        
         log('[OrderManager] Aborting order management due to higher priority task', 'warn')
         printMcChatToConsole(`§f[§4BAF§f]: §c[OrderManager] Aborting - priority task detected`)
         
@@ -1341,6 +1348,9 @@ export function abortOrderManagement(bot: MyBot): void {
         
         bot.state = null
         isManagingOrders = false
+        
+        // Clear the refreshing flag to prevent infinite loop
+        isRefreshingAfterLimitDetection = false
     }
 }
 

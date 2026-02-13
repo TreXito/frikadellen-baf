@@ -83,8 +83,10 @@ export function pauseBazaarFlips(bot?: MyBot): void {
     setAHFlipsPending()
 
     // Abort any active order management to prioritize AH flips
+    // BUT don't abort if it's actively managing orders (isManagingOrders = true)
+    // to prevent interrupting critical operations like cancel+re-list
     if (bot) {
-        abortOrderManagement(bot)
+        abortOrderManagement(bot, false) // false = don't force abort during critical operations
     }
 
     bazaarFlipsPaused = true

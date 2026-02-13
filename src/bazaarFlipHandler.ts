@@ -24,6 +24,8 @@ const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 9
 const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
 // Rate limiting for warning messages
 const LIMIT_WARNING_COOLDOWN_MS = 60000 // Show "slots full" warning once per minute max
+// Order placement confirmation
+const ORDER_REJECTION_WAIT_MS = 1000 // Wait for server response after clicking confirm
 
 // Track last time we showed the "slots full" warning
 let lastLimitWarningTime = 0
@@ -877,16 +879,19 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                     }
-                    bot.on('message', chatListener)
                     
-                    await sleep(200)
-                    await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
-                    
-                    // Wait to see if Hypixel sends a rejection message
-                    await sleep(1000) // Wait 1 second for server response
-                    
-                    // Clean up chat listener
-                    bot.removeListener('message', chatListener)
+                    try {
+                        bot.on('message', chatListener)
+                        
+                        await sleep(200)
+                        await clickWindow(bot, 13).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                        
+                        // Wait to see if Hypixel sends a rejection message
+                        await sleep(ORDER_REJECTION_WAIT_MS)
+                    } finally {
+                        // Always clean up chat listener, even if an error occurs
+                        bot.removeListener('message', chatListener)
+                    }
                     
                     if (orderRejected) {
                         log(`[BazaarDebug] Order placement failed: ${rejectionReason}`, 'error')

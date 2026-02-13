@@ -33,6 +33,9 @@ let bazaarOrderCooldownUntil: number = 0 // Timestamp when cooldown expires
 // It doesn't need to be reset because if items were stashed once, the user should check
 let hasStashedItems = false
 
+// Store the last auction sold clickEvent for direct claiming
+let lastAuctionClickCommand: string | null = null
+
 /**
  * Export function to check if items are in stash (for future use)
  */
@@ -115,12 +118,24 @@ export async function registerIngameMessageHandler(bot: MyBot) {
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
                 log('New item sold - queuing claim with HIGH priority')
                 
+                // Extract clickEvent if present (for direct auction access)
+                lastAuctionClickCommand = null
+                if (message.json && message.json.extra) {
+                    for (const part of message.json.extra) {
+                        if (part.clickEvent && part.clickEvent.action === 'run_command') {
+                            lastAuctionClickCommand = part.clickEvent.value
+                            log(`[AH] Found clickEvent command: ${lastAuctionClickCommand}`, 'debug')
+                            break
+                        }
+                    }
+                }
+                
                 // Queue the claim with HIGH priority so it runs immediately after current task
                 enqueueCommand(
                     'Claim Sold Auction',
                     CommandPriority.HIGH,
                     async () => {
-                        await claimSoldItem(bot)
+                        await claimSoldItem(bot, lastAuctionClickCommand)
                     },
                     true // interruptible - can be interrupted by AH flips
                 )
@@ -463,8 +478,124 @@ export function claimPurchased(bot: MyBot, useCollectAll: boolean = true): Promi
  * Properly processes the Manage Auctions window to claim all sold items
  * Loops through items and re-scans after each claim (slots shift after claiming)
  */
-export async function claimSoldItem(bot: MyBot): Promise<boolean> {
+export async function claimSoldItem(bot: MyBot, clickCommand?: string | null): Promise<boolean> {
     log('[Startup] Claiming sold AH items...', 'info')
+    
+    // If we have a clickCommand from the chat message, use it for direct access
+    if (clickCommand) {
+        log(`[AH] Using direct auction access via clickEvent: ${clickCommand}`, 'info')
+        return await claimSoldItemDirect(bot, clickCommand)
+    }
+    
+    // Otherwise fall back to the old method (scan through Manage Auctions)
+    log('[AH] No clickEvent available, using fallback method (scanning Manage Auctions)', 'info')
+    return await claimSoldItemFallback(bot)
+}
+
+/**
+ * Claim a sold auction directly by executing the chat clickEvent command
+ * This is faster and more reliable than navigating through /ah menus
+ */
+async function claimSoldItemDirect(bot: MyBot, clickCommand: string): Promise<boolean> {
+    // Helper functions
+    function getSlotName(slot: any): string {
+        if (!slot || !slot.nbt) return ''
+        return (slot.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+    }
+    
+    function findSlotWithName(win: any, searchName: string): number {
+        for (let i = 0; i < win.slots.length; i++) {
+            const slot = win.slots[i]
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            if (name && name.includes(searchName)) return i
+        }
+        return -1
+    }
+    
+    function waitForNewWindow(bot: MyBot, timeout: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                bot._client.removeListener('open_window', handler)
+                resolve(false)
+            }, timeout)
+            
+            const handler = () => {
+                clearTimeout(timer)
+                bot._client.removeListener('open_window', handler)
+                resolve(true)
+            }
+            
+            bot._client.once('open_window', handler)
+        })
+    }
+    
+    try {
+        // Execute the clickEvent command (e.g., /viewauction <uuid>)
+        const windowPromise = waitForNewWindow(bot, 5000)
+        bot.chat(clickCommand)
+        const windowOpened = await windowPromise
+        
+        if (!windowOpened || !bot.currentWindow) {
+            log('[AH] Auction window did not open from clickEvent command', 'warn')
+            return false
+        }
+        
+        // Wait for window to populate
+        await sleep(300)
+        let pollAttempts = 0
+        while (pollAttempts < 20) { // max 2 seconds
+            if (!bot.currentWindow) break
+            let hasContent = false
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (slot && slot.nbt) {
+                    const name = removeMinecraftColorCodes(getSlotName(slot))
+                    if (name && name !== '' && name !== 'Close' && name !== 'Go Back') {
+                        hasContent = true
+                        break
+                    }
+                }
+            }
+            if (hasContent) break
+            await sleep(100)
+            pollAttempts++
+        }
+        
+        if (!bot.currentWindow) {
+            log('[AH] Window closed unexpectedly', 'warn')
+            return false
+        }
+        
+        // Look for "Claim" button
+        const claimSlot = findSlotWithName(bot.currentWindow, 'Claim')
+        if (claimSlot === -1) {
+            log('[AH] Claim button not found in auction window', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            return false
+        }
+        
+        log(`[AH] Found Claim button at slot ${claimSlot}, claiming...`, 'info')
+        await clickWindow(bot, claimSlot).catch(() => {})
+        await sleep(400)
+        
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        log('[AH] Successfully claimed auction via direct access', 'info')
+        return true
+        
+    } catch (error) {
+        log(`[AH] Error claiming via direct access: ${error}`, 'error')
+        if (bot.currentWindow) {
+            try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+        }
+        return false
+    }
+}
+
+/**
+ * Fallback method: claim sold auctions by navigating through /ah → Manage Auctions
+ * This is the original implementation, kept as a fallback
+ */
+async function claimSoldItemFallback(bot: MyBot): Promise<boolean> {
     
     // Helper functions (local to avoid circular dependencies)
     function getSlotName(slot: any): string {

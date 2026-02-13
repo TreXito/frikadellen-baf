@@ -30,7 +30,7 @@ export function findSlotWithName(win: any, searchName: string): number {
 }
 
 /**
- * BUG 1: Find item in search results with exact match priority
+ * BUG 1: Find item in search results with exact match priority, then fuzzy fallback
  * Returns slot index or -1 if not found
  * Logs all available items if no exact match found
  */
@@ -40,7 +40,9 @@ export function findItemInSearchResults(window: any, itemName: string): number {
     let bestSlot = -1
     let bestScore = 0
     const allSlotNames: string[] = []
+    const slotData: Array<{ slot: number, name: string }> = []
     
+    // Phase 1: Try exact match (highest priority)
     for (let i = 0; i < window.slots.length; i++) {
         const slot = window.slots[i]
         if (!slot || !slot.nbt) continue
@@ -50,6 +52,7 @@ export function findItemInSearchResults(window: any, itemName: string): number {
         
         // Track all slot names for logging
         allSlotNames.push(slotName)
+        slotData.push({ slot: i, name: slotName })
         
         // Exact match — return immediately
         if (slotName === cleanTarget) {
@@ -58,12 +61,77 @@ export function findItemInSearchResults(window: any, itemName: string): number {
         }
     }
     
-    // BUG 1: If no exact match found, log the mismatch and return -1
-    if (bestSlot === -1) {
-        log(`[BAF] No exact match for "${itemName}" in search results — found: [${allSlotNames.join(', ')}]`, 'warn')
+    // Phase 2: Try token-based matching (all words present)
+    const targetTokens = cleanTarget.split(/\s+/).filter(t => t.length > 0)
+    for (const { slot, name } of slotData) {
+        if (targetTokens.every(token => name.includes(token))) {
+            log(`[BAF] Found token match for "${itemName}" at slot ${slot} (${name})`, 'info')
+            return slot
+        }
     }
     
-    return bestSlot
+    // Phase 3: Try partial matching (substring containment)
+    for (const { slot, name } of slotData) {
+        if (name.includes(cleanTarget) || cleanTarget.includes(name)) {
+            log(`[BAF] Found partial match for "${itemName}" at slot ${slot} (${name})`, 'info')
+            return slot
+        }
+    }
+    
+    // Phase 4: Try fuzzy matching with Levenshtein distance
+    const maxDistance = Math.max(2, Math.floor(cleanTarget.length * 0.2)) // Allow 20% character difference
+    for (const { slot, name } of slotData) {
+        const distance = levenshteinDistance(cleanTarget, name)
+        if (distance <= maxDistance && (bestSlot === -1 || distance < bestScore)) {
+            bestSlot = slot
+            bestScore = distance
+        }
+    }
+    
+    if (bestSlot !== -1) {
+        log(`[BAF] Found fuzzy match for "${itemName}" at slot ${bestSlot} (${slotData.find(s => s.slot === bestSlot)?.name}) with distance ${bestScore}`, 'info')
+        return bestSlot
+    }
+    
+    // No match found at all
+    log(`[BAF] No match for "${itemName}" in search results — found: [${allSlotNames.join(', ')}]`, 'warn')
+    return -1
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ * Used for fuzzy matching in bazaar search
+ */
+function levenshteinDistance(a: string, b: string): number {
+    if (a.length === 0) return b.length
+    if (b.length === 0) return a.length
+    
+    const matrix: number[][] = []
+    
+    // Initialize matrix
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i]
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j
+    }
+    
+    // Fill matrix
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1]
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    matrix[i][j - 1] + 1,     // insertion
+                    matrix[i - 1][j] + 1      // deletion
+                )
+            }
+        }
+    }
+    
+    return matrix[b.length][a.length]
 }
 
 /**

@@ -56,6 +56,9 @@ let buyOrderLimitReached = false
 let fastCheckTimer: NodeJS.Timeout | null = null
 let isFastCheckMode = false
 
+// Track when last check was attempted (to prevent retry spam when blocked)
+let lastCheckAttempt = 0
+
 // Retry delay for claim operations when bazaar flips are paused (5 seconds)
 const CLAIM_RETRY_DELAY_MS = 5000
 
@@ -742,19 +745,42 @@ function stopFastCheckMode(): void {
     }
 }
 
+// Track when last check was attempted (to prevent retry spam)
+let lastCheckAttempt = 0
+const CHECK_RETRY_COOLDOWN_MS = 5000 // Don't retry more than once per 5 seconds
+
 /**
  * Check for orders that need to be cancelled due to timeout
  * Cancels ALL stale orders in a single batch operation
+ * If already managing orders, schedules a retry instead of skipping
  */
 async function checkOrders(bot: MyBot): Promise<void> {
-    if (isManagingOrders) {
-        log('[OrderManager] Already managing orders, skipping check', 'debug')
-        return
-    }
-    
     // Don't check orders during grace period (bot still initializing)
     if (bot.state === 'gracePeriod') {
         log('[OrderManager] Skipping order check during grace period', 'debug')
+        return
+    }
+    
+    // If currently managing orders, schedule a delayed retry instead of giving up
+    if (isManagingOrders) {
+        const now = Date.now()
+        const timeSinceLastAttempt = now - lastCheckAttempt
+        
+        // Only schedule retry if we haven't recently attempted
+        if (timeSinceLastAttempt < CHECK_RETRY_COOLDOWN_MS) {
+            log('[OrderManager] Already managing orders and retry recently scheduled, skipping', 'debug')
+            return
+        }
+        
+        lastCheckAttempt = now
+        log('[OrderManager] Already managing orders, will retry check in 10 seconds', 'debug')
+        
+        // Schedule retry after current operation should be done
+        setTimeout(() => {
+            checkOrders(bot).catch(err => {
+                log(`[OrderManager] Delayed check error: ${err}`, 'error')
+            })
+        }, 10000)
         return
     }
     

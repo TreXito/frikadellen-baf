@@ -113,17 +113,52 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                 }
             }
             if (text.startsWith('[Auction]') && text.includes('bought') && text.includes('for')) {
-                log('New item sold - queuing claim with HIGH priority')
+                log('New item sold - attempting direct claim via clickEvent')
                 
-                // Queue the claim with HIGH priority so it runs immediately after current task
-                enqueueCommand(
-                    'Claim Sold Auction',
-                    CommandPriority.HIGH,
-                    async () => {
-                        await claimSoldItem(bot)
-                    },
-                    true // interruptible - can be interrupted by AH flips
-                )
+                // Try to extract clickEvent command from message JSON for immediate claiming
+                let clickEventCommand: string | null = null
+                try {
+                    const messageJson = (message as any).json
+                    if (messageJson && messageJson.extra && Array.isArray(messageJson.extra)) {
+                        // Search for clickEvent in the extra array
+                        for (const element of messageJson.extra) {
+                            if (element.clickEvent && element.clickEvent.action === 'run_command') {
+                                const command = element.clickEvent.value
+                                // Extract /viewauction command if present
+                                if (command && command.includes('viewauction')) {
+                                    clickEventCommand = command
+                                    log(`[AuctionClaim] Found clickEvent command: ${command}`, 'info')
+                                    break
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    log(`[AuctionClaim] Failed to parse message for clickEvent: ${err}`, 'debug')
+                }
+                
+                // If we found a clickEvent command, use direct claiming for immediate response
+                if (clickEventCommand) {
+                    enqueueCommand(
+                        'Claim Sold Auction (Direct)',
+                        CommandPriority.HIGH,
+                        async () => {
+                            await claimSoldItemDirect(bot, clickEventCommand!)
+                        },
+                        true // interruptible - can be interrupted by AH flips
+                    )
+                } else {
+                    // Fallback to traditional claim method if no clickEvent found
+                    log('[AuctionClaim] No clickEvent found, using traditional claim method', 'debug')
+                    enqueueCommand(
+                        'Claim Sold Auction',
+                        CommandPriority.HIGH,
+                        async () => {
+                            await claimSoldItem(bot)
+                        },
+                        true // interruptible - can be interrupted by AH flips
+                    )
+                }
 
                 sendWebhookItemSold(
                     text.split(' bought ')[1].split(' for ')[0],
@@ -862,12 +897,88 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         log(`[Startup] Claimed ${claimedCount} sold auction(s), processed ${processedItems.size} item(s) in ${iterations} iteration(s)`, 'info')
         return claimedCount > 0
-        
     } catch (error) {
         log(`[Startup] Error claiming sold items: ${error}`, 'error')
-        if (bot.currentWindow) {
-            try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        return false
+    }
+}
+
+/**
+ * Direct claim method using clickEvent command from auction sold message
+ * This is faster than navigating through /ah → Manage Auctions → finding item
+ * Uses the /viewauction command directly to open the specific auction
+ */
+async function claimSoldItemDirect(bot: MyBot, clickEventCommand: string): Promise<boolean> {
+    log(`[AuctionClaim] Starting direct claim with command: ${clickEventCommand}`, 'info')
+    
+    // Helper functions (local to avoid circular dependencies)
+    function getSlotName(slot: any): string {
+        if (!slot || !slot.nbt) return ''
+        return (slot.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
+    }
+    
+    function findSlotWithName(win: any, searchName: string): number {
+        for (let i = 0; i < win.slots.length; i++) {
+            const slot = win.slots[i]
+            const name = removeMinecraftColorCodes(getSlotName(slot))
+            if (name && name.includes(searchName)) return i
         }
+        return -1
+    }
+    
+    function waitForNewWindow(bot: MyBot, timeout: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                bot._client.removeListener('open_window', handler)
+                resolve(false)
+            }, timeout)
+            
+            const handler = () => {
+                clearTimeout(timer)
+                bot._client.removeListener('open_window', handler)
+                resolve(true)
+            }
+            
+            bot._client.once('open_window', handler)
+        })
+    }
+    
+    try {
+        // Execute the clickEvent command (e.g., /viewauction <uuid>)
+        const windowPromise = waitForNewWindow(bot, 5000)
+        bot.chat(clickEventCommand)
+        const opened = await windowPromise
+        
+        if (!opened || !bot.currentWindow) {
+            log('[AuctionClaim] Auction window did not open from clickEvent command', 'warn')
+            return false
+        }
+        
+        // Wait for window to populate
+        await sleep(300)
+        
+        // Look for "Claim" button - typically in BIN Auction View
+        const claimSlot = findSlotWithName(bot.currentWindow, 'Claim')
+        if (claimSlot === -1) {
+            log('[AuctionClaim] Claim button not found in auction view', 'warn')
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+            return false
+        }
+        
+        log(`[AuctionClaim] Found Claim button at slot ${claimSlot}, clicking`, 'info')
+        await clickWindow(bot, claimSlot).catch(() => {})
+        await sleep(400)
+        
+        // Close window after claiming
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+        
+        log('[AuctionClaim] Direct claim completed successfully', 'info')
+        printMcChatToConsole('§f[§4BAF§f]: §a[AuctionClaim] Claimed sold auction!')
+        return true
+    } catch (error) {
+        log(`[AuctionClaim] Error in direct claim: ${error}`, 'error')
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         return false
     }
 }

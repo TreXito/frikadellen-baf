@@ -107,6 +107,37 @@ export function isSkin(itemName: string): boolean {
     return lowerName.includes('skin') || lowerName.includes('✦')
 }
 
+/**
+ * Convert item name to title case for Hypixel /bz command
+ * This ensures proper capitalization when searching the bazaar
+ * 
+ * Examples:
+ * - "turbo moonflower V" -> "Turbo Moonflower V"
+ * - "FLAWED PERIDOT GEM" -> "Flawed Peridot Gem"
+ * - "enchanted coal" -> "Enchanted Coal"
+ * 
+ * @param itemName The item name to convert
+ * @returns The item name in title case
+ */
+export function toTitleCase(itemName: string): string {
+    if (!itemName) return ''
+    
+    // Split by spaces and capitalize first letter of each word
+    return itemName
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (!word) return word
+            // Keep Roman numerals (I, II, III, IV, V, etc.) uppercase
+            if (/^[IVX]+$/.test(word.toUpperCase()) && word.length <= 4) {
+                return word.toUpperCase()
+            }
+            // Capitalize first letter, keep rest lowercase
+            return word.charAt(0).toUpperCase() + word.slice(1)
+        })
+        .join(' ')
+}
+
 export function formatInventoryForUpload(inventory: any): any[] {
     // Format inventory items to include display names like SkyCrypt does
     const formattedItems = inventory.items().map((item: any) => {

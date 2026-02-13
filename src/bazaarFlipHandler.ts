@@ -1,6 +1,6 @@
 import { MyBot, BazaarFlipRecommendation } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
+import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, toTitleCase } from './utils'
 import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
@@ -365,14 +365,15 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
     // Prefer itemTag (internal ID like "FLAWED_PERIDOT_GEM") over itemName for /bz command
     // Using itemTag skips the search results page and goes directly to the item, which is faster
     // Falls back to itemName if itemTag is not available
-    const searchTerm = itemTag || itemName
+    // When using itemName, convert to title case to ensure Hypixel's /bz command finds the item
+    const searchTerm = itemTag || toTitleCase(itemName)
     if (!searchTerm) {
         throw new Error('Both itemTag and itemName are missing from recommendation')
     }
     if (itemTag) {
         log(`[BazaarDebug] Using itemTag "${itemTag}" for /bz command (faster, skips search results)`, 'info')
     } else if (itemName) {
-        log(`[BazaarDebug] itemTag not available, using itemName "${itemName}" for /bz command`, 'info')
+        log(`[BazaarDebug] itemTag not available, using itemName "${itemName}" (converted to title case: "${searchTerm}") for /bz command`, 'info')
     }
 
     // Retry loop for order placement

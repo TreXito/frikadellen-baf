@@ -22,6 +22,11 @@ const FIRST_SEARCH_RESULT_SLOT = 11 // Fallback slot for first item in bazaar se
 // Price failsafe thresholds
 const PRICE_FAILSAFE_BUY_THRESHOLD = 0.9  // Reject buy orders if sign price < 90% of order price
 const PRICE_FAILSAFE_SELL_THRESHOLD = 1.1 // Reject sell orders if sign price > 110% of order price
+// Rate limiting for warning messages
+const LIMIT_WARNING_COOLDOWN_MS = 60000 // Show "slots full" warning once per minute max
+
+// Track last time we showed the "slots full" warning
+let lastLimitWarningTime = 0
 
 /**
  * Parse bazaar flip data from JSON response (from websocket)
@@ -247,7 +252,13 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
                 if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
                     // Hard limit confirmed - wait for slot to be freed
                     log(`[BAF]: Order limit reached - ${retryCheck.reason}`, 'warn')
-                    printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${retryCheck.reason} - waiting for slot to free up`)
+                    
+                    // Rate-limit the warning message to once per minute
+                    const now = Date.now()
+                    if (now - lastLimitWarningTime >= LIMIT_WARNING_COOLDOWN_MS) {
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${retryCheck.reason} - waiting for slot to free up`)
+                        lastLimitWarningTime = now
+                    }
                     
                     // Queue the order to retry after a slot becomes available
                     // Fast check mode is now enabled, so slots will be checked frequently
@@ -267,7 +278,13 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
         } else {
             // This is a hard limit from our counts - wait for slot to be freed
             log(`[BAF]: Order limit reached - ${orderCheck.reason}`, 'warn')
-            printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${orderCheck.reason} - waiting for slot to free up`)
+            
+            // Rate-limit the warning message to once per minute
+            const now = Date.now()
+            if (now - lastLimitWarningTime >= LIMIT_WARNING_COOLDOWN_MS) {
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${orderCheck.reason} - waiting for slot to free up`)
+                lastLimitWarningTime = now
+            }
             
             // Queue the order to retry after a slot becomes available
             // Fast check mode is now enabled, so slots will be checked frequently

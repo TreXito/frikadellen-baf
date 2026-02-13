@@ -75,6 +75,10 @@ const WINDOW_UPDATE_DELAY_MS = 50
 // Delay between batch order cancellations (to avoid overwhelming the server)
 const BATCH_CANCEL_DELAY_MS = 50
 
+// Constants for polling cancel button in order detail view
+const MAX_CANCEL_BUTTON_POLL_ATTEMPTS = 20 // Maximum polling attempts (20 x 100ms = 2 seconds)
+const CANCEL_BUTTON_POLL_INTERVAL_MS = 100 // Delay between polling attempts
+
 /**
  * Helper: Extract display name from slot NBT data
  */
@@ -1068,28 +1072,28 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             // Click the order — same window updates
             await clickWindow(bot, orderSlot).catch(() => {})
             
-            // BUG FIX: Poll until slot 13 contains "Cancel Order" button (max 2 seconds)
+            // BUG FIX: Poll until slot 13 contains "Cancel Order" button
             let cancelButtonFound = false
             let pollAttempts = 0
-            while (pollAttempts < 20) { // max 2 seconds (20 * 100ms)
-                if (!bot.currentWindow) break
+            while (pollAttempts < MAX_CANCEL_BUTTON_POLL_ATTEMPTS) {
+                if (!bot.currentWindow || bot.currentWindow.slots.length <= 13) break
                 
                 const slot13 = bot.currentWindow.slots[13]
                 if (slot13 && slot13.nbt) {
                     const slotName = removeMinecraftColorCodes(getSlotName(slot13))
                     if (slotName && slotName.includes('Cancel Order')) {
                         cancelButtonFound = true
-                        log(`[OrderManager] Cancel button found after ${pollAttempts * 100}ms`, 'debug')
+                        log(`[OrderManager] Cancel button found after ${pollAttempts * CANCEL_BUTTON_POLL_INTERVAL_MS}ms`, 'debug')
                         break
                     }
                 }
                 
-                await sleep(100)
+                await sleep(CANCEL_BUTTON_POLL_INTERVAL_MS)
                 pollAttempts++
             }
             
             if (!cancelButtonFound) {
-                log(`[OrderManager] Cancel Order button not found in slot 13 after ${pollAttempts * 100}ms, skipping`, 'warn')
+                log(`[OrderManager] Cancel Order button not found in slot 13 after ${pollAttempts * CANCEL_BUTTON_POLL_INTERVAL_MS}ms, skipping`, 'warn')
                 // Try to go back to manage orders list
                 if (bot.currentWindow) {
                     await clickWindow(bot, 49).catch(() => {}) // Click "Go Back" if available

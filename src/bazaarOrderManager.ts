@@ -392,6 +392,8 @@ export async function refreshOrderCounts(bot: MyBot, retryCount: number = 0): Pr
     
     if (bot.state) {
         log('[OrderManager] Bot is busy, cannot refresh order counts', 'debug')
+        // Clear the flag to prevent infinite loop when bot is busy with other operations
+        isRefreshingAfterLimitDetection = false
         return false
     }
     

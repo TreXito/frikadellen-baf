@@ -252,22 +252,18 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
                 const retryCheck = canPlaceOrder(recommendation.isBuyOrder, bot)
                 // Block only if it's a confirmed hard limit (not stale, not can place)
                 if (!retryCheck.canPlace && !retryCheck.needsRefresh) {
-                    // Hard limit confirmed - wait for slot to be freed
-                    log(`[BAF]: Order limit reached - ${retryCheck.reason}`, 'warn')
+                    // Hard limit confirmed - discard the order
+                    log(`[BAF]: Order limit reached - ${retryCheck.reason}, discarding order`, 'warn')
                     
                     // Rate-limit the warning message to once per minute
                     const now = Date.now()
                     if (now - lastLimitWarningTime >= LIMIT_WARNING_COOLDOWN_MS) {
-                        printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${retryCheck.reason} - waiting for slot to free up`)
+                        printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${retryCheck.reason} - order discarded`)
                         lastLimitWarningTime = now
                     }
                     
-                    // Queue the order to retry after a slot becomes available
-                    // Fast check mode is now enabled, so slots will be checked frequently
-                    setTimeout(() => {
-                        log('[BAF]: Retrying order after waiting for slot', 'info')
-                        handleBazaarFlipRecommendation(bot, recommendation)
-                    }, 15000) // Retry every 15 seconds when at limit
+                    // Don't schedule retries - fast check mode is now enabled to free up slots
+                    // Future recommendations will be processed once slots are available
                     return
                 }
                 // Otherwise continue with order placement (Hypixel will enforce actual limits)
@@ -278,22 +274,18 @@ export async function handleBazaarFlipRecommendation(bot: MyBot, recommendation:
                 // Don't return - continue with order placement
             }
         } else {
-            // This is a hard limit from our counts - wait for slot to be freed
-            log(`[BAF]: Order limit reached - ${orderCheck.reason}`, 'warn')
+            // This is a hard limit from our counts - discard the order
+            log(`[BAF]: Order limit reached - ${orderCheck.reason}, discarding order`, 'warn')
             
             // Rate-limit the warning message to once per minute
             const now = Date.now()
             if (now - lastLimitWarningTime >= LIMIT_WARNING_COOLDOWN_MS) {
-                printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${orderCheck.reason} - waiting for slot to free up`)
+                printMcChatToConsole(`§f[§4BAF§f]: §e[Limit] ${orderCheck.reason} - order discarded`)
                 lastLimitWarningTime = now
             }
             
-            // Queue the order to retry after a slot becomes available
-            // Fast check mode is now enabled, so slots will be checked frequently
-            setTimeout(() => {
-                log('[BAF]: Retrying order after waiting for slot', 'info')
-                handleBazaarFlipRecommendation(bot, recommendation)
-            }, 15000) // Retry every 15 seconds when at limit
+            // Don't schedule retries - fast check mode is now enabled to free up slots
+            // Future recommendations will be processed once slots are available
             return
         }
     }
@@ -495,6 +487,16 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
                 if (!isRetryableError) {
                     log(`[BazaarDebug] Non-retryable error, aborting: ${errorMessage}`, 'error')
                     printMcChatToConsole(`§f[§4BAF§f]: §cNon-retryable error: ${errorMessage}`)
+                    
+                    // If this is a limit error, trigger an immediate order count refresh
+                    // to ensure our counts are up to date for future orders
+                    if (errorMessage.includes('Order limit reached')) {
+                        log('[BazaarDebug] Triggering immediate order count refresh after limit error', 'info')
+                        // Schedule refresh in background (don't await to avoid blocking)
+                        refreshOrderCounts(bot).catch((err: any) => {
+                            log(`[BazaarDebug] Error refreshing order counts after limit: ${err}`, 'error')
+                        })
+                    }
                 } else {
                     log(`[BazaarDebug] Max retries (${MAX_ORDER_PLACEMENT_RETRIES}) reached, giving up`, 'error')
                     printMcChatToConsole(`§f[§4BAF§f]: §cFailed after ${MAX_ORDER_PLACEMENT_RETRIES} attempts`)

@@ -591,13 +591,16 @@ async function runStartupWorkflow() {
     bot.state = 'startup'
     
     // BUG 3 FIX: Global timeout for entire startup workflow (2 minutes)
+    // Use a flag to prevent double execution with finally block
+    let timeoutFired = false
     const startupTimeout = setTimeout(() => {
+        timeoutFired = true
         log('[Startup] Startup timed out after 2 minutes! Forcing completion.', 'error')
         printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Workflow timed out! Forcing completion.')
         if (bot.currentWindow) {
             try { bot.closeWindow(bot.currentWindow) } catch(e) {}
         }
-        bot.state = null
+        // Don't set bot.state = null here, let finally block handle it
     }, 120000) // 2 minutes
     
     let ordersFound = 0
@@ -634,6 +637,8 @@ async function runStartupWorkflow() {
                     ordersFound = result.cancelled
                     log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Order management complete`)
+                } else {
+                    log('[Startup] Order management timed out or returned no result', 'warn')
                 }
             } catch (err) {
                 log(`[Startup] Order management error: ${err}`, 'error')
@@ -699,7 +704,13 @@ async function runStartupWorkflow() {
         clearTimeout(startupTimeout)
         
         // BUG FIX #3: Clear startup state - bot can now accept flips and commands
-        bot.state = null
+        // Only clear if timeout hasn't already cleared it
+        if (!timeoutFired) {
+            bot.state = null
+        } else {
+            // Ensure state is cleared even if timeout fired
+            bot.state = null
+        }
         
         // Send webhook notification about startup complete
         sendWebhookStartupComplete(ordersFound)

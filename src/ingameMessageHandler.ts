@@ -29,7 +29,24 @@ let orderRefreshDebounceTimer: NodeJS.Timeout | null = null
 let bazaarOrderCooldownUntil: number = 0 // Timestamp when cooldown expires
 
 // BUG 2: Stashed items tracking
+// This flag is set when stash messages appear and serves as a session-wide warning
+// It doesn't need to be reset because if items were stashed once, the user should check
 let hasStashedItems = false
+
+/**
+ * Export function to check if items are in stash (for future use)
+ */
+export function hasItemsInStash(): boolean {
+    return hasStashedItems
+}
+
+/**
+ * Export function to reset stash flag (for manual clearing or future automation)
+ */
+export function clearStashFlag(): void {
+    hasStashedItems = false
+    log('[BAF] Stash flag cleared', 'debug')
+}
 
 export async function registerIngameMessageHandler(bot: MyBot) {
     let wss = await getCurrentWebsocket()

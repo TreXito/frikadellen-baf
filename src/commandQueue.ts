@@ -356,9 +356,12 @@ export function clearQueue(): void {
 /**
  * Clear all queued bazaar orders from the queue
  * Used when order limit is reached to prevent futile retry attempts
+ * Note: Uses name prefix 'Bazaar ' to identify orders, consistent with existing
+ * duplicate checking logic in enqueueCommand()
  */
 export function clearBazaarOrders(): void {
     const initialCount = commandQueue.length
+    // Filter out all commands that start with 'Bazaar ' (buy and sell orders)
     commandQueue = commandQueue.filter(cmd => !cmd.name.startsWith('Bazaar '))
     const clearedCount = initialCount - commandQueue.length
     

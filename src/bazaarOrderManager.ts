@@ -1338,7 +1338,7 @@ export function abortOrderManagement(bot: MyBot, forceAbort: boolean = true): vo
  * 
  * @returns Object with counts of cancelled and re-listed orders
  */
-export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, relisted: number, claimed: number }> {
+export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, claimed: number }> {
     log('[Startup] Checking and managing existing orders...', 'info')
     printMcChatToConsole('§f[§4BAF§f]: §7[Startup] Managing existing orders...')
     
@@ -1351,7 +1351,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         const bazaarOpened = await waitForNewWindow(bot, 5000)
         if (!bazaarOpened || !bot.currentWindow) {
             log('[Startup] Bazaar window did not open', 'warn')
-            return { cancelled: 0, relisted: 0, claimed: 0 }
+            return { cancelled: 0, claimed: 0 }
         }
         
         // BUG 2 FIX: Poll until slots are populated
@@ -1383,7 +1383,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         
         if (!manageResult || !bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
-            return { cancelled: 0, relisted: 0, claimed: 0 }
+            return { cancelled: 0, claimed: 0 }
         }
         
         // BUG 2 FIX: Poll until slots are populated
@@ -1523,11 +1523,11 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         log(`[Startup] Details: cancelled ${cancelledCount}, claimed ${claimedCount}`, 'debug')
         printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount + claimedCount} order(s) - cancelled all old orders`)
         
-        return { cancelled: cancelledCount, relisted: 0, claimed: claimedCount }
+        return { cancelled: cancelledCount, claimed: claimedCount }
         
     } catch (error) {
         log(`[Startup] Error during order management: ${error}`, 'error')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }
+        return { cancelled: cancelledCount, claimed: claimedCount }
     }
 }

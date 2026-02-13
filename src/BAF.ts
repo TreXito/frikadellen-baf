@@ -686,7 +686,7 @@ async function runStartupWorkflow() {
                 const result = await withTimeout(startupOrderManagement(bot), 90000, 'Order management', bot)
                 if (result) {
                     ordersFound = result.cancelled
-                    log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
+                    log(`[Startup] Order management complete - cancelled ${result.cancelled}`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Order management complete`)
                 } else {
                     log('[Startup] Order management timed out or returned no result', 'warn')

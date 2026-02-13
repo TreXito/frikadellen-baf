@@ -563,21 +563,36 @@ async function onWebsocketMessage(msg) {
 }
 
 /**
- * BUG 3 FIX: Timeout wrapper for async operations
+ * BUG 1 FIX: Timeout wrapper for async operations
  * Wraps a promise with a timeout and ensures cleanup on timeout
+ * Properly cancels the timeout when the promise resolves to prevent spurious timeout messages
  */
-async function withTimeout<T>(promise: Promise<T>, ms: number, name: string): Promise<T | undefined> {
-    return Promise.race([
-        promise,
-        sleep(ms).then(() => {
+async function withTimeout<T>(promise: Promise<T>, ms: number, name: string, bot: MyBot): Promise<T | undefined> {
+    return new Promise<T | undefined>((resolve) => {
+        let settled = false
+        
+        const timer = setTimeout(() => {
+            if (settled) return
+            settled = true
             log(`[Startup] ${name} timed out after ${ms / 1000}s`, 'warn')
             printMcChatToConsole(`§f[§4BAF§f]: §c[Startup] ${name} timed out`)
-            if (bot.currentWindow) {
-                try { bot.closeWindow(bot.currentWindow) } catch(e) {}
-            }
-            return undefined
+            if (bot.currentWindow) { try { bot.closeWindow(bot.currentWindow) } catch(e) {} }
+            resolve(undefined)
+        }, ms)
+        
+        promise.then((result) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve(result)
+        }).catch((err) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            log(`[Startup] ${name} error: ${err}`, 'warn')
+            resolve(undefined)
         })
-    ])
+    })
 }
 
 /**
@@ -617,7 +632,7 @@ async function runStartupWorkflow() {
         log('[Startup] Step 1/4: Checking cookie status...', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 1/4: §fChecking cookie status...')
         try {
-            await withTimeout(checkAndBuyCookie(bot), 15000, 'Cookie check')
+            await withTimeout(checkAndBuyCookie(bot), 15000, 'Cookie check', bot)
             log('[Startup] Cookie check complete', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Cookie check complete')
         } catch (err) {
@@ -632,7 +647,7 @@ async function runStartupWorkflow() {
             log('[Startup] Step 2/4: Managing existing orders...', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 2/4: §fManaging existing orders...')
             try {
-                const result = await withTimeout(startupOrderManagement(bot), 90000, 'Order management')
+                const result = await withTimeout(startupOrderManagement(bot), 90000, 'Order management', bot)
                 if (result) {
                     ordersFound = result.cancelled
                     log(`[Startup] Order management complete - cancelled ${result.cancelled}, re-listed ${result.relisted}`, 'info')
@@ -655,7 +670,7 @@ async function runStartupWorkflow() {
         log('[Startup] Step 3/4: Claiming sold items...', 'info')
         printMcChatToConsole('§f[§4BAF§f]: §7[Startup] §bStep 3/4: §fClaiming sold items...')
         try {
-            await withTimeout(claimSoldItem(bot), 30000, 'Sold items claim')
+            await withTimeout(claimSoldItem(bot), 30000, 'Sold items claim', bot)
             log('[Startup] Sold items claim complete', 'info')
             printMcChatToConsole('§f[§4BAF§f]: §a[Startup] Sold items claim complete')
         } catch (err) {

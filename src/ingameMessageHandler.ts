@@ -513,7 +513,28 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             log('[Startup] /ah window did not open', 'warn')
             return false
         }
+        
+        // BUG 2 FIX: Poll until slots are populated
         await sleep(300)
+        let pollAttempts = 0
+        while (pollAttempts < 20) { // max 2 seconds
+            if (!bot.currentWindow) break
+            let hasItems = false
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (slot && slot.name && slot.name !== 'air' && slot.name !== 'stained_glass_pane') {
+                    const name = removeMinecraftColorCodes(getSlotName(slot))
+                    if (name && name === 'Manage Auctions') {
+                        hasItems = true
+                        break
+                    }
+                }
+            }
+            if (hasItems) break
+            await sleep(100)
+            pollAttempts++
+        }
+        log(`[Startup] /ah window loaded after ${pollAttempts * 100 + 300}ms`, 'debug')
         
         // Click "Manage Auctions"
         const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Auctions')
@@ -523,14 +544,36 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             return false
         }
         
+        // BUG 3 FIX: Create waitForNewWindow promise BEFORE clicking
+        const manageWindowPromise = waitForNewWindow(bot, 5000)
         await clickWindow(bot, manageSlot).catch(() => {})
-        const manageOpened = await waitForNewWindow(bot, 5000)
-        if (!manageOpened) {
+        const manageOpened = await manageWindowPromise
+        if (!manageOpened || !bot.currentWindow) {
             log('[Startup] Manage Auctions window did not open', 'warn')
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
             return false
         }
+        
+        // BUG 2 FIX: Poll until slots are populated
         await sleep(300)
+        pollAttempts = 0
+        while (pollAttempts < 20) { // max 2 seconds
+            if (!bot.currentWindow) break
+            let hasContent = false
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (!slot || !slot.nbt) continue
+                const name = removeMinecraftColorCodes(getSlotName(slot))
+                if (name && name !== '' && name !== 'Close' && name !== 'Go Back' && 
+                    name !== 'Arrow' && !name.includes('stained_glass')) {
+                    hasContent = true
+                    break
+                }
+            }
+            if (hasContent) break
+            await sleep(100)
+            pollAttempts++
+        }
+        log(`[Startup] Manage Auctions window loaded after ${pollAttempts * 100 + 300}ms`, 'debug')
         
         if (!bot.currentWindow) return false
         
@@ -610,12 +653,55 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 if (!reopened || !bot.currentWindow) break
                 await sleep(300)
                 
+                // Poll for /ah window slots
+                let pollAttempts = 0
+                while (pollAttempts < 20) {
+                    if (!bot.currentWindow) break
+                    let hasItems = false
+                    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                        const slot = bot.currentWindow.slots[i]
+                        if (slot && slot.name && slot.name !== 'air') {
+                            const name = removeMinecraftColorCodes(getSlotName(slot))
+                            if (name && name === 'Manage Auctions') {
+                                hasItems = true
+                                break
+                            }
+                        }
+                    }
+                    if (hasItems) break
+                    await sleep(100)
+                    pollAttempts++
+                }
+                
                 const manageSlot2 = findSlotWithName(bot.currentWindow, 'Manage Auctions')
                 if (manageSlot2 === -1) break
+                
+                // Create promise BEFORE clicking
+                const managePromise2 = waitForNewWindow(bot, 5000)
                 await clickWindow(bot, manageSlot2).catch(() => {})
-                const manageOpened2 = await waitForNewWindow(bot, 5000)
-                if (!manageOpened2) break
+                const manageOpened2 = await managePromise2
+                if (!manageOpened2 || !bot.currentWindow) break
+                
                 await sleep(300)
+                
+                // Poll for Manage Auctions window slots
+                pollAttempts = 0
+                while (pollAttempts < 20) {
+                    if (!bot.currentWindow) break
+                    let hasContent = false
+                    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                        const slot = bot.currentWindow.slots[i]
+                        if (!slot || !slot.nbt) continue
+                        const name = removeMinecraftColorCodes(getSlotName(slot))
+                        if (name && name !== '' && name !== 'Close' && name !== 'Go Back') {
+                            hasContent = true
+                            break
+                        }
+                    }
+                    if (hasContent) break
+                    await sleep(100)
+                    pollAttempts++
+                }
             }
         }
         

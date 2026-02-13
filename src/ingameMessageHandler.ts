@@ -600,7 +600,14 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
         // Process all claimable items - re-scan after each claim
         let claimedCount = 0
         
-        while (true) {
+        // Track processed item names to prevent infinite loops on false positives
+        const processedItems = new Set<string>()
+        // Add iteration limit as safety net
+        const MAX_ITERATIONS = 50
+        let iterations = 0
+        
+        while (iterations < MAX_ITERATIONS) {
+            iterations++
             if (!bot.currentWindow) break
             
             // BUG 4 FIX: Verify we're still in Manage Auctions
@@ -662,6 +669,7 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             
             // BUG 4 FIX: Find the FIRST claimable item (re-scan every iteration) using proper detection
             let foundClaimable = -1
+            let foundItemName = ''
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
                 if (!slot || !slot.nbt) continue
@@ -671,9 +679,16 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 if (!name || name === 'Close' || name === 'Go Back' || name.includes('Arrow') || 
                     name === 'Create Auction' || name === 'View Bids' || name === 'Past Auctions') continue
                 
+                // Skip items we've already processed (prevents infinite loops on false positives)
+                if (processedItems.has(name)) {
+                    log(`[Startup] Skipping already processed item: ${name} at slot ${i}`, 'debug')
+                    continue
+                }
+                
                 // BUG 4 FIX: Use isClaimableAuction to distinguish sold from active auctions
                 if (isClaimableAuction(slot)) {
                     foundClaimable = i
+                    foundItemName = name
                     log(`[Startup] Found claimable: ${name} at slot ${i}`, 'debug')
                     break
                 } else {
@@ -685,6 +700,10 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
                 log('[Startup] No more claimable auctions found', 'debug')
                 break // Nothing left to claim
             }
+            
+            // Mark this item as processed to prevent re-processing
+            processedItems.add(foundItemName)
+            log(`[Startup] Processing item: ${foundItemName} (total processed: ${processedItems.size})`, 'debug')
             
             // Click the claimable slot
             const slotName = removeMinecraftColorCodes(getSlotName(bot.currentWindow.slots[foundClaimable]))
@@ -834,8 +853,14 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             }
         }
         
+        if (iterations >= MAX_ITERATIONS) {
+            log(`[Startup] Hit max iteration limit (${MAX_ITERATIONS}) while claiming auctions - possible stuck loop prevented`, 'error')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Auction claim loop limit reached!')
+            printMcChatToConsole('§f[§4BAF§f]: §c[Startup] Some auctions may not have been claimed - check manually')
+        }
+        
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        log(`[Startup] Claimed ${claimedCount} sold auction(s)`, 'info')
+        log(`[Startup] Claimed ${claimedCount} sold auction(s), processed ${processedItems.size} item(s) in ${iterations} iteration(s)`, 'info')
         return claimedCount > 0
         
     } catch (error) {

@@ -796,13 +796,14 @@ async function checkOrders(bot: MyBot): Promise<void> {
     printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Found §e${staleOrders.length}§7 stale order(s) - cancelling all`)
     
     // Queue a SINGLE command to cancel all stale orders in one Manage Orders session
+    // Use HIGH priority because order management should not be interrupted by bazaar flips
     enqueueCommand(
         `Cancel All Stale Orders (${staleOrders.length})`,
-        CommandPriority.LOW,
+        CommandPriority.HIGH,
         async () => {
             await cancelAllStaleOrders(bot, staleOrders)
         },
-        true // interruptible - can be interrupted by AH flips
+        false // NOT interruptible - order management is critical
     )
 }
 
@@ -1012,12 +1013,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
 
     log(`[OrderManager] Found ${staleOrders.length} stale order(s) - cancelling in single session`, 'info')
 
-    // Import placeBazaarOrder for re-listing
-    const { placeBazaarOrder } = await import('./bazaarFlipHandler')
-    
-    // Queue to track cancelled sell offers for re-listing
-    const relistQueue: BazaarOrderRecord[] = []
-
     isManagingOrders = true
     bot.state = 'bazaar'
 
@@ -1115,12 +1110,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
                 
-                // FEATURE 2: Add cancelled sell offers to re-list queue
-                if (!order.isBuyOrder && order.pricePerUnit > 0 && order.amount > 0) {
-                    relistQueue.push(order)
-                    log(`[OrderManager] Will re-list cancelled sell offer: ${order.itemName}`, 'debug')
-                }
-                
                 // Send webhook notification
                 sendWebhookBazaarOrderCancelled(
                     order.itemName,
@@ -1144,19 +1133,6 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
         // Close window when done
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         await sleep(50)
-        
-        // FEATURE 2: Re-list cancelled sell offers
-        for (const order of relistQueue) {
-            log(`[OrderManager] Re-listing cancelled sell offer: ${order.amount}x ${order.itemName} at ${order.pricePerUnit}`, 'info')
-            printMcChatToConsole(`§f[§4BAF§f]: §7[OrderManager] Re-listing §e${order.itemName}`)
-            
-            try {
-                await placeBazaarOrder(bot, order.itemName, order.amount, order.pricePerUnit, false)
-                await sleep(100)
-            } catch (err) {
-                log(`[OrderManager] Failed to re-list ${order.itemName}: ${err}`, 'warn')
-            }
-        }
         
         // Clean up tracked orders
         cleanupTrackedOrders()
@@ -1358,21 +1334,18 @@ export function abortOrderManagement(bot: MyBot, forceAbort: boolean = true): vo
 
 /**
  * FEATURE 1: Startup Order Management
- * Discovers existing orders and immediately cancels stale ones, re-listing sell offers
+ * Discovers existing orders and immediately cancels them
  * This runs BEFORE normal operations begin (keeps bot.state = 'startup')
+ * Orders are cancelled but NOT re-listed - Coflnet will provide new recommendations
  * 
- * @returns Object with counts of cancelled and re-listed orders
+ * @returns Object with counts of cancelled and claimed orders
  */
-export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, relisted: number, claimed: number }> {
+export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: number, claimed: number }> {
     log('[Startup] Checking and managing existing orders...', 'info')
     printMcChatToConsole('§f[§4BAF§f]: §7[Startup] Managing existing orders...')
     
-    // Import placeBazaarOrder dynamically to avoid circular dependencies
-    const { placeBazaarOrder } = await import('./bazaarFlipHandler')
-    
     let cancelledCount = 0
     let claimedCount = 0
-    let relistedCount = 0
     
     try {
         // Open /bz → Manage Orders
@@ -1380,7 +1353,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         const bazaarOpened = await waitForNewWindow(bot, 5000)
         if (!bazaarOpened || !bot.currentWindow) {
             log('[Startup] Bazaar window did not open', 'warn')
-            return { cancelled: 0, relisted: 0, claimed: 0 }
+            return { cancelled: 0, claimed: 0 }
         }
         
         // BUG 2 FIX: Poll until slots are populated
@@ -1412,7 +1385,7 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         
         if (!manageResult || !bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
-            return { cancelled: 0, relisted: 0, claimed: 0 }
+            return { cancelled: 0, claimed: 0 }
         }
         
         // BUG 2 FIX: Poll until slots are populated
@@ -1514,134 +1487,11 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                 cancelledCount++
                 log(`[Startup] Cancelled ${foundOrder.isBuy ? 'buy order' : 'sell offer'} for ${foundOrder.itemName}`, 'info')
                 
-                // BUG 1 FIX: IMMEDIATELY re-list sell offers to prevent inventory overflow
-                if (!foundOrder.isBuy) {
-                    // SELL OFFER: Items come back to inventory after cancel.
-                    // IMMEDIATELY re-list before cancelling the next order.
-                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
-                        // Step 1: Close the current Manage Orders window FIRST
-                        log('[Startup] Closing Manage Orders window before re-listing', 'debug')
-                        if (bot.currentWindow) {
-                            try {
-                                bot.closeWindow(bot.currentWindow)
-                            } catch (e) {
-                                log(`[Startup] Error closing window: ${e}`, 'warn')
-                            }
-                        }
-                        await sleep(500)
-                        
-                        // Step 2: Verify window is closed
-                        if (bot.currentWindow) {
-                            log('[Startup] Window still open after close, forcing', 'warn')
-                            try { 
-                                bot.closeWindow(bot.currentWindow) 
-                            } catch(e) {
-                                log(`[Startup] Error force-closing window: ${e}`, 'warn')
-                            }
-                            await sleep(500)
-                        }
-                        
-                        // Step 3: NOW place the sell offer — this runs /bz ItemName internally
-                        log(`[Startup] Re-listing ${foundOrder.itemName} — running /bz flow (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${foundOrder.itemName}§7 immediately`)
-                        
-                        try {
-                            await placeBazaarOrder(bot, foundOrder.itemName, orderInfo.remaining, orderInfo.pricePerUnit, false)
-                            log(`[Startup] Successfully re-listed ${foundOrder.itemName}`, 'info')
-                            relistedCount++
-                        } catch (err) {
-                            log(`[Startup] Failed to re-list ${foundOrder.itemName}: ${err}`, 'warn')
-                        }
-                        
-                        // Step 4: Make sure any window from the sell flow is closed
-                        if (bot.currentWindow) {
-                            try { 
-                                bot.closeWindow(bot.currentWindow) 
-                            } catch(e) {
-                                log(`[Startup] Error closing window after re-list: ${e}`, 'debug')
-                            }
-                            await sleep(300)
-                        }
-                        
-                        // Step 5: ONLY NOW reopen /bz → Manage Orders to continue with next order
-                        log('[Startup] Reopening Manage Orders for next order', 'debug')
-                        bot.chat('/bz')
-                        const reopened = await waitForNewWindow(bot, 5000)
-                        if (!reopened || !bot.currentWindow) {
-                            log('[Startup] Failed to re-open bazaar after re-listing', 'warn')
-                            break
-                        }
-                        
-                        // BUG 2 FIX: Poll until /bz window slots are populated
-                        await sleep(300)
-                        let pollAttempts = 0
-                        while (pollAttempts < 20) {
-                            if (!bot.currentWindow) break
-                            let hasItems = false
-                            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                                const slot = bot.currentWindow.slots[i]
-                                if (slot && slot.name && slot.name !== 'air') {
-                                    const name = removeMinecraftColorCodes(getSlotName(slot))
-                                    if (name && name === 'Manage Orders') {
-                                        hasItems = true
-                                        break
-                                    }
-                                }
-                            }
-                            if (hasItems) break
-                            await sleep(100)
-                            pollAttempts++
-                        }
-                        
-                        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
-                        if (manageSlot === -1) {
-                            log('[Startup] Manage Orders button not found after re-opening', 'warn')
-                            break
-                        }
-                        
-                        // BUG 3 FIX: Create promise BEFORE clicking
-                        const managePromise = waitForNewWindow(bot, 5000)
-                        await clickWindow(bot, manageSlot).catch(() => {})
-                        const manageOpened = await managePromise
-                        if (!manageOpened || !bot.currentWindow) {
-                            log('[Startup] Manage Orders window did not open after clicking', 'warn')
-                            break
-                        }
-                        
-                        // BUG 2 FIX: Poll until Manage Orders window slots are populated
-                        await sleep(300)
-                        pollAttempts = 0
-                        while (pollAttempts < 20) {
-                            if (!bot.currentWindow) break
-                            let hasContent = false
-                            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                                const slot = bot.currentWindow.slots[i]
-                                if (!slot || !slot.nbt) continue
-                                const name = removeMinecraftColorCodes(getSlotName(slot))
-                                if (name && (name.startsWith('BUY ') || name.startsWith('SELL '))) {
-                                    hasContent = true
-                                    break
-                                }
-                            }
-                            if (hasContent) break
-                            await sleep(100)
-                            pollAttempts++
-                        }
-                        
-                        if (!bot.currentWindow) {
-                            log('[Startup] Manage Orders window did not open after re-listing', 'warn')
-                            break
-                        }
-                        
-                        // Loop continues — find next order with fresh slot positions
-                        continue
-                    }
-                } else {
-                    // BUY ORDER: Coins refunded, no inventory impact.
-                    // If partially filled, items were claimed — those need selling later
-                    if (orderInfo.filled > 0) {
-                        sellQueue.push({ itemName: foundOrder.itemName, amount: orderInfo.filled })
-                    }
+                // Orders are cancelled but NOT re-listed during startup.
+                // Coflnet will provide new recommendations for what to buy/sell.
+                // For BUY orders: If partially filled, track items for potential selling later
+                if (foundOrder.isBuy && orderInfo.filled > 0) {
+                    sellQueue.push({ itemName: foundOrder.itemName, amount: orderInfo.filled })
                 }
             } else {
                 // No cancel button — fully filled, just claimed
@@ -1671,15 +1521,15 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             log(`[Startup] Skipping sell creation for ${sellQueue.length} buy order item(s) (requires price fetch)`, 'debug')
         }
         
-        log(`[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`, 'info')
-        log(`[Startup] Details: cancelled ${cancelledCount}, claimed ${claimedCount}, re-listed ${relistedCount}`, 'debug')
-        printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount + claimedCount} order(s), re-listed ${relistedCount}`)
+        log(`[Startup] Managed ${cancelledCount + claimedCount} order(s) - cancelled all old orders`, 'info')
+        log(`[Startup] Details: cancelled ${cancelledCount}, claimed ${claimedCount}`, 'debug')
+        printMcChatToConsole(`§f[§4BAF§f]: §a[Startup] Managed ${cancelledCount + claimedCount} order(s) - cancelled all old orders`)
         
-        return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }
+        return { cancelled: cancelledCount, claimed: claimedCount }
         
     } catch (error) {
         log(`[Startup] Error during order management: ${error}`, 'error')
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
-        return { cancelled: cancelledCount, relisted: relistedCount, claimed: claimedCount }
+        return { cancelled: cancelledCount, claimed: claimedCount }
     }
 }

@@ -745,8 +745,7 @@ function stopFastCheckMode(): void {
     }
 }
 
-// Track when last check was attempted (to prevent retry spam)
-let lastCheckAttempt = 0
+// Cooldown for retrying checks when blocked
 const CHECK_RETRY_COOLDOWN_MS = 5000 // Don't retry more than once per 5 seconds
 
 /**

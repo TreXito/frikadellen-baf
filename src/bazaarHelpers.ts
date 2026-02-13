@@ -2,6 +2,10 @@ import { MyBot } from '../types/autobuy'
 import { log } from './logger'
 import { clickWindow, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 
+// Constants for fuzzy matching
+const MIN_LEVENSHTEIN_DISTANCE = 2 // Minimum Levenshtein distance to allow
+const FUZZY_MATCH_THRESHOLD = 0.2 // Allow 20% character difference for fuzzy matching
+
 /**
  * Helper to get slot name from NBT data (BUG 2 FIX - Enhanced)
  * Uses getItemDisplayName() to correctly read SkyBlock display names
@@ -79,7 +83,7 @@ export function findItemInSearchResults(window: any, itemName: string): number {
     }
     
     // Phase 4: Try fuzzy matching with Levenshtein distance
-    const maxDistance = Math.max(2, Math.floor(cleanTarget.length * 0.2)) // Allow 20% character difference
+    const maxDistance = Math.max(MIN_LEVENSHTEIN_DISTANCE, Math.floor(cleanTarget.length * FUZZY_MATCH_THRESHOLD))
     for (const { slot, name } of slotData) {
         const distance = levenshteinDistance(cleanTarget, name)
         if (distance <= maxDistance && (bestSlot === -1 || distance < bestScore)) {

@@ -354,6 +354,21 @@ export function clearQueue(): void {
 }
 
 /**
+ * Clear all queued bazaar orders from the queue
+ * Used when order limit is reached to prevent futile retry attempts
+ */
+export function clearBazaarOrders(): void {
+    const initialCount = commandQueue.length
+    commandQueue = commandQueue.filter(cmd => !cmd.name.startsWith('Bazaar '))
+    const clearedCount = initialCount - commandQueue.length
+    
+    if (clearedCount > 0) {
+        log(`[CommandQueue] Cleared ${clearedCount} pending bazaar order(s) due to order limit`, 'warn')
+        printMcChatToConsole(`§f[§4BAF§f]: §e[OrderLimit] Cleared ${clearedCount} pending bazaar order(s)`)
+    }
+}
+
+/**
  * Helper sleep function
  */
 function sleep(ms: number): Promise<void> {

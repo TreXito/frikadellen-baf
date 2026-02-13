@@ -5,7 +5,7 @@ import { getConfigProperty } from './configHelper'
 import { areBazaarFlipsPaused, queueBazaarFlip } from './bazaarFlipPauser'
 import { sendWebhookBazaarOrderPlaced } from './webhookHandler'
 import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderManager'
-import { enqueueCommand, CommandPriority } from './commandQueue'
+import { enqueueCommand, CommandPriority, clearBazaarOrders } from './commandQueue'
 import { isBazaarDailyLimitReached, isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
 import { findItemInSearchResults, getSlotName } from './bazaarHelpers'
@@ -498,6 +498,10 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
                             log(`[BazaarDebug] Failed to refresh order counts after hitting limit: ${errorMsg}`, 'error')
                             log('[BazaarDebug] Future order placement may use stale counts until next refresh', 'warn')
                         })
+                        
+                        // Clear all pending bazaar orders from the queue since they will also fail
+                        log('[BazaarDebug] Clearing pending bazaar orders from queue', 'info')
+                        clearBazaarOrders()
                     }
                 } else {
                     log(`[BazaarDebug] Max retries (${MAX_ORDER_PLACEMENT_RETRIES}) reached, giving up`, 'error')

@@ -745,8 +745,10 @@ function stopFastCheckMode(): void {
     }
 }
 
-// Cooldown for retrying checks when blocked
-const CHECK_RETRY_COOLDOWN_MS = 5000 // Don't retry more than once per 5 seconds
+// Cooldown for retrying checks when blocked (prevents spam)
+// This is separate from the actual retry delay (10 seconds)
+const CHECK_RETRY_COOLDOWN_MS = 5000 // Don't schedule multiple retries within 5 seconds
+const CHECK_RETRY_DELAY_MS = 10000 // Actual delay before retry when blocked
 
 /**
  * Check for orders that need to be cancelled due to timeout
@@ -772,14 +774,14 @@ async function checkOrders(bot: MyBot): Promise<void> {
         }
         
         lastCheckAttempt = now
-        log('[OrderManager] Already managing orders, will retry check in 10 seconds', 'debug')
+        log(`[OrderManager] Already managing orders, will retry check in ${CHECK_RETRY_DELAY_MS / 1000} seconds`, 'debug')
         
         // Schedule retry after current operation should be done
         setTimeout(() => {
             checkOrders(bot).catch(err => {
                 log(`[OrderManager] Delayed check error: ${err}`, 'error')
             })
-        }, 10000)
+        }, CHECK_RETRY_DELAY_MS)
         return
     }
     

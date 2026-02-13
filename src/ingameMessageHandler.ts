@@ -143,7 +143,7 @@ export async function registerIngameMessageHandler(bot: MyBot) {
                         'Claim Sold Auction (Direct)',
                         CommandPriority.HIGH,
                         async () => {
-                            await claimSoldItemDirect(bot, clickEventCommand!)
+                            await claimSoldItemDirect(bot, clickEventCommand)
                         },
                         true // interruptible - can be interrupted by AH flips
                     )

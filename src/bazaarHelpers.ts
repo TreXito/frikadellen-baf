@@ -5,6 +5,7 @@ import { clickWindow, sleep, removeMinecraftColorCodes, getItemDisplayName } fro
 // Constants for fuzzy matching
 const MIN_LEVENSHTEIN_DISTANCE = 2 // Minimum Levenshtein distance to allow
 const FUZZY_MATCH_THRESHOLD = 0.2 // Allow 20% character difference for fuzzy matching
+const MIN_STRING_LENGTH_FOR_FUZZY = 5 // Don't use fuzzy matching for very short strings (< 5 chars)
 
 /**
  * Helper to get slot name from NBT data (BUG 2 FIX - Enhanced)
@@ -82,19 +83,23 @@ export function findItemInSearchResults(window: any, itemName: string): number {
         }
     }
     
-    // Phase 4: Try fuzzy matching with Levenshtein distance
-    const maxDistance = Math.max(MIN_LEVENSHTEIN_DISTANCE, Math.floor(cleanTarget.length * FUZZY_MATCH_THRESHOLD))
-    for (const { slot, name } of slotData) {
-        const distance = levenshteinDistance(cleanTarget, name)
-        if (distance <= maxDistance && (bestSlot === -1 || distance < bestScore)) {
-            bestSlot = slot
-            bestScore = distance
+    // Phase 4: Try fuzzy matching with Levenshtein distance (only for strings >= 5 chars)
+    if (cleanTarget.length >= MIN_STRING_LENGTH_FOR_FUZZY) {
+        const maxDistance = Math.max(MIN_LEVENSHTEIN_DISTANCE, Math.floor(cleanTarget.length * FUZZY_MATCH_THRESHOLD))
+        for (const { slot, name } of slotData) {
+            const distance = levenshteinDistance(cleanTarget, name)
+            if (distance <= maxDistance && (bestSlot === -1 || distance < bestScore)) {
+                bestSlot = slot
+                bestScore = distance
+            }
         }
-    }
-    
-    if (bestSlot !== -1) {
-        log(`[BAF] Found fuzzy match for "${itemName}" at slot ${bestSlot} (${slotData.find(s => s.slot === bestSlot)?.name}) with distance ${bestScore}`, 'info')
-        return bestSlot
+        
+        if (bestSlot !== -1) {
+            log(`[BAF] Found fuzzy match for "${itemName}" at slot ${bestSlot} (${slotData.find(s => s.slot === bestSlot)?.name}) with distance ${bestScore}`, 'info')
+            return bestSlot
+        }
+    } else {
+        log(`[BAF] Skipping fuzzy match for short string "${itemName}" (length: ${cleanTarget.length})`, 'debug')
     }
     
     // No match found at all

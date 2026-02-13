@@ -495,7 +495,8 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
                         // Schedule refresh in background (don't await to avoid blocking)
                         refreshOrderCounts(bot).catch((err: unknown) => {
                             const errorMsg = err instanceof Error ? err.message : String(err)
-                            log(`[BazaarDebug] Error refreshing order counts after limit: ${errorMsg}`, 'error')
+                            log(`[BazaarDebug] Failed to refresh order counts after hitting limit: ${errorMsg}`, 'error')
+                            log('[BazaarDebug] Future order placement may use stale counts until next refresh', 'warn')
                         })
                     }
                 } else {

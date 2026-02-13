@@ -1325,16 +1325,17 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             return { cancelled: 0, relisted: 0, claimed: 0 }
         }
         
-        // Queues for re-listing
-        const relistQueue: { itemName: string, pricePerUnit: number, amount: number }[] = []
+        // Queues for later processing (buy orders only - sell orders handled immediately)
         const sellQueue: { itemName: string, amount: number }[] = []
         
-        // BUG FIX #1: Always find the FIRST order, process it, then loop back
-        // Never store slot positions across cancellations - they shift after each cancel
+        // BUG 1 FIX: Process ONE order at a time
+        // For SELL orders: cancel → immediately re-list → re-open Manage Orders → continue
+        // For BUY orders: cancel → track items for later → continue
+        // This prevents inventory overflow with unstackable items like enchanted books
         while (true) {
             if (!bot.currentWindow) break
             
-            // Find the FIRST stale order in the current window (re-scan every iteration)
+            // Find the FIRST order in the current window (re-scan every iteration)
             let foundOrder: { slot: number, name: string, isBuy: boolean } | null = null
             for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                 const slot = bot.currentWindow.slots[i]
@@ -1352,12 +1353,11 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             const itemName = foundOrder.name.replace(/^(BUY|SELL)\s+/, '').replace(/[☘☂✪◆❤]/g, '').trim()
             
             // Read the lore BEFORE clicking (from the Manage Orders list view)
-            // Parse fill status, price etc from the lore
-            // Safety check: ensure slot still exists and has NBT data (window could have changed)
+            // Safety check: ensure slot still exists and has NBT data
             const slot = bot.currentWindow.slots[foundOrder.slot]
             if (!slot || !slot.nbt) {
                 log(`[Startup] Slot ${foundOrder.slot} no longer valid, re-scanning`, 'debug')
-                continue // Re-scan from beginning
+                continue
             }
             const lore = getSlotLore(slot)
             const orderInfo = parseOrderLore(lore)
@@ -1380,22 +1380,71 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                 })
                 await sleep(400)
                 
-                // Track for re-listing
-                if (!foundOrder.isBuy) {
-                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
-                        relistQueue.push({ itemName, pricePerUnit: orderInfo.pricePerUnit, amount: orderInfo.remaining })
-                    }
-                } else if (orderInfo.filled > 0) {
-                    sellQueue.push({ itemName, amount: orderInfo.filled })
-                }
-                
                 cancelledCount++
                 log(`[Startup] Cancelled ${foundOrder.isBuy ? 'buy order' : 'sell offer'} for ${itemName}`, 'info')
+                
+                // BUG 1 FIX: IMMEDIATELY re-list sell offers to prevent inventory overflow
+                if (!foundOrder.isBuy) {
+                    // SELL OFFER: Items come back to inventory after cancel.
+                    // IMMEDIATELY re-list before cancelling the next order.
+                    if (orderInfo.remaining > 0 && orderInfo.pricePerUnit > 0) {
+                        // Close current window (should be back at Manage Orders or closed already)
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        await sleep(300)
+                        
+                        // Re-list NOW — this moves items OUT of inventory back to bazaar
+                        log(`[Startup] Re-listing ${itemName} immediately (${orderInfo.remaining} @ ${orderInfo.pricePerUnit})`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${itemName}§7 immediately`)
+                        
+                        try {
+                            await placeBazaarOrder(bot, itemName, orderInfo.remaining, orderInfo.pricePerUnit, false)
+                            relistedCount++
+                        } catch (err) {
+                            log(`[Startup] Failed to re-list ${itemName}: ${err}`, 'warn')
+                            if (bot.currentWindow) {
+                                try { bot.closeWindow(bot.currentWindow) } catch(e) {}
+                            }
+                        }
+                        
+                        await sleep(300)
+                        
+                        // Re-open /bz → Manage Orders to continue with next order
+                        bot.chat('/bz')
+                        const reopened = await waitForNewWindow(bot, 5000)
+                        if (!reopened || !bot.currentWindow) {
+                            log('[Startup] Failed to re-open bazaar after re-listing', 'warn')
+                            break
+                        }
+                        await sleep(300)
+                        
+                        const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
+                        if (manageSlot === -1) {
+                            log('[Startup] Manage Orders button not found after re-opening', 'warn')
+                            break
+                        }
+                        const manageOpened = waitForNewWindow(bot, 5000)
+                        await clickWindow(bot, manageSlot).catch(() => {})
+                        await manageOpened
+                        await sleep(300)
+                        
+                        if (!bot.currentWindow) {
+                            log('[Startup] Manage Orders window did not open after re-listing', 'warn')
+                            break
+                        }
+                        
+                        // Loop continues — find next order with fresh slot positions
+                        continue
+                    }
+                } else {
+                    // BUY ORDER: Coins refunded, no inventory impact.
+                    // If partially filled, items were claimed — those need selling later
+                    if (orderInfo.filled > 0) {
+                        sellQueue.push({ itemName, amount: orderInfo.filled })
+                    }
+                }
             } else {
                 // No cancel button — fully filled, just claimed
                 if (foundOrder.isBuy) {
-                    // Use filled amount (how many items were bought and need to be sold)
-                    // Fallback to total order amount if filled field is 0 (shouldn't happen for fully filled orders)
                     const amount = orderInfo.filled || orderInfo.amount
                     if (amount > 0) {
                         sellQueue.push({ itemName, amount })
@@ -1405,8 +1454,6 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                 log(`[Startup] Claimed fully filled order for ${itemName}`, 'info')
             }
             
-            // CRITICAL: After cancel/claim, the window returns to the Manage Orders list
-            // with the cancelled order REMOVED and all slots SHIFTED
             // Wait for the window to update before the next iteration
             await sleep(400)
             
@@ -1416,22 +1463,6 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
         // Close Manage Orders
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
         await sleep(50)
-        
-        // BUG FIX #2: Re-list cancelled sell offers NOW (inside startup function, not as queued commands)
-        for (const item of relistQueue) {
-            if (item.amount <= 0 || item.pricePerUnit <= 0) continue
-            
-            log(`[Startup] Re-listing ${item.amount}x ${item.itemName} at ${item.pricePerUnit}`, 'info')
-            printMcChatToConsole(`§f[§4BAF§f]: §7[Startup] Re-listing §e${item.itemName}`)
-            
-            try {
-                await placeBazaarOrder(bot, item.itemName, item.amount, item.pricePerUnit, false)
-                relistedCount++
-                await sleep(500)
-            } catch (err) {
-                log(`[Startup] Failed to re-list ${item.itemName}: ${err}`, 'warn')
-            }
-        }
         
         // Sell items from filled buy orders (would require fetching current prices from API)
         // Currently skipped because it requires fetching current market prices from Coflnet API

@@ -1,6 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes } from './utils'
+import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 import { canPlaceOrder } from './bazaarOrderManager'
 
 /**
@@ -71,10 +71,10 @@ export function scanInventoryForBazaarItems(bot: MyBot): BazaarItem[] {
             const skyblockId = (item.nbt as any)?.value?.ExtraAttributes?.value?.id?.value
             if (!skyblockId) continue
             
-            // Get item display name
-            const displayName = getSlotName(item)
-            const cleanName = removeMinecraftColorCodes(displayName)
-            if (!cleanName) continue
+            // Get item display name using getItemDisplayName() (BUG 2 FIX)
+            // This correctly handles enchanted books by reading NBT display name
+            const cleanName = getItemDisplayName(item)
+            if (!cleanName || cleanName === 'Unknown') continue
             
             // Estimate stack value
             // TODO: This currently uses item count as a proxy for value

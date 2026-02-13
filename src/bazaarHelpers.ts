@@ -1,12 +1,19 @@
 import { MyBot } from '../types/autobuy'
 import { log } from './logger'
-import { clickWindow, sleep, removeMinecraftColorCodes } from './utils'
+import { clickWindow, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 
 /**
- * Helper to get slot name from NBT data
+ * Helper to get slot name from NBT data (BUG 2 FIX - Enhanced)
+ * Uses getItemDisplayName() to correctly read SkyBlock display names
  */
 export function getSlotName(slot: any): string {
     if (!slot || !slot.nbt) return ''
+    
+    // Use getItemDisplayName() for consistent NBT name extraction
+    const displayName = getItemDisplayName(slot)
+    if (displayName && displayName !== 'Unknown') return displayName
+    
+    // Fallback to direct NBT read if getItemDisplayName() didn't work
     return (slot.nbt as any)?.value?.display?.value?.Name?.value?.toString() || ''
 }
 

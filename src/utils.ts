@@ -117,10 +117,15 @@ export function isSkin(itemName: string): boolean {
  * - "enchanted coal" -> "Enchanted Coal"
  * 
  * @param itemName The item name to convert
- * @returns The item name in title case
+ * @returns The item name in title case, or empty string if input is empty
  */
 export function toTitleCase(itemName: string): string {
-    if (!itemName) return ''
+    if (!itemName) {
+        // Import log function inline to avoid circular dependencies
+        const { log } = require('./logger')
+        log('[Utils] toTitleCase called with empty item name', 'warn')
+        return ''
+    }
     
     // Split by spaces and capitalize first letter of each word
     return itemName
@@ -129,6 +134,8 @@ export function toTitleCase(itemName: string): string {
         .map(word => {
             if (!word) return word
             // Keep Roman numerals (I, II, III, IV, V, etc.) uppercase
+            // This is a loose match intentionally - Hypixel item names use I-V primarily
+            // and we want to preserve the uppercase format for consistency
             if (/^[IVX]+$/.test(word.toUpperCase()) && word.length <= 4) {
                 return word.toUpperCase()
             }

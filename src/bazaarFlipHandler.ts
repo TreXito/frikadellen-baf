@@ -519,6 +519,10 @@ async function executeBazaarFlip(bot: MyBot, recommendation: BazaarFlipRecommend
  * @returns Promise that resolves when the order is placed
  */
 export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, pricePerUnit: number, isBuyOrder: boolean): Promise<void> {
+    // BUG 1 FIX: Add entry logging to verify function is being called
+    log(`[BAF] [BazaarFlow] Starting placeBazaarOrder for ${itemName} (${amount}x @ ${pricePerUnit.toFixed(1)} coins, ${isBuyOrder ? 'BUY' : 'SELL'})`, 'info')
+    printMcChatToConsole(`§f[§4BAF§f]: §7[BazaarFlow] Placing ${isBuyOrder ? 'buy' : 'sell'} order for §e${itemName}`)
+    
     return new Promise<void>((resolve, reject) => {
         let currentStep = 'initial'
 
@@ -629,6 +633,7 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
             }
             
             let title = getWindowTitle(window)
+            log(`[BAF] [BazaarFlow] Window opened: "${title}" at step: ${currentStep}`, 'info')
             log(`[BazaarDebug] Window opened: "${title}" at step: ${currentStep}`, 'info')
             
             // Log all slots in this window for debugging
@@ -858,6 +863,10 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
         // Use low-level open_window event instead of high-level windowOpen
         bot._client.on('open_window', windowListener)
 
+        // BUG 1 FIX: Log /bz command execution
+        log(`[BAF] [BazaarFlow] Executing /bz ${itemName} to open bazaar`, 'info')
+        bot.chat(`/bz ${itemName}`)
+        
         // Set a timeout for the entire operation
         setTimeout(() => {
             bot._client.removeListener('open_window', windowListener)

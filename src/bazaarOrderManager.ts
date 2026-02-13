@@ -76,7 +76,7 @@ const WINDOW_UPDATE_DELAY_MS = 50
 const BATCH_CANCEL_DELAY_MS = 50
 
 // Constants for polling cancel button in order detail view
-const MAX_CANCEL_BUTTON_POLL_ATTEMPTS = 20 // Maximum polling attempts (20 x 100ms = 2 seconds)
+const MAX_CANCEL_BUTTON_POLL_ATTEMPTS = 20 // Maximum polling attempts (2 seconds at 100ms intervals)
 const CANCEL_BUTTON_POLL_INTERVAL_MS = 100 // Delay between polling attempts
 
 /**

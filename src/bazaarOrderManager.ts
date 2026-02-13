@@ -1312,18 +1312,63 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
             log('[Startup] Bazaar window did not open', 'warn')
             return { cancelled: 0, relisted: 0, claimed: 0 }
         }
-        await sleep(50)
+        
+        // BUG 2 FIX: Poll until slots are populated
+        await sleep(300)
+        let pollAttempts = 0
+        while (pollAttempts < 20) { // max 2 seconds
+            if (!bot.currentWindow) break
+            let hasItems = false
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (slot && slot.name && slot.name !== 'air' && slot.name !== 'stained_glass_pane') {
+                    const name = removeMinecraftColorCodes(getSlotName(slot))
+                    if (name && name === 'Manage Orders') {
+                        hasItems = true
+                        break
+                    }
+                }
+            }
+            if (hasItems) break
+            await sleep(100)
+            pollAttempts++
+        }
+        log(`[Startup] Bazaar window loaded after ${pollAttempts * 100 + 300}ms`, 'debug')
         
         // Click Manage Orders at slot 50
         const manageOpened = waitForNewWindow(bot, 5000)
         await clickWindow(bot, 50).catch(() => {})
         await manageOpened
-        await sleep(50)
         
         if (!bot.currentWindow) {
             log('[Startup] Manage Orders window did not open', 'warn')
             return { cancelled: 0, relisted: 0, claimed: 0 }
         }
+        
+        // BUG 2 FIX: Poll until slots are populated
+        await sleep(300)
+        pollAttempts = 0
+        while (pollAttempts < 20) { // max 2 seconds
+            if (!bot.currentWindow) break
+            let hasContent = false
+            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                const slot = bot.currentWindow.slots[i]
+                if (!slot || !slot.nbt) continue
+                const name = removeMinecraftColorCodes(getSlotName(slot))
+                if (name && name !== '' && name !== 'Close' && name !== 'Go Back' && 
+                    name !== 'Arrow' && !name.includes('stained_glass')) {
+                    // Check if it's an actual order
+                    if (name.startsWith('BUY ') || name.startsWith('SELL ')) {
+                        hasContent = true
+                        break
+                    }
+                }
+            }
+            if (hasContent) break
+            await sleep(100)
+            pollAttempts++
+        }
+        log(`[Startup] Manage Orders window loaded after ${pollAttempts * 100 + 300}ms`, 'debug')
         
         // Queues for later processing
         // This tracks items from filled buy orders that need to be sold later
@@ -1416,20 +1461,62 @@ export async function startupOrderManagement(bot: MyBot): Promise<{ cancelled: n
                             log('[Startup] Failed to re-open bazaar after re-listing', 'warn')
                             break
                         }
+                        
+                        // BUG 2 FIX: Poll until /bz window slots are populated
                         await sleep(300)
+                        let pollAttempts = 0
+                        while (pollAttempts < 20) {
+                            if (!bot.currentWindow) break
+                            let hasItems = false
+                            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                                const slot = bot.currentWindow.slots[i]
+                                if (slot && slot.name && slot.name !== 'air') {
+                                    const name = removeMinecraftColorCodes(getSlotName(slot))
+                                    if (name && name === 'Manage Orders') {
+                                        hasItems = true
+                                        break
+                                    }
+                                }
+                            }
+                            if (hasItems) break
+                            await sleep(100)
+                            pollAttempts++
+                        }
                         
                         const manageSlot = findSlotWithName(bot.currentWindow, 'Manage Orders')
                         if (manageSlot === -1) {
                             log('[Startup] Manage Orders button not found after re-opening', 'warn')
                             break
                         }
+                        
+                        // BUG 3 FIX: Create promise BEFORE clicking
+                        const managePromise = waitForNewWindow(bot, 5000)
                         await clickWindow(bot, manageSlot).catch(() => {})
-                        const manageOpened = await waitForNewWindow(bot, 5000)
-                        if (!manageOpened) {
+                        const manageOpened = await managePromise
+                        if (!manageOpened || !bot.currentWindow) {
                             log('[Startup] Manage Orders window did not open after clicking', 'warn')
                             break
                         }
+                        
+                        // BUG 2 FIX: Poll until Manage Orders window slots are populated
                         await sleep(300)
+                        pollAttempts = 0
+                        while (pollAttempts < 20) {
+                            if (!bot.currentWindow) break
+                            let hasContent = false
+                            for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                                const slot = bot.currentWindow.slots[i]
+                                if (!slot || !slot.nbt) continue
+                                const name = removeMinecraftColorCodes(getSlotName(slot))
+                                if (name && (name.startsWith('BUY ') || name.startsWith('SELL '))) {
+                                    hasContent = true
+                                    break
+                                }
+                            }
+                            if (hasContent) break
+                            await sleep(100)
+                            pollAttempts++
+                        }
                         
                         if (!bot.currentWindow) {
                             log('[Startup] Manage Orders window did not open after re-listing', 'warn')

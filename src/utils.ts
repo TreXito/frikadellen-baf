@@ -54,17 +54,6 @@ export function numberWithThousandsSeparators(number?: number): string {
     return parts.join('.')
 }
 
-/**
- * Format a number for Hypixel bazaar signs preserving decimal values
- * Hypixel expects prices like "2430219.4" not "2430219" (preserves the decimal part)
- * @param number The number to format
- * @returns Formatted string with decimal part preserved (e.g., "2430219.4")
- */
-export function formatPriceForSign(number: number): string {
-    // Use standard toString() which already uses dot as decimal separator
-    return number.toString()
-}
-
 export function isCoflChatMessage(message: string) {
     return removeMinecraftColorCodes(message).startsWith('[Chat]')
 }

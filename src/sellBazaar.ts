@@ -1,6 +1,6 @@
 import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, getItemDisplayName, formatPriceForSign } from './utils'
+import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 import { enqueueCommand, CommandPriority } from './commandQueue'
 
 // Constants
@@ -396,8 +396,8 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
 
                     // Register sign handler BEFORE clicking
                     bot._client.once('open_sign_entity', ({ location }) => {
-                        // Format price preserving decimal values for Hypixel
-                        const priceToWrite = formatPriceForSign(item.pricePerUnit)
+                        // Write price as-is from Coflnet (preserves decimals)
+                        const priceToWrite = item.pricePerUnit.toString()
                         log(`[SellBZ] Sign opened, writing price: ${priceToWrite} (from ${item.pricePerUnit})`, 'debug')
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },

@@ -2,7 +2,7 @@ import { MyBot, SellData } from '../types/autobuy'
 import { getCurrentWebsocket } from './BAF'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes, formatPriceForSign } from './utils'
+import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes } from './utils'
 import { sendWebhookItemListed } from './webhookHandler'
 
 let setPrice = false
@@ -132,7 +132,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
             clickWindow(bot, itemSlot).catch(err => log(`Error clicking item slot for sell: ${err}`, 'error'))
             bot._client.once('open_sign_entity', ({ location }) => {
                 let price = (data as SellData).price
-                const priceFormatted = formatPriceForSign(price)
+                const priceFormatted = price.toString()
                 log('Price to set ' + priceFormatted)
                 bot._client.write('update_sign', {
                     location: {

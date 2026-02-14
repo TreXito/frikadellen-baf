@@ -2,7 +2,7 @@ import { MyBot, SellData } from '../types/autobuy'
 import { getCurrentWebsocket } from './BAF'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes } from './utils'
+import { clickWindow, getWindowTitle, numberWithThousandsSeparators, removeMinecraftColorCodes, formatPriceForSign } from './utils'
 import { sendWebhookItemListed } from './webhookHandler'
 
 let setPrice = false
@@ -132,14 +132,15 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
             clickWindow(bot, itemSlot).catch(err => log(`Error clicking item slot for sell: ${err}`, 'error'))
             bot._client.once('open_sign_entity', ({ location }) => {
                 let price = (data as SellData).price
-                log('Price to set ' + Math.floor(price).toString())
+                const priceFormatted = formatPriceForSign(price)
+                log('Price to set ' + priceFormatted)
                 bot._client.write('update_sign', {
                     location: {
                         x: location.z,
                         y: location.y,
                         z: location.z
                     },
-                    text1: `\"${Math.floor(price).toString()}\"`,
+                    text1: `\"${priceFormatted}\"`,
                     text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                     text3: '{"italic":false,"extra":["Your auction"],"text":""}',
                     text4: '{"italic":false,"extra":["starting bid"],"text":""}'

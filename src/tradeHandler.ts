@@ -1,7 +1,7 @@
 import { MyBot, TradeData } from '../types/autobuy'
 import { getCurrentWebsocket } from './BAF'
 import { log } from './logger'
-import { clickWindow, sleep } from './utils'
+import { clickWindow, sleep, formatPriceForSign } from './utils'
 
 export async function tradePerson(bot: MyBot, data: TradeData) {
     let wss = await getCurrentWebsocket()
@@ -41,15 +41,16 @@ export async function tradePerson(bot: MyBot, data: TradeData) {
                     if (data.coins > 0 && !addedCoins) {
                         bot._client.once('open_sign_entity', ({ location }) => {
                             let price = data.coins
+                            const priceFormatted = formatPriceForSign(price)
                             log('New sign entity')
-                            log('price to set ' + Math.floor(price).toString())
+                            log('price to set ' + priceFormatted)
                             bot._client.write('update_sign', {
                                 location: {
                                     x: location.z,
                                     y: location.y,
                                     z: location.z
                                 },
-                                text1: `\"${Math.floor(price).toString()}\"`,
+                                text1: `\"${priceFormatted}\"`,
                                 text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                                 text3: '{"italic":false,"extra":["Your auction"],"text":""}',
                                 text4: '{"italic":false,"extra":["starting bid"],"text":""}'

@@ -10,25 +10,6 @@ Hypixel can ban for doing so.
 
 Pre-built executables for Windows, Linux, and macOS are available in the [releases section](https://github.com/TreXito/frikadellen-baf/releases). Download the latest release for your operating system.
 
-### For Maintainers: Creating a Release
-
-To create a new release with pre-built executables:
-
-1. Update the version in `package.json`
-2. Create and push a version tag (with or without `v` prefix):
-   ```bash
-   git tag v2.0.1  # or just 2.0.1
-   git push origin v2.0.1
-   ```
-3. The GitHub Actions workflow will automatically:
-   - Build executables for Windows, Linux, and macOS
-   - Create a GitHub release with the tag name
-   - Upload all executables and start scripts to the release
-
-The workflow accepts tags in these formats:
-- `v*` (e.g., `v2.0.1`, `v1.0`)
-- `[0-9]*` (any tag starting with a digit, e.g., `2.0.1`, `1.0`)
-
 ## Is this bannable
 
 Yes, it is against the TOS of Hypixel, so don't use it if you don't want to risk that.
@@ -46,6 +27,15 @@ As far as I am aware mineflayer only stores the credentials in `.minecraft/nmp-c
 
 ## Getting Started
 
+### Linux (with or without VPS)
+
+To execute BAF on Linux use the following (and follow the input requests)
+
+```bash
+wget https://github.com/TreXito/frikadellen-baf/releases/latest/download/BAF-linux && chmod +x BAF-linux
+```
+this command downloads the latest version
+to run it just execute ./BAF-linux
 ### Executable
 
 For Windows there is a PowerShell-Script "BAF.ps1". This script automatically downloads/updates and starts the newest version from GitHub and saves it at `%appdata$/BAF`. Created files like the config and log file are also stored there. You can execute it by double clicking the cmd file or right-clicking the .ps1 and click "Run with PowerShell". You need to have Node.js installed for the Windows version.
@@ -68,16 +58,6 @@ To run or build the code, you need Node and npm.
 
 NOTE: You only need this if you want to build the code yourself. If you are using a executable, you can ignore the node steps.
 
-### Linux
-
-To execute BAF on Linux use the following (and follow the input requests)
-
-```bash
-version=v2.0.1
-wget -c https://github.com/TreXito/frikadellen-baf/releases/download/$version/BAF-$version-linux
-chmod +x BAF-$version-linux
-./BAF-$version-linux
-```
 
 ## How does it work
 
@@ -116,7 +96,7 @@ PROFIT_PERCENTAGE = 50
 MIN_PRICE = 10000000
 ```
 
-When skip is used, the bot will automatically click the green checkmark in the BIN Auction View window to skip the confirmation dialog, allowing for faster purchases.
+When skip is used, the bot will automatically send the the confirm purchase while sending the initial buy command, allowing for faster purchases.
 
 ### Proxy Configuration
 

@@ -842,8 +842,8 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                         
-                        // Convert price to integer by flooring to avoid Hypixel sign truncation issues
-                        const priceToWrite = Math.floor(pricePerUnit)
+                        // Write price as-is from Coflnet (preserves decimals)
+                        const priceToWrite = pricePerUnit.toString()
                         log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice : 'unknown'}, writing: ${priceToWrite} (from ${pricePerUnit})`, 'info')
                         printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${priceToWrite}§7 coins §8(from ${pricePerUnit.toFixed(1)})§r`)
                         bot._client.write('update_sign', {

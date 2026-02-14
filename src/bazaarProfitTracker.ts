@@ -26,6 +26,7 @@ let profitReportTimer: NodeJS.Timeout | null = null
 // Constants
 const PROFIT_REPORT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 const BAZAAR_TAX_RATE = 0.0125 // 1.25% tax
+const PRICE_COMPARISON_TOLERANCE = 0.1 // Tolerance for floating point price comparisons (0.1 coins)
 
 /**
  * Record a buy order being placed
@@ -102,6 +103,66 @@ export function recordSellOrder(itemName: string, pricePerUnit: number, amount: 
     // Clean up empty pending buy list
     if (pending.length === 0) {
         pendingBuys.delete(itemName)
+    }
+}
+
+/**
+ * Remove a cancelled order from pending buys
+ * This prevents cancelled orders from being matched with future sell orders
+ */
+export function removeCancelledOrder(itemName: string, isBuyOrder: boolean, pricePerUnit: number, amount: number): void {
+    // Only remove buy orders from pending buys (sell orders aren't tracked as pending)
+    if (!isBuyOrder) {
+        log(`[ProfitTracker] Sell order cancelled for ${itemName}, no pending buy to remove`, 'debug')
+        return
+    }
+    
+    const pending = pendingBuys.get(itemName)
+    
+    if (!pending || pending.length === 0) {
+        log(`[ProfitTracker] No pending buys found for ${itemName} to remove`, 'debug')
+        return
+    }
+    
+    // Find and remove matching buy order(s)
+    let remainingAmount = amount
+    let removedAmount = 0
+    
+    // Remove from pending buys (FIFO - remove oldest first to match recordSellOrder behavior)
+    // Iterate from beginning to match FIFO order, process elements sequentially
+    let i = 0
+    while (i < pending.length && remainingAmount > 0) {
+        const buyOrder = pending[i]
+        
+        // Match by price (with small tolerance for floating point comparison)
+        if (Math.abs(buyOrder.price - pricePerUnit) <= PRICE_COMPARISON_TOLERANCE) {
+            const removeAmount = Math.min(remainingAmount, buyOrder.amount)
+            
+            buyOrder.amount -= removeAmount
+            remainingAmount -= removeAmount
+            removedAmount += removeAmount
+            
+            // Remove buy order if fully consumed
+            if (buyOrder.amount <= 0) {
+                pending.splice(i, 1)
+                // Don't increment i since we removed an element
+            } else {
+                i++
+            }
+        } else {
+            i++
+        }
+    }
+    
+    // Clean up empty pending buy list
+    if (pending.length === 0) {
+        pendingBuys.delete(itemName)
+    }
+    
+    if (removedAmount > 0) {
+        log(`[ProfitTracker] Removed cancelled buy order: ${removedAmount}x ${itemName} @ ${pricePerUnit.toFixed(1)} coins`, 'debug')
+    } else {
+        log(`[ProfitTracker] Could not find matching buy order to remove for ${itemName}`, 'debug')
     }
 }
 

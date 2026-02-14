@@ -26,7 +26,7 @@ let profitReportTimer: NodeJS.Timeout | null = null
 // Constants
 const PROFIT_REPORT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 const BAZAAR_TAX_RATE = 0.0125 // 1.25% tax
-const PRICE_COMPARISON_TOLERANCE = 0.01 // Tolerance for floating point price comparisons
+const PRICE_COMPARISON_TOLERANCE = 0.1 // Tolerance for floating point price comparisons (0.1 coins)
 
 /**
  * Record a buy order being placed

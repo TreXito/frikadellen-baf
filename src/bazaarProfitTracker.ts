@@ -26,6 +26,7 @@ let profitReportTimer: NodeJS.Timeout | null = null
 // Constants
 const PROFIT_REPORT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 const BAZAAR_TAX_RATE = 0.0125 // 1.25% tax
+const PRICE_COMPARISON_TOLERANCE = 0.01 // Tolerance for floating point price comparisons
 
 /**
  * Record a buy order being placed
@@ -128,12 +129,13 @@ export function removeCancelledOrder(itemName: string, isBuyOrder: boolean, pric
     let removedAmount = 0
     
     // Remove from pending buys (FIFO - remove oldest first to match recordSellOrder behavior)
-    for (let i = 0; i < pending.length && remainingAmount > 0; i++) {
+    // Iterate from beginning to match FIFO order, process elements sequentially
+    let i = 0
+    while (i < pending.length && remainingAmount > 0) {
         const buyOrder = pending[i]
         
         // Match by price (with small tolerance for floating point comparison)
-        const priceTolerance = 0.01
-        if (Math.abs(buyOrder.price - pricePerUnit) <= priceTolerance) {
+        if (Math.abs(buyOrder.price - pricePerUnit) <= PRICE_COMPARISON_TOLERANCE) {
             const removeAmount = Math.min(remainingAmount, buyOrder.amount)
             
             buyOrder.amount -= removeAmount
@@ -143,8 +145,12 @@ export function removeCancelledOrder(itemName: string, isBuyOrder: boolean, pric
             // Remove buy order if fully consumed
             if (buyOrder.amount <= 0) {
                 pending.splice(i, 1)
-                i-- // Adjust index after removal
+                // Don't increment i since we removed an element
+            } else {
+                i++
             }
+        } else {
+            i++
         }
     }
     

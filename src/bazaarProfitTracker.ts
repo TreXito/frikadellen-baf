@@ -106,6 +106,61 @@ export function recordSellOrder(itemName: string, pricePerUnit: number, amount: 
 }
 
 /**
+ * Remove a cancelled order from pending buys
+ * This prevents cancelled orders from being matched with future sell orders
+ */
+export function removeCancelledOrder(itemName: string, isBuyOrder: boolean, pricePerUnit: number, amount: number): void {
+    // Only remove buy orders from pending buys (sell orders aren't tracked as pending)
+    if (!isBuyOrder) {
+        log(`[ProfitTracker] Sell order cancelled for ${itemName}, no pending buy to remove`, 'debug')
+        return
+    }
+    
+    const pending = pendingBuys.get(itemName)
+    
+    if (!pending || pending.length === 0) {
+        log(`[ProfitTracker] No pending buys found for ${itemName} to remove`, 'debug')
+        return
+    }
+    
+    // Find and remove matching buy order(s)
+    let remainingAmount = amount
+    let removedAmount = 0
+    
+    // Remove from pending buys (FIFO - remove oldest first to match recordSellOrder behavior)
+    for (let i = 0; i < pending.length && remainingAmount > 0; i++) {
+        const buyOrder = pending[i]
+        
+        // Match by price (with small tolerance for floating point comparison)
+        const priceTolerance = 0.01
+        if (Math.abs(buyOrder.price - pricePerUnit) <= priceTolerance) {
+            const removeAmount = Math.min(remainingAmount, buyOrder.amount)
+            
+            buyOrder.amount -= removeAmount
+            remainingAmount -= removeAmount
+            removedAmount += removeAmount
+            
+            // Remove buy order if fully consumed
+            if (buyOrder.amount <= 0) {
+                pending.splice(i, 1)
+                i-- // Adjust index after removal
+            }
+        }
+    }
+    
+    // Clean up empty pending buy list
+    if (pending.length === 0) {
+        pendingBuys.delete(itemName)
+    }
+    
+    if (removedAmount > 0) {
+        log(`[ProfitTracker] Removed cancelled buy order: ${removedAmount}x ${itemName} @ ${pricePerUnit.toFixed(1)} coins`, 'debug')
+    } else {
+        log(`[ProfitTracker] Could not find matching buy order to remove for ${itemName}`, 'debug')
+    }
+}
+
+/**
  * Get total profit across all completed trades
  */
 export function getTotalProfit(): number {

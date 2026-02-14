@@ -12,7 +12,7 @@ import {
     findAndClick
 } from './bazaarHelpers'
 import { isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
-import { recordBuyOrder, recordSellOrder } from './bazaarProfitTracker'
+import { recordBuyOrder, recordSellOrder, removeCancelledOrder } from './bazaarProfitTracker'
 
 /**
  * Represents a tracked bazaar order
@@ -1170,6 +1170,9 @@ async function cancelAllStaleOrders(bot: MyBot, staleOrders: BazaarOrderRecord[]
             log(`[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
                 
+                // Remove cancelled order from profit tracker to prevent incorrect profit calculations
+                removeCancelledOrder(order.itemName, order.isBuyOrder, order.pricePerUnit, order.amount)
+                
                 // Send webhook notification
                 sendWebhookBazaarOrderCancelled(
                     order.itemName,
@@ -1323,6 +1326,9 @@ async function cancelSingleOrder(bot: MyBot, order: BazaarOrderRecord): Promise<
         if (cancelSuccess) {
             log(`[OrderManager] Cancelled ${searchPrefix.toLowerCase()} order for ${order.itemName}`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §a[OrderManager] Cancelled ${order.isBuyOrder ? 'buy order' : 'sell offer'} for ${order.itemName}`)
+            
+            // Remove cancelled order from profit tracker to prevent incorrect profit calculations
+            removeCancelledOrder(order.itemName, order.isBuyOrder, order.pricePerUnit, order.amount)
             
             // Send webhook notification
             const ageMinutes = Math.floor((Date.now() - order.placedAt) / 60000)

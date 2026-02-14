@@ -842,11 +842,13 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                             }
                         }
                         
-                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice : 'unknown'}, writing: ${pricePerUnit}`, 'info')
-                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${pricePerUnit.toFixed(1)}§7 coins`)
+                        // Convert price to integer by flooring to avoid Hypixel sign truncation issues
+                        const priceToWrite = Math.floor(pricePerUnit)
+                        log(`[BazaarDebug] Sign opened for price, current sign price: ${currentSignPrice > 0 ? currentSignPrice : 'unknown'}, writing: ${priceToWrite} (from ${pricePerUnit})`, 'info')
+                        printMcChatToConsole(`§f[§4BAF§f]: §7[Sign] Writing price: §e${priceToWrite}§7 coins`)
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },
-                            text1: `\"${pricePerUnit}\"`,
+                            text1: `\"${priceToWrite}\"`,
                             text2: '{"italic":false,"extra":["^^^^^^^^^^^^^^^"],"text":""}',
                             text3: '{"italic":false,"extra":[""],"text":""}',
                             text4: '{"italic":false,"extra":[""],"text":""}'

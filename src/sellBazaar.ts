@@ -396,10 +396,12 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
 
                     // Register sign handler BEFORE clicking
                     bot._client.once('open_sign_entity', ({ location }) => {
-                        log(`[SellBZ] Sign opened, writing price: ${item.pricePerUnit}`, 'debug')
+                        // Convert price to integer by flooring to avoid Hypixel sign truncation issues
+                        const priceToWrite = Math.floor(item.pricePerUnit)
+                        log(`[SellBZ] Sign opened, writing price: ${priceToWrite} (from ${item.pricePerUnit})`, 'debug')
                         bot._client.write('update_sign', {
                             location: { x: location.x, y: location.y, z: location.z },
-                            text1: `"${item.pricePerUnit}"`,
+                            text1: `"${priceToWrite}"`,
                             text2: SIGN_TEXT_LINE2,
                             text3: SIGN_TEXT_LINE3,
                             text4: SIGN_TEXT_LINE4

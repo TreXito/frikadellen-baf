@@ -334,3 +334,48 @@ export async function clickAndWaitForSign(bot: MyBot, slot: number, value: strin
     log(`[BAF] Failed to open sign after ${maxRetries + 1} attempts for slot ${slot}`, 'warn')
     return false
 }
+
+/**
+ * BUG FIX: Verify slot contains expected item before clicking.
+ * Polls for up to 1 second to ensure the window has updated and the slot contains a valid item.
+ * This prevents clicking on "Unknown" items due to race conditions.
+ */
+export async function verifyAndClickSlot(bot: MyBot, slot: number, expectedItemName: string, timeout = 1000): Promise<boolean> {
+    const startTime = Date.now()
+    
+    while (Date.now() - startTime < timeout) {
+        if (!bot.currentWindow) {
+            log(`[BAF] Window closed while verifying slot ${slot}`, 'warn')
+            return false
+        }
+        
+        const slotItem = bot.currentWindow.slots[slot]
+        if (slotItem && slotItem.nbt) {
+            const itemName = getSlotName(slotItem)
+            
+            // Check if slot contains a valid item (not empty, not Unknown)
+            if (itemName && itemName !== 'Unknown' && itemName !== '' && itemName !== 'Air') {
+                // Optional: Verify it matches expected item (fuzzy match for safety)
+                const cleanItemName = removeMinecraftColorCodes(itemName).toLowerCase()
+                const cleanExpected = removeMinecraftColorCodes(expectedItemName).toLowerCase()
+                
+                if (cleanItemName.includes(cleanExpected) || cleanExpected.includes(cleanItemName)) {
+                    log(`[BAF] Slot ${slot} verified with item: ${itemName}`, 'debug')
+                    
+                    // Now click it using clickAndWaitForWindow for better reliability
+                    return await clickAndWaitForWindow(bot, slot, 1000, 2)
+                } else {
+                    log(`[BAF] Slot ${slot} contains "${itemName}" but expected "${expectedItemName}"`, 'warn')
+                    await sleep(50)
+                    continue
+                }
+            }
+        }
+        
+        // Slot is empty or Unknown, wait and retry
+        await sleep(50)
+    }
+    
+    log(`[BAF] Timeout verifying slot ${slot} for item "${expectedItemName}"`, 'warn')
+    return false
+}

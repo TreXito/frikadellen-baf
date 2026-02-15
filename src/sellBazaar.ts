@@ -2,6 +2,7 @@ import { MyBot } from '../types/autobuy'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getWindowTitle, sleep, removeMinecraftColorCodes, getItemDisplayName } from './utils'
 import { enqueueCommand, CommandPriority } from './commandQueue'
+import { verifyAndClickSlot, getSlotName } from './bazaarHelpers'
 
 // Constants
 const OPERATION_TIMEOUT_MS = 20000
@@ -367,6 +368,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                     
                     // Find the item in search results
                     let itemSlot = -1
+                    let itemName = ''
                     for (let i = 0; i < window.slots.length; i++) {
                         const slot = window.slots[i]
                         const name = removeMinecraftColorCodes(
@@ -374,17 +376,33 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                         )
                         if (name && name.toLowerCase().includes(item.displayName.toLowerCase())) {
                             itemSlot = i
+                            itemName = name
                             break
                         }
                     }
 
                     if (itemSlot === -1) {
                         itemSlot = BAZAAR_FIRST_RESULT_SLOT // Fallback to first result slot
+                        // Get name of fallback slot
+                        const fallbackSlot = window.slots[itemSlot]
+                        if (fallbackSlot) {
+                            itemName = getSlotName(fallbackSlot) || item.displayName
+                        } else {
+                            itemName = item.displayName
+                        }
                     }
 
-                    log(`[SellBZ] Clicking item at slot ${itemSlot}`, 'debug')
-                    await sleep(200)
-                    await clickWindow(bot, itemSlot).catch(() => {})
+                    log(`[SellBZ] Found item at slot ${itemSlot}`, 'debug')
+                    
+                    // BUG FIX: Verify slot contains the item before clicking to prevent "Unknown" crashes
+                    const clickSuccess = await verifyAndClickSlot(bot, itemSlot, itemName || item.displayName, 1000)
+                    if (!clickSuccess) {
+                        log(`[SellBZ] Failed to verify and click slot ${itemSlot} for "${item.displayName}"`, 'error')
+                        bot._client.removeListener('open_window', windowListener)
+                        clearTimeout(timeout)
+                        reject(new Error(`Failed to click item "${item.displayName}" at slot ${itemSlot}`))
+                        return
+                    }
                     return
                 }
 

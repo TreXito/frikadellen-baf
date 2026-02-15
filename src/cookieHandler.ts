@@ -18,6 +18,7 @@ const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
 const EQUIP_DELAY_MS = 250 // Delay after equipping item
 const CONSUME_DELAY_MS = 500 // Delay after consuming item
 const INVENTORY_UPDATE_DELAY_MS = 1500 // Delay for item to appear in inventory after purchase (increased from 500ms)
+const STORAGE_OPERATION_DELAY_MS = 500 // Delay for storage window operations
 
 // Track cookie time globally
 let cookieTime: number = 0
@@ -264,9 +265,9 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
     try {
         debug('Checking player inventory for cookie')
         
-        // Ensure no window is open
+        // Ensure no window is open to allow clean inventory access
         if (bot.currentWindow) {
-            debug('Window is open, closing it before checking inventory')
+            debug('Closing open window to ensure clean inventory access')
             bot.betterWindowClose()
             await sleep(250)
         }
@@ -471,17 +472,17 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                             debug('Cookie not in inventory, trying storage fallback')
                             try {
                                 await getItemAndMove(bot, 'COOKIE')
-                                await sleep(500) // Wait for window to open/update
+                                await sleep(STORAGE_OPERATION_DELAY_MS) // Wait for window to open/update
                                 
                                 // Try to consume from inventory again (cookie might have been moved)
                                 const consumedAfterStorage = await consumeCookieFromInventory(bot)
                                 if (!consumedAfterStorage) {
                                     debug('Failed to consume cookie from storage, trying direct click')
-                                    // As a last resort, try clicking slot 11 if window is open
+                                    // As a last resort, try clicking slot 11 (cookie item position in storage window)
                                     if (bot.currentWindow) {
                                         await bot.betterClick(11)
                                         debug("Clicked slot 11 to consume cookie")
-                                        await sleep(500)
+                                        await sleep(STORAGE_OPERATION_DELAY_MS)
                                     }
                                 }
                                 bot.betterWindowClose()

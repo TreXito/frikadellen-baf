@@ -17,7 +17,7 @@ const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
 // Timing constants for cookie consumption
 const EQUIP_DELAY_MS = 250 // Delay after equipping item
 const CONSUME_DELAY_MS = 500 // Delay after consuming item
-const INVENTORY_UPDATE_DELAY_MS = 500 // Delay for item to appear in inventory after purchase
+const INVENTORY_UPDATE_DELAY_MS = 1500 // Delay for item to appear in inventory after purchase (increased from 500ms)
 
 // Track cookie time globally
 let cookieTime: number = 0
@@ -264,9 +264,22 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
     try {
         debug('Checking player inventory for cookie')
         
+        // Ensure no window is open
+        if (bot.currentWindow) {
+            debug('Window is open, closing it before checking inventory')
+            bot.betterWindowClose()
+            await sleep(250)
+        }
+        
         // Get all items in player inventory
         const inventoryItems = bot.inventory.items()
         debug(`Found ${inventoryItems.length} items in inventory`)
+        
+        // Log all item names for debugging
+        if (inventoryItems.length > 0) {
+            const itemNames = inventoryItems.map(item => `${item.name}(slot:${item.slot})`).join(', ')
+            debug(`Inventory items: ${itemNames}`)
+        }
         
         // Search for cookie in inventory
         let cookieItem = null
@@ -450,16 +463,33 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                         await sleep(INVENTORY_UPDATE_DELAY_MS)
                         
                         // Try to consume from inventory first (normal case)
+                        debug('Attempting to consume cookie from inventory')
                         const consumedFromInventory = await consumeCookieFromInventory(bot)
                         
                         if (!consumedFromInventory) {
                             // If not in inventory, try storage as fallback
-                            debug('Cookie not in inventory, trying storage')
-                            await getItemAndMove(bot, 'COOKIE')
-                            await betterOnce(bot, 'windowOpen')
-                            await bot.betterClick(11)
-                            debug("activated cookie from storage")
-                            bot.betterWindowClose() // Just to be safe
+                            debug('Cookie not in inventory, trying storage fallback')
+                            try {
+                                await getItemAndMove(bot, 'COOKIE')
+                                await sleep(500) // Wait for window to open/update
+                                
+                                // Try to consume from inventory again (cookie might have been moved)
+                                const consumedAfterStorage = await consumeCookieFromInventory(bot)
+                                if (!consumedAfterStorage) {
+                                    debug('Failed to consume cookie from storage, trying direct click')
+                                    // As a last resort, try clicking slot 11 if window is open
+                                    if (bot.currentWindow) {
+                                        await bot.betterClick(11)
+                                        debug("Clicked slot 11 to consume cookie")
+                                        await sleep(500)
+                                    }
+                                }
+                                bot.betterWindowClose()
+                            } catch (storageError) {
+                                debug(`Storage fallback failed: ${storageError}`)
+                                bot.betterWindowClose()
+                                // Continue anyway - cookie might still be consumed
+                            }
                         }
                         
                         const timeInHours = time ? Math.round(time / 3600) : 0

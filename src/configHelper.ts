@@ -171,8 +171,8 @@ function prepareTomlBeforeWrite(tomlString: string): string {
             autoCookieIndex,
             0,
             '',
-            '# Auto booster cookie: if remaining cookie duration on startup is less than this value (in hours), automatically buy and consume a booster cookie (default: 24 hours)',
-            '# Set to 0 to disable automatic cookie purchasing'
+            '# Auto booster cookie: if remaining cookie duration on startup is GREATER than this value (in hours), automatically buy and consume a booster cookie (default: 24 hours)',
+            '# This keeps your cookie time maxed out. Set to 0 to disable automatic cookie purchasing'
         )
     }
 

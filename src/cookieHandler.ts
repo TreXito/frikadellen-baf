@@ -356,14 +356,17 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                     await sleep(250)
                     
                     // Click slot 10 (confirm) to buy the cookie
-                    await bot.betterClick(10)
+                    await clickWindow(bot, 10)
+                    
+                    await sleep(250) // Give time for purchase to process
+                    
                     try {
                         // Check for full inv
                         await betterOnce(bot, "message", (message) => {
                             let text = message.getText(null)
                             debug("cookie text", text)
                             return text.includes("One or more items didn't fit in your inventory")
-                        })
+                        }, 3000) // 3 second timeout for message
                         logmc(`§6[§bTPM§6]§c Your inv is full so I can't eat this cookie. You have one in your stash now`)
                         resolve(`Full inv :(`)
                         bot.betterWindowClose()

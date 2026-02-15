@@ -199,6 +199,9 @@ export async function checkAndBuyCookie(bot: MyBot): Promise<void> {
         await sleep(500)
         
         // Check if we need to buy a cookie
+        // IMPORTANT: This uses INVERTED logic per user requirement (see repository memory)
+        // Only buy when you have EXCESS time (> threshold), not when running low (<= threshold)
+        // This is designed for users who want to keep cookie time maxed out
         if (cookieTimeHours <= autoCookieHours) {
             log(`Cookie time ${Math.round(cookieTimeHours)}h is <= threshold ${autoCookieHours}h, not buying`, 'info')
             printMcChatToConsole(`§f[§4BAF§f]: §aNot buying cookie - ${Math.round(cookieTimeHours)}h remaining`)
@@ -325,6 +328,8 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
             
             const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
             
+            // IMPORTANT: Inverted logic - only buy when time EXCEEDS threshold
+            // This keeps cookies maxed for users with sufficient coins
             if (time && time <= autoCookie) {
                 logmc(`§6[§bTPM§6]§3 Not buying a cookie because you have ${Math.round(time / 3600)}h`)
                 resolve(`Enough time`)

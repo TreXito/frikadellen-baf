@@ -4,12 +4,54 @@ import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getSlotLore, sleep, betterOnce } from './utils'
 import { getCurrentPurse } from './BAF'
 
+// Helper logging functions to match the provided code style
+const logmc = printMcChatToConsole
+const debug = (msg: string, ...args: any[]) => log(`[DEBUG] ${msg} ${args.join(' ')}`, 'debug')
+const error = (msg: string, ...args: any[]) => log(`[ERROR] ${msg} ${args.join(' ')}`, 'error')
+
 const COOKIE_PRICE_API = 'https://api.hypixel.net/v2/skyblock/bazaar'
 const DEFAULT_COOKIE_PRICE = 5000000 // 5M coins fallback
 const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
 
 // Track cookie time globally
 let cookieTime: number = 0
+
+/**
+ * Add helper methods to the bot for cookie handling
+ */
+export function addCookieHelpers(bot: MyBot) {
+    // betterClick - maps to existing clickWindow
+    if (!bot.betterClick) {
+        bot.betterClick = async (slot: number) => {
+            return clickWindow(bot, slot)
+        }
+    }
+    
+    // betterWindowClose - closes the current window
+    if (!bot.betterWindowClose) {
+        bot.betterWindowClose = () => {
+            if (bot.currentWindow) {
+                bot.closeWindow(bot.currentWindow)
+            }
+        }
+    }
+    
+    // getPurse - gets the current purse balance
+    if (!bot.getPurse) {
+        bot.getPurse = () => {
+            return getPurse(bot)
+        }
+    }
+}
+
+// Extend MyBot interface with cookie helper methods
+declare module '../types/autobuy' {
+    interface MyBot {
+        betterClick?: (slot: number) => Promise<void>
+        betterWindowClose?: () => void
+        getPurse?: () => number
+    }
+}
 
 /**
  * Gets the current bazaar price of a booster cookie
@@ -73,6 +115,9 @@ function getPurse(bot: MyBot): number {
  * Called when the bot joins SkyBlock
  */
 export async function checkAndBuyCookie(bot: MyBot): Promise<void> {
+    // Add cookie helpers to bot
+    addCookieHelpers(bot)
+    
     const autoCookieHours = getConfigProperty('AUTO_COOKIE')
     
     // If AUTO_COOKIE is 0 or not set, skip
@@ -210,163 +255,127 @@ function parseCookieDuration(durationText: string): number {
  * @returns Promise that resolves when the item is found and ready to be clicked
  */
 async function getItemAndMove(bot: MyBot, itemId: string): Promise<void> {
-    try {
-        // Open storage first
-        bot.chat('/storage')
-        
-        // Wait for storage window to open
-        await betterOnce(bot, 'windowOpen')
-        
-        await sleep(250)
-        
-        if (!bot.currentWindow) {
-            throw new Error('No window open after /storage')
-        }
-        
-        // Search for the cookie in all slots
-        let cookieSlot = null
-        for (const slot of bot.currentWindow.slots) {
-            if (slot) {
-                // Check by item name (booster cookies have item name 'cookie')
-                if (slot.name === 'cookie') {
-                    cookieSlot = slot.slot
-                    log(`[getItemAndMove] Found ${itemId} in slot ${cookieSlot}`, 'debug')
-                    break
-                }
-                
-                // Check by display name in NBT
-                if (slot.nbt?.value) {
-                    try {
-                        const nbtValue = slot.nbt.value as any
-                        if (nbtValue.display?.value?.Name?.value) {
-                            const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
-                            if (displayName.includes('booster cookie')) {
-                                cookieSlot = slot.slot
-                                log(`[getItemAndMove] Found ${itemId} by display name in slot ${cookieSlot}`, 'debug')
-                                break
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Open storage first
+            bot.chat('/storage')
+            
+            // Wait for storage window to open
+            await betterOnce(bot, 'windowOpen')
+            
+            await sleep(250)
+            
+            if (!bot.currentWindow) {
+                throw new Error('No window open after /storage')
+            }
+            
+            // Search for the cookie in all slots
+            let cookieSlot = null
+            for (const slot of bot.currentWindow.slots) {
+                if (slot) {
+                    // Check by item name (booster cookies have item name 'cookie')
+                    if (slot.name === 'cookie') {
+                        cookieSlot = slot.slot
+                        debug(`Found ${itemId} in slot ${cookieSlot}`)
+                        break
+                    }
+                    
+                    // Check by display name in NBT
+                    if (slot.nbt?.value) {
+                        try {
+                            const nbtValue = slot.nbt.value as any
+                            if (nbtValue.display?.value?.Name?.value) {
+                                const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
+                                if (displayName.includes('booster cookie')) {
+                                    cookieSlot = slot.slot
+                                    debug(`Found ${itemId} by display name in slot ${cookieSlot}`)
+                                    break
+                                }
                             }
+                        } catch (e) {
+                            // Skip slots with invalid NBT
                         }
-                    } catch (e) {
-                        // Skip slots with invalid NBT
                     }
                 }
             }
+            
+            if (!cookieSlot) {
+                throw new Error(`Could not find ${itemId} in window`)
+            }
+            
+            // Click on the cookie to open it
+            await bot.betterClick(cookieSlot)
+            debug(`Clicked ${itemId} in slot ${cookieSlot}`)
+            resolve()
+        } catch (error) {
+            debug(`getItemAndMove error:`, error)
+            reject(error)
         }
-        
-        if (!cookieSlot) {
-            throw new Error(`Could not find ${itemId} in window`)
-        }
-        
-        // Click on the cookie to open it
-        await clickWindow(bot, cookieSlot)
-        log(`[getItemAndMove] Clicked ${itemId} in slot ${cookieSlot}`, 'debug')
-    } catch (error) {
-        log(`[getItemAndMove] Error: ${error}`, 'error')
-        throw error
-    }
+    })
 }
 
 /**
- * Buys and consumes a booster cookie - Updated implementation based on problem statement
+ * Buys and consumes a booster cookie - Implementation from problem statement
  */
-async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
-    try {
-        const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
-        
-        // Check if we already have enough cookie time
-        if (currentCookieTime && currentCookieTime >= autoCookie) {
-            printMcChatToConsole(`§f[§4BAF§f]: §3Not buying a cookie because you have ${Math.round(currentCookieTime / 3600)}h`)
-            log(`Not buying cookie - have ${Math.round(currentCookieTime / 3600)}h remaining`, 'info')
-            return
-        }
-        
-        const price = await getCookiePrice()
-        const purse = getPurse(bot)
-        
-        log(`Cookie price: ${price}, Purse: ${purse}`, 'info')
-        
-        // Check if cookie is too expensive or not enough coins
-        if (price > MAX_COOKIE_PRICE || purse < price * 2) {
-            printMcChatToConsole(`§f[§4BAF§f]: §cCookie costs ${Math.round(price / 1000000)}M so not buying :(`)
-            log(`Cookie expensive or insufficient funds: price=${price}, purse=${purse}`, 'warn')
-            return
-        }
-        
-        // Start buying the cookie
-        log('Opening bazaar to buy cookie...', 'info')
-        bot.chat('/bz booster cookie')
-        await betterOnce(bot, 'windowOpen')
-        
-        // Click on cookie item (slot 11)
-        await clickWindow(bot, 11)
-        await betterOnce(bot, 'windowOpen')
-        
-        await sleep(250)
-        
-        // Click "Buy Instantly" button (slot 10)
-        await clickWindow(bot, 10)
-        await betterOnce(bot, 'windowOpen')
-        
-        await sleep(250)
-        
-        // Confirm purchase (slot 10 again)
-        await clickWindow(bot, 10)
-        
+async function buyCookie(bot: MyBot, time: number | null = null): Promise<string> {
+    return new Promise(async (resolve, reject) => {
         try {
-            // Check for full inventory message
-            await betterOnce(bot, 'message', (message) => {
-                let text = message.getText(null)
-                log(`[Cookie] Message received: ${text}`, 'debug')
-                // Use includes for more flexible matching
-                return text.includes("One or more items didn't fit in your inventory")
-            }, 3000)
+            // Ensure helpers are initialized
+            addCookieHelpers(bot)
             
-            printMcChatToConsole(`§f[§4BAF§f]: §cYour inv is full so I can't eat this cookie. You have one in your stash now`)
-            log('Inventory full, cookie in stash', 'warn')
-            if (bot.currentWindow) {
-                bot.closeWindow(bot.currentWindow)
+            const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
+            
+            if (time && time >= autoCookie) {
+                logmc(`§6[§bTPM§6]§3 Not buying a cookie because you have ${Math.round(time / 3600)}h`)
+                resolve(`Enough time`)
+            } else {
+                const price = await getCookiePrice()
+
+                if (price > MAX_COOKIE_PRICE || bot.getPurse() < price * 2) {
+                    logmc(`§6[§bTPM§6]§c Cookie costs ${price} so not buying :(`)
+                    resolve(`Cookie expensive :(`)
+                } else {
+                    bot.chat(`/bz booster cookie`)
+                    await betterOnce(bot, 'windowOpen')
+                    await bot.betterClick(11)
+                    await betterOnce(bot, 'windowOpen')
+                    await sleep(250)
+                    await bot.betterClick(10)
+                    await betterOnce(bot, 'windowOpen')
+                    await sleep(250)
+                    await bot.betterClick(10) // This click buys the cookie
+                    try {
+                        // Check for full inv
+                        await betterOnce(bot, "message", (message) => {
+                            let text = message.getText(null)
+                            debug("cookie text", text)
+                            return text.includes("One or more items didn't fit in your inventory")
+                        })
+                        logmc(`§6[§bTPM§6]§c Your inv is full so I can't eat this cookie. You have one in your stash now`)
+                        resolve(`Full inv :(`)
+                        bot.betterWindowClose()
+                    } catch (e) {
+                        // If no message for full inv then yay we don't have one
+                        debug(`cookie error (probably not an actual error)`, e)
+                        bot.betterWindowClose()
+                        await getItemAndMove(bot, 'COOKIE')
+                        await betterOnce(bot, 'windowOpen')
+                        await bot.betterClick(11)
+                        debug("activated cookie")
+                        bot.betterWindowClose() // Just to be safe
+                        const timeInHours = time ? Math.round(time / 3600) : 0
+                        const newTimeInHours = time ? Math.round((time + 4 * 86400) / 3600) : Math.round((4 * 86400) / 3600)
+                        logmc(`§6[§bTPM§6]§3 Automatically ate a booster cookie cause you had ${timeInHours} hours left. Now you have ${newTimeInHours} hours`)
+                        cookieTime += 4 * 86400 // Add 4 days in seconds
+                        resolve(`Cookie bought and consumed successfully`)
+                    }
+                }
             }
-            return
         } catch (e) {
-            // No full inventory message - cookie was bought successfully
-            log(`[Cookie] No full inventory error (this is good): ${e}`, 'debug')
-            
-            // Close any open windows
-            if (bot.currentWindow) {
-                bot.closeWindow(bot.currentWindow)
-            }
-            
-            await sleep(500)
-            
-            // Call getItemAndMove to open storage and click the cookie
-            await getItemAndMove(bot, 'COOKIE')
-            
-            // Wait for the cookie consumption window to open
-            await betterOnce(bot, 'windowOpen')
-            
-            // Click slot 11 to consume the cookie (this is the "Consume" button in the cookie GUI)
-            await clickWindow(bot, 11)
-            log('[Cookie] Activated cookie', 'debug')
-            
-            // Close window (just to be safe)
-            if (bot.currentWindow) {
-                bot.closeWindow(bot.currentWindow)
-            }
-            
-            const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
-            const currentHours = Math.round(currentCookieTime / 3600)
-            
-            printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
-            printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
-            log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
-            
-            // Update global cookie time (4 days = 4 * 86400 seconds)
-            cookieTime += 4 * 86400
+            error(`Error buying cookie: `, e)
+            bot.betterWindowClose()
+            // No need to change state because it'll safely go back to getting ready
+            resolve(`Failed to buy cookie`)
         }
-    } catch (e) {
-        log(`Error buying cookie: ${e}`, 'error')
-        if (bot.currentWindow) {
-            bot.closeWindow(bot.currentWindow)
-        }
-    }
+    })
 }

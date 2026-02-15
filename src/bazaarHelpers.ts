@@ -339,6 +339,11 @@ export async function clickAndWaitForSign(bot: MyBot, slot: number, value: strin
  * BUG FIX: Verify slot contains expected item before clicking.
  * Polls for up to 1 second to ensure the window has updated and the slot contains a valid item.
  * This prevents clicking on "Unknown" items due to race conditions.
+ * @param bot The bot instance
+ * @param slot The slot number to verify and click
+ * @param expectedItemName The expected item name to verify
+ * @param timeout Maximum time in milliseconds to wait for slot verification (defaults to 1000ms)
+ * @returns Promise<boolean> true if slot was verified and clicked successfully, false otherwise
  */
 export async function verifyAndClickSlot(bot: MyBot, slot: number, expectedItemName: string, timeout = 1000): Promise<boolean> {
     const startTime = Date.now()
@@ -355,7 +360,10 @@ export async function verifyAndClickSlot(bot: MyBot, slot: number, expectedItemN
             
             // Check if slot contains a valid item (not empty, not Unknown)
             if (itemName && itemName !== 'Unknown' && itemName !== '' && itemName !== 'Air') {
-                // Optional: Verify it matches expected item (fuzzy match for safety)
+                // Verify it matches expected item (fuzzy match for safety)
+                // Use bidirectional substring matching: allows "Enchanted Diamond" to match "Diamond"
+                // or partial name mismatches. More strict matching could reject valid items due to
+                // formatting differences or color codes not fully stripped.
                 const cleanItemName = removeMinecraftColorCodes(itemName).toLowerCase()
                 const cleanExpected = removeMinecraftColorCodes(expectedItemName).toLowerCase()
                 

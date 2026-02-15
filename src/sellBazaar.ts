@@ -395,7 +395,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                     log(`[SellBZ] Found item at slot ${itemSlot}`, 'debug')
                     
                     // BUG FIX: Verify slot contains the item before clicking to prevent "Unknown" crashes
-                    const clickSuccess = await verifyAndClickSlot(bot, itemSlot, itemName || item.displayName, 1000)
+                    const clickSuccess = await verifyAndClickSlot(bot, itemSlot, itemName, 1000)
                     if (!clickSuccess) {
                         log(`[SellBZ] Failed to verify and click slot ${itemSlot} for "${item.displayName}"`, 'error')
                         bot._client.removeListener('open_window', windowListener)

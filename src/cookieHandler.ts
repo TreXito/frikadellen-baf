@@ -3,6 +3,7 @@ import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getSlotLore, sleep, betterOnce } from './utils'
 import { getCurrentPurse } from './BAF'
+import { clickAndWaitForWindow } from './bazaarHelpers'
 
 // Helper logging functions to match the provided code style
 const logmc = printMcChatToConsole
@@ -339,13 +340,23 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                 } else {
                     bot.chat(`/bz booster cookie`)
                     await betterOnce(bot, 'windowOpen')
-                    await bot.betterClick(11)
-                    await betterOnce(bot, 'windowOpen')
+                    
+                    // Click slot 11 (cookie item) and wait for product window
+                    const clickedCookie = await clickAndWaitForWindow(bot, 11, 2000, 2)
+                    if (!clickedCookie) {
+                        throw new Error('Failed to open cookie product window')
+                    }
                     await sleep(250)
+                    
+                    // Click slot 10 (buy instantly) and wait for confirm window
+                    const clickedBuy = await clickAndWaitForWindow(bot, 10, 2000, 2)
+                    if (!clickedBuy) {
+                        throw new Error('Failed to open buy confirmation window')
+                    }
+                    await sleep(250)
+                    
+                    // Click slot 10 (confirm) to buy the cookie
                     await bot.betterClick(10)
-                    await betterOnce(bot, 'windowOpen')
-                    await sleep(250)
-                    await bot.betterClick(10) // This click buys the cookie
                     try {
                         // Check for full inv
                         await betterOnce(bot, "message", (message) => {

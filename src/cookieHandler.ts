@@ -251,6 +251,72 @@ function parseCookieDuration(durationText: string): number {
 }
 
 /**
+ * Tries to find and consume a cookie from player inventory
+ * @param bot The bot instance
+ * @returns Promise that resolves to true if cookie was found and consumed, false if not found
+ */
+async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
+    try {
+        debug('Checking player inventory for cookie')
+        
+        // Get all items in player inventory
+        const inventoryItems = bot.inventory.items()
+        
+        // Search for cookie in inventory
+        let cookieItem = null
+        for (const item of inventoryItems) {
+            // Check by item name (booster cookies have item name 'cookie')
+            if (item.name === 'cookie') {
+                cookieItem = item
+                debug(`Found cookie in inventory slot ${item.slot}`)
+                break
+            }
+            
+            // Check by display name in NBT
+            if (item.nbt?.value) {
+                try {
+                    const nbtValue = item.nbt.value as any
+                    if (nbtValue.display?.value?.Name?.value) {
+                        const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
+                        if (displayName.includes('booster cookie')) {
+                            cookieItem = item
+                            debug(`Found cookie by display name in inventory slot ${item.slot}`)
+                            break
+                        }
+                    }
+                } catch (e) {
+                    // Skip items with invalid NBT
+                }
+            }
+        }
+        
+        if (!cookieItem) {
+            debug('Cookie not found in player inventory')
+            return false
+        }
+        
+        // Move cookie to hotbar slot 8 (last hotbar slot)
+        const hotbarSlot = 8
+        debug(`Moving cookie from slot ${cookieItem.slot} to hotbar slot ${hotbarSlot}`)
+        
+        // Equip the cookie to hotbar
+        await bot.equip(cookieItem, 'hand')
+        await sleep(250)
+        
+        // Activate/consume the item
+        debug('Activating cookie')
+        bot.activateItem()
+        await sleep(500) // Give time for consumption
+        
+        debug('Cookie consumed from inventory')
+        return true
+    } catch (error) {
+        debug(`consumeCookieFromInventory error:`, error)
+        return false
+    }
+}
+
+/**
  * Finds a cookie in storage and prepares it for consumption
  * @param bot The bot instance
  * @param itemId The item ID to search for (e.g., 'COOKIE' for booster cookie)
@@ -371,14 +437,26 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                         resolve(`Full inv :(`)
                         bot.betterWindowClose()
                     } catch (e) {
-                        // If no message for full inv then yay we don't have one
+                        // If no message for full inv then cookie went to inventory
                         debug(`cookie error (probably not an actual error)`, e)
                         bot.betterWindowClose()
-                        await getItemAndMove(bot, 'COOKIE')
-                        await betterOnce(bot, 'windowOpen')
-                        await bot.betterClick(11)
-                        debug("activated cookie")
-                        bot.betterWindowClose() // Just to be safe
+                        
+                        // Wait a bit for the item to appear in inventory
+                        await sleep(500)
+                        
+                        // Try to consume from inventory first (normal case)
+                        const consumedFromInventory = await consumeCookieFromInventory(bot)
+                        
+                        if (!consumedFromInventory) {
+                            // If not in inventory, try storage as fallback
+                            debug('Cookie not in inventory, trying storage')
+                            await getItemAndMove(bot, 'COOKIE')
+                            await betterOnce(bot, 'windowOpen')
+                            await bot.betterClick(11)
+                            debug("activated cookie from storage")
+                            bot.betterWindowClose() // Just to be safe
+                        }
+                        
                         const timeInHours = time ? Math.round(time / 3600) : 0
                         const newTimeInHours = time ? Math.round((time + 4 * 86400) / 3600) : Math.round((4 * 86400) / 3600)
                         logmc(`§6[§bTPM§6]§3 Automatically ate a booster cookie cause you had ${timeInHours} hours left. Now you have ${newTimeInHours} hours`)

@@ -34,34 +34,6 @@ export async function sleep(ms: number): Promise<void> {
     return await new Promise(resolve => setTimeout(resolve, ms))
 }
 
-/**
- * Better version of bot.once that supports filtering and timeout
- * @param bot The bot instance
- * @param event The event name to listen for
- * @param filter Optional filter function to determine if event matches
- * @param timeout Optional timeout in milliseconds (default: 10000)
- * @returns Promise that resolves when the event fires and filter passes
- */
-export async function betterOnce(bot: any, event: string, filter?: (data: any) => boolean, timeout: number = 10000): Promise<any> {
-    return new Promise((resolve, reject) => {
-        const timeoutHandle = setTimeout(() => {
-            bot.removeListener(event, handler)
-            reject(new Error(`Timeout waiting for event: ${event}`))
-        }, timeout)
-        
-        const handler = (data: any) => {
-            // If no filter provided, or filter returns true
-            if (!filter || filter(data)) {
-                clearTimeout(timeoutHandle)
-                bot.removeListener(event, handler)
-                resolve(data)
-            }
-        }
-        
-        bot.on(event, handler)
-    })
-}
-
 export function getWindowTitle(window) {
     if (window.title) {
         let parsed = JSON.parse(window.title)

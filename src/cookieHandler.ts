@@ -261,6 +261,7 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
         
         // Get all items in player inventory
         const inventoryItems = bot.inventory.items()
+        debug(`Found ${inventoryItems.length} items in inventory`)
         
         // Search for cookie in inventory
         let cookieItem = null
@@ -295,20 +296,19 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
             return false
         }
         
-        // Move cookie to hotbar slot 8 (last hotbar slot)
-        const hotbarSlot = 8
-        debug(`Moving cookie from slot ${cookieItem.slot} to hotbar slot ${hotbarSlot}`)
+        debug(`Attempting to equip and consume cookie from slot ${cookieItem.slot}`)
         
-        // Equip the cookie to hotbar
+        // Equip the cookie to hand
         await bot.equip(cookieItem, 'hand')
+        debug('Cookie equipped to hand')
         await sleep(250)
         
         // Activate/consume the item
-        debug('Activating cookie')
+        debug('Activating cookie with right-click')
         bot.activateItem()
         await sleep(500) // Give time for consumption
         
-        debug('Cookie consumed from inventory')
+        debug('Cookie consumption command sent')
         return true
     } catch (error) {
         debug(`consumeCookieFromInventory error:`, error)

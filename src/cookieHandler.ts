@@ -3,6 +3,7 @@ import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
 import { clickWindow, getSlotLore, sleep, betterOnce } from './utils'
 import { getCurrentPurse } from './BAF'
+import { clickAndWaitForWindow } from './bazaarHelpers'
 
 // Helper logging functions to match the provided code style
 const logmc = printMcChatToConsole
@@ -339,20 +340,33 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                 } else {
                     bot.chat(`/bz booster cookie`)
                     await betterOnce(bot, 'windowOpen')
-                    await bot.betterClick(11)
-                    await betterOnce(bot, 'windowOpen')
+                    
+                    // Click slot 11 (cookie item) and wait for product window
+                    const clickedCookie = await clickAndWaitForWindow(bot, 11, 2000, 2)
+                    if (!clickedCookie) {
+                        throw new Error('Failed to open cookie product window')
+                    }
                     await sleep(250)
-                    await bot.betterClick(10)
-                    await betterOnce(bot, 'windowOpen')
+                    
+                    // Click slot 10 (buy instantly) and wait for confirm window
+                    const clickedBuy = await clickAndWaitForWindow(bot, 10, 2000, 2)
+                    if (!clickedBuy) {
+                        throw new Error('Failed to open buy confirmation window')
+                    }
                     await sleep(250)
-                    await bot.betterClick(10) // This click buys the cookie
+                    
+                    // Click slot 10 (confirm) to buy the cookie
+                    await clickWindow(bot, 10)
+                    
+                    await sleep(250) // Give time for purchase to process
+                    
                     try {
                         // Check for full inv
                         await betterOnce(bot, "message", (message) => {
                             let text = message.getText(null)
                             debug("cookie text", text)
                             return text.includes("One or more items didn't fit in your inventory")
-                        })
+                        }, 3000) // 3 second timeout for message
                         logmc(`§6[§bTPM§6]§c Your inv is full so I can't eat this cookie. You have one in your stash now`)
                         resolve(`Full inv :(`)
                         bot.betterWindowClose()

@@ -274,7 +274,7 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
         
         // Check if we already have enough cookie time
-        if (currentCookieTime && currentCookieTime > autoCookie) {
+        if (currentCookieTime && currentCookieTime >= autoCookie) {
             printMcChatToConsole(`§f[§4BAF§f]: §3Not buying a cookie because you have ${Math.round(currentCookieTime / 3600)}h`)
             log(`Not buying cookie - have ${Math.round(currentCookieTime / 3600)}h remaining`, 'info')
             return

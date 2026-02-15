@@ -14,6 +14,11 @@ const COOKIE_PRICE_API = 'https://api.hypixel.net/v2/skyblock/bazaar'
 const DEFAULT_COOKIE_PRICE = 5000000 // 5M coins fallback
 const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
 
+// Timing constants for cookie consumption
+const EQUIP_DELAY_MS = 250 // Delay after equipping item
+const CONSUME_DELAY_MS = 500 // Delay after consuming item
+const INVENTORY_UPDATE_DELAY_MS = 500 // Delay for item to appear in inventory after purchase
+
 // Track cookie time globally
 let cookieTime: number = 0
 
@@ -301,12 +306,12 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
         // Equip the cookie to hand
         await bot.equip(cookieItem, 'hand')
         debug('Cookie equipped to hand')
-        await sleep(250)
+        await sleep(EQUIP_DELAY_MS)
         
         // Activate/consume the item
         debug('Activating cookie with right-click')
         bot.activateItem()
-        await sleep(500) // Give time for consumption
+        await sleep(CONSUME_DELAY_MS) // Give time for consumption
         
         debug('Cookie consumption command sent')
         return true
@@ -442,7 +447,7 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                         bot.betterWindowClose()
                         
                         // Wait a bit for the item to appear in inventory
-                        await sleep(500)
+                        await sleep(INVENTORY_UPDATE_DELAY_MS)
                         
                         // Try to consume from inventory first (normal case)
                         const consumedFromInventory = await consumeCookieFromInventory(bot)

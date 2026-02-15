@@ -204,16 +204,24 @@ function parseCookieDuration(durationText: string): number {
 }
 
 /**
- * Finds a cookie in the current window and moves it to the specified slot
+ * Finds a cookie in storage and prepares it for consumption
  * @param bot The bot instance
  * @param itemId The item ID to search for (e.g., 'COOKIE' for booster cookie)
- * @returns Promise that resolves when the item is found and moved
+ * @returns Promise that resolves when the item is found and ready to be clicked
  */
 async function getItemAndMove(bot: MyBot, itemId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         try {
+            // Open storage first
+            bot.chat('/storage')
+            
+            // Wait for storage window to open
+            await betterOnce(bot, 'windowOpen')
+            
+            await sleep(250)
+            
             if (!bot.currentWindow) {
-                reject(new Error('No window open'))
+                reject(new Error('No window open after /storage'))
                 return
             }
             
@@ -252,8 +260,10 @@ async function getItemAndMove(bot: MyBot, itemId: string): Promise<void> {
                 return
             }
             
-            // Move the cookie to the hotbar (slot 36 is the first hotbar slot)
-            // In Hypixel, clicking on the cookie in storage equips it to cursor
+            // Click on the cookie to open it
+            await clickWindow(bot, cookieSlot)
+            log(`[getItemAndMove] Clicked ${itemId} in slot ${cookieSlot}`, 'debug')
+            
             resolve()
         } catch (error) {
             log(`[getItemAndMove] Error: ${error}`, 'error')
@@ -336,28 +346,17 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
                 
                 await sleep(500)
                 
-                // Open storage to get the cookie
-                bot.chat('/storage')
+                // Call getItemAndMove to open storage and click the cookie
                 await getItemAndMove(bot, 'COOKIE')
+                
+                // Wait for the cookie consumption window to open
                 await betterOnce(bot, 'windowOpen')
                 
-                // Find and click the cookie to consume it
-                if (bot.currentWindow) {
-                    let cookieSlot = null
-                    for (const slot of bot.currentWindow.slots) {
-                        if (slot && (slot.name === 'cookie' || 
-                            (slot.nbt?.value as any)?.display?.value?.Name?.value?.toString().toLowerCase().includes('booster cookie'))) {
-                            cookieSlot = slot.slot
-                            break
-                        }
-                    }
-                    
-                    if (cookieSlot) {
-                        await clickWindow(bot, cookieSlot)
-                        log('[Cookie] Activated cookie', 'debug')
-                    }
-                }
+                // Click slot 11 to consume the cookie (this is the "Consume" button in the cookie GUI)
+                await clickWindow(bot, 11)
+                log('[Cookie] Activated cookie', 'debug')
                 
+                // Close window (just to be safe)
                 if (bot.currentWindow) {
                     bot.closeWindow(bot.currentWindow)
                 }

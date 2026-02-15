@@ -1,12 +1,15 @@
 import { MyBot } from '../types/autobuy'
 import { getConfigProperty } from './configHelper'
 import { log, printMcChatToConsole } from './logger'
-import { clickWindow, getSlotLore, sleep } from './utils'
+import { clickWindow, getSlotLore, sleep, betterOnce } from './utils'
 import { getCurrentPurse } from './BAF'
 
 const COOKIE_PRICE_API = 'https://api.hypixel.net/v2/skyblock/bazaar'
 const DEFAULT_COOKIE_PRICE = 5000000 // 5M coins fallback
 const MAX_COOKIE_PRICE = 20000000 // 20M coins maximum
+
+// Track cookie time globally
+let cookieTime: number = 0
 
 /**
  * Gets the current bazaar price of a booster cookie
@@ -201,213 +204,182 @@ function parseCookieDuration(durationText: string): number {
 }
 
 /**
- * Buys and consumes a booster cookie
+ * Finds a cookie in the current window and moves it to the specified slot
+ * @param bot The bot instance
+ * @param itemId The item ID to search for (e.g., 'COOKIE' for booster cookie)
+ * @returns Promise that resolves when the item is found and moved
  */
-async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
-    try {
-        const price = await getCookiePrice()
-        const purse = getPurse(bot)
-        
-        log(`Cookie price: ${price}, Purse: ${purse}`, 'info')
-        
-        // Check if cookie is too expensive
-        if (price > MAX_COOKIE_PRICE) {
-            printMcChatToConsole(`§f[§4BAF§f]: §cCookie costs ${Math.round(price / 1000000)}M - too expensive, not buying`)
-            log('Cookie too expensive, not buying', 'warn')
-            return
-        }
-        
-        // Check affordability based on actual cookie price
-        if (purse < price * 1.5) {
-            printMcChatToConsole(`§f[§4BAF§f]: §c[AutoCookie] Not enough coins to buy cookie (need ${Math.round(price / 1000000)}M, have ${Math.round(purse / 1000000)}M)`)
-            log('[AutoCookie] Not enough coins to buy cookie', 'warn')
-            return
-        }
-        
-        // Buy the cookie from bazaar
-        log('Opening bazaar to buy cookie...', 'info')
-        bot.chat('/bz booster cookie')
-        
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for bazaar'))
-            }, 10000)
-            
-            const handler = () => {
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', handler)
-                resolve()
+async function getItemAndMove(bot: MyBot, itemId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        try {
+            if (!bot.currentWindow) {
+                reject(new Error('No window open'))
+                return
             }
             
-            bot.once('windowOpen', handler)
-        })
-        
-        await sleep(500)
-        
-        // Click on cookie (slot 11 - center item in bazaar)
-        log('Clicking on cookie item...', 'debug')
-        clickWindow(bot, 11).catch(err => log(`Error clicking cookie: ${err}`, 'error'))
-        
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for cookie details'))
-            }, 10000)
-            
-            const handler = () => {
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', handler)
-                resolve()
-            }
-            
-            bot.once('windowOpen', handler)
-        })
-        
-        await sleep(500)
-        
-        // Click "Buy Instantly" button (slot 10)
-        log('Clicking Buy Instantly...', 'debug')
-        clickWindow(bot, 10).catch(err => log(`Error clicking buy instantly: ${err}`, 'error'))
-        
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for purchase confirmation'))
-            }, 10000)
-            
-            const handler = () => {
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', handler)
-                resolve()
-            }
-            
-            bot.once('windowOpen', handler)
-        })
-        
-        await sleep(500)
-        
-        // Confirm purchase (slot 10 again)
-        log('Confirming cookie purchase...', 'debug')
-        clickWindow(bot, 10).catch(err => log(`Error confirming purchase: ${err}`, 'error'))
-        
-        // Wait for purchase to complete
-        await sleep(2000)
-        
-        // Check for full inventory message
-        let inventoryFull = false
-        const messageHandler = (message: any) => {
-            const text = message.getText(null)
-            if (text.includes("One or more items didn't fit in your inventory")) {
-                inventoryFull = true
-            }
-        }
-        
-        bot.on('message', messageHandler)
-        await sleep(1000)
-        bot.removeListener('message', messageHandler)
-        
-        if (inventoryFull) {
-            printMcChatToConsole(`§f[§4BAF§f]: §cYour inventory is full, cookie is in stash`)
-            log('Inventory full, cookie in stash', 'warn')
-            if (bot.currentWindow) {
-                bot.closeWindow(bot.currentWindow)
-            }
-            return
-        }
-        
-        // Close any open windows
-        if (bot.currentWindow) {
-            bot.closeWindow(bot.currentWindow)
-        }
-        
-        await sleep(1000)
-        
-        // Open storage to find and consume the cookie
-        log('Opening storage to consume cookie...', 'info')
-        bot.chat('/storage')
-        
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for storage'))
-            }, 10000)
-            
-            const handler = () => {
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', handler)
-                resolve()
-            }
-            
-            bot.once('windowOpen', handler)
-        })
-        
-        await sleep(500)
-        
-        // Find the cookie in the storage
-        // Booster cookies have the item name 'cookie' in Minecraft 1.8.9
-        if (!bot.currentWindow) {
-            log('Storage window not available', 'error')
-            return
-        }
-        
-        let cookieSlot = null
-        for (const slot of bot.currentWindow.slots) {
-            if (slot && slot.name === 'cookie') {
-                cookieSlot = slot.slot
-                log(`Found cookie in slot ${cookieSlot}`, 'debug')
-                break
-            }
-        }
-        
-        if (!cookieSlot) {
-            // Try looking at display names if the item name check failed
+            // Search for the cookie in all slots
+            let cookieSlot = null
             for (const slot of bot.currentWindow.slots) {
-                if (slot && slot.nbt?.value) {
-                    try {
-                        const nbtValue = slot.nbt.value as any
-                        if (nbtValue.display?.value?.Name?.value) {
-                            const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
-                            if (displayName.includes('booster cookie')) {
-                                cookieSlot = slot.slot
-                                log(`Found cookie by display name in slot ${cookieSlot}`, 'debug')
-                                break
+                if (slot) {
+                    // Check by item name
+                    if (slot.name === 'cookie') {
+                        cookieSlot = slot.slot
+                        log(`[getItemAndMove] Found ${itemId} in slot ${cookieSlot}`, 'debug')
+                        break
+                    }
+                    
+                    // Check by display name in NBT
+                    if (slot.nbt?.value) {
+                        try {
+                            const nbtValue = slot.nbt.value as any
+                            if (nbtValue.display?.value?.Name?.value) {
+                                const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
+                                if (displayName.includes('booster cookie')) {
+                                    cookieSlot = slot.slot
+                                    log(`[getItemAndMove] Found ${itemId} by display name in slot ${cookieSlot}`, 'debug')
+                                    break
+                                }
                             }
+                        } catch (e) {
+                            // Skip slots with invalid NBT
                         }
-                    } catch (e) {
-                        // Skip slots with invalid NBT
                     }
                 }
             }
+            
+            if (!cookieSlot) {
+                reject(new Error(`Could not find ${itemId} in window`))
+                return
+            }
+            
+            // Move the cookie to the hotbar (slot 36 is the first hotbar slot)
+            // In Hypixel, clicking on the cookie in storage equips it to cursor
+            resolve()
+        } catch (error) {
+            log(`[getItemAndMove] Error: ${error}`, 'error')
+            reject(error)
         }
-        
-        if (!cookieSlot) {
-            log('Could not find cookie in storage', 'warn')
+    })
+}
+
+/**
+ * Buys and consumes a booster cookie - Updated implementation based on problem statement
+ */
+async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
+            
+            // Check if we already have enough cookie time
+            if (currentCookieTime && currentCookieTime > autoCookie) {
+                printMcChatToConsole(`§f[§4BAF§f]: §3Not buying a cookie because you have ${Math.round(currentCookieTime / 3600)}h`)
+                log(`Not buying cookie - have ${Math.round(currentCookieTime / 3600)}h remaining`, 'info')
+                resolve()
+                return
+            }
+            
+            const price = await getCookiePrice()
+            const purse = getPurse(bot)
+            
+            log(`Cookie price: ${price}, Purse: ${purse}`, 'info')
+            
+            // Check if cookie is too expensive or not enough coins
+            if (price > MAX_COOKIE_PRICE || purse < price * 2) {
+                printMcChatToConsole(`§f[§4BAF§f]: §cCookie costs ${Math.round(price / 1000000)}M so not buying :(`)
+                log(`Cookie expensive or insufficient funds: price=${price}, purse=${purse}`, 'warn')
+                resolve()
+                return
+            }
+            
+            // Start buying the cookie
+            log('Opening bazaar to buy cookie...', 'info')
+            bot.chat('/bz booster cookie')
+            await betterOnce(bot, 'windowOpen')
+            
+            // Click on cookie item (slot 11)
+            await clickWindow(bot, 11)
+            await betterOnce(bot, 'windowOpen')
+            
+            await sleep(250)
+            
+            // Click "Buy Instantly" button (slot 10)
+            await clickWindow(bot, 10)
+            await betterOnce(bot, 'windowOpen')
+            
+            await sleep(250)
+            
+            // Confirm purchase (slot 10 again)
+            await clickWindow(bot, 10)
+            
+            try {
+                // Check for full inventory message
+                await betterOnce(bot, 'message', (message) => {
+                    let text = message.getText(null)
+                    log(`[Cookie] Message received: ${text}`, 'debug')
+                    return text == `One or more items didn't fit in your inventory and were added to your item stash! Click here to pick them up!`
+                }, 3000)
+                
+                printMcChatToConsole(`§f[§4BAF§f]: §cYour inv is full so I can't eat this cookie. You have one in your stash now`)
+                log('Inventory full, cookie in stash', 'warn')
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                resolve()
+            } catch (e) {
+                // No full inventory message - cookie was bought successfully
+                log(`[Cookie] No full inventory error (this is good): ${e}`, 'debug')
+                
+                // Close any open windows
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                
+                await sleep(500)
+                
+                // Open storage to get the cookie
+                bot.chat('/storage')
+                await getItemAndMove(bot, 'COOKIE')
+                await betterOnce(bot, 'windowOpen')
+                
+                // Find and click the cookie to consume it
+                if (bot.currentWindow) {
+                    let cookieSlot = null
+                    for (const slot of bot.currentWindow.slots) {
+                        if (slot && (slot.name === 'cookie' || 
+                            (slot.nbt?.value as any)?.display?.value?.Name?.value?.toString().toLowerCase().includes('booster cookie'))) {
+                            cookieSlot = slot.slot
+                            break
+                        }
+                    }
+                    
+                    if (cookieSlot) {
+                        await clickWindow(bot, cookieSlot)
+                        log('[Cookie] Activated cookie', 'debug')
+                    }
+                }
+                
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                
+                const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
+                const currentHours = Math.round(currentCookieTime / 3600)
+                
+                printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
+                printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
+                log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
+                
+                // Update global cookie time
+                cookieTime += 4 * 8.64e+7
+                
+                resolve()
+            }
+        } catch (e) {
+            log(`Error buying cookie: ${e}`, 'error')
             if (bot.currentWindow) {
                 bot.closeWindow(bot.currentWindow)
             }
-            return
+            resolve()
         }
-        
-        // Click on the cookie to activate it
-        log(`Clicking cookie in slot ${cookieSlot}...`, 'debug')
-        clickWindow(bot, cookieSlot).catch(err => log(`Error clicking cookie: ${err}`, 'error'))
-        
-        await sleep(1000)
-        
-        // Close storage
-        if (bot.currentWindow) {
-            bot.closeWindow(bot.currentWindow)
-        }
-        
-        const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
-        const currentHours = Math.round(currentCookieTime / 3600)
-        
-        printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
-        printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
-        log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
-        
-    } catch (error) {
-        log(`Error buying cookie: ${error}`, 'error')
-        printMcChatToConsole(`§f[§4BAF§f]: §cError buying cookie: ${error}`)
-        if (bot.currentWindow) {
-            bot.closeWindow(bot.currentWindow)
-        }
-    }
+    })
 }

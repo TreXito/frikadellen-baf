@@ -320,6 +320,9 @@ async function getItemAndMove(bot: MyBot, itemId: string): Promise<void> {
 async function buyCookie(bot: MyBot, time: number | null = null): Promise<string> {
     return new Promise(async (resolve, reject) => {
         try {
+            // Ensure helpers are initialized
+            addCookieHelpers(bot)
+            
             const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
             
             if (time && time >= autoCookie) {
@@ -334,19 +337,19 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                 } else {
                     bot.chat(`/bz booster cookie`)
                     await betterOnce(bot, 'windowOpen')
-                    bot.betterClick(11)
+                    await bot.betterClick(11)
                     await betterOnce(bot, 'windowOpen')
                     await sleep(250)
-                    bot.betterClick(10)
+                    await bot.betterClick(10)
                     await betterOnce(bot, 'windowOpen')
                     await sleep(250)
-                    bot.betterClick(10) // This click buys the cookie
+                    await bot.betterClick(10) // This click buys the cookie
                     try {
                         // Check for full inv
                         await betterOnce(bot, "message", (message) => {
                             let text = message.getText(null)
                             debug("cookie text", text)
-                            return text == `One or more items didn't fit in your inventory and were added to your item stash! Click here to pick them up!`
+                            return text.includes("One or more items didn't fit in your inventory")
                         })
                         logmc(`§6[§bTPM§6]§c Your inv is full so I can't eat this cookie. You have one in your stash now`)
                         resolve(`Full inv :(`)
@@ -357,11 +360,13 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                         bot.betterWindowClose()
                         await getItemAndMove(bot, 'COOKIE')
                         await betterOnce(bot, 'windowOpen')
-                        bot.betterClick(11)
+                        await bot.betterClick(11)
                         debug("activated cookie")
                         bot.betterWindowClose() // Just to be safe
-                        logmc(`§6[§bTPM§6]§3 Automatically ate a booster cookie cause you had ${Math.round(time / 3600)} hours left. Now you have ${Math.round((time + 4 * 86400) / 3600)} hours`)
-                        cookieTime += 4 * 8.64e+7
+                        const timeInHours = time ? Math.round(time / 3600) : 0
+                        const newTimeInHours = time ? Math.round((time + 4 * 86400) / 3600) : Math.round((4 * 86400) / 3600)
+                        logmc(`§6[§bTPM§6]§3 Automatically ate a booster cookie cause you had ${timeInHours} hours left. Now you have ${newTimeInHours} hours`)
+                        cookieTime += 4 * 86400 // Add 4 days in seconds
                         resolve(`Cookie bought and consumed successfully`)
                     }
                 }

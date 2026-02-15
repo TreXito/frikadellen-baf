@@ -479,19 +479,14 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                                 await getItemAndMove(bot, 'COOKIE')
                                 await sleep(STORAGE_OPERATION_DELAY_MS) // Wait for window to open/update
                                 
-                                // Try to consume from inventory again (cookie might have been moved)
-                                const consumedAfterStorage = await consumeCookieFromInventory(bot)
-                                if (!consumedAfterStorage) {
-                                    error('Failed to consume cookie from storage, trying direct click as last resort')
-                                    // As a last resort, try clicking the consume button in the cookie detail window
-                                    // This assumes the cookie detail window is open with consume button at COOKIE_CONSUME_SLOT
-                                    if (bot.currentWindow) {
-                                        await bot.betterClick(COOKIE_CONSUME_SLOT)
-                                        debug(`Clicked slot ${COOKIE_CONSUME_SLOT} to consume cookie`)
-                                        await sleep(STORAGE_OPERATION_DELAY_MS)
-                                    } else {
-                                        error('Cannot consume cookie: no window open and cookie not found in inventory')
-                                    }
+                                // After getItemAndMove clicks the cookie in storage, the cookie detail window is now open
+                                // Click the consume button directly in the open cookie detail window
+                                if (bot.currentWindow) {
+                                    await bot.betterClick(COOKIE_CONSUME_SLOT)
+                                    debug(`Clicked slot ${COOKIE_CONSUME_SLOT} to consume cookie from storage detail window`)
+                                    await sleep(STORAGE_OPERATION_DELAY_MS)
+                                } else {
+                                    error('Cannot consume cookie: no window open after getItemAndMove')
                                 }
                             } catch (storageError) {
                                 error(`Storage fallback failed: ${storageError}`)

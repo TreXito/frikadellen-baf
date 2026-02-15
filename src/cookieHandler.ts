@@ -19,6 +19,7 @@ const EQUIP_DELAY_MS = 250 // Delay after equipping item
 const CONSUME_DELAY_MS = 500 // Delay after consuming item
 const INVENTORY_UPDATE_DELAY_MS = 1500 // Delay for item to appear in inventory after purchase (increased from 500ms)
 const STORAGE_OPERATION_DELAY_MS = 500 // Delay for storage window operations
+const COOKIE_CONSUME_SLOT = 11 // Slot 11 is the consume button in the cookie item detail window
 
 // Track cookie time globally
 let cookieTime: number = 0
@@ -481,18 +482,20 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                                 // Try to consume from inventory again (cookie might have been moved)
                                 const consumedAfterStorage = await consumeCookieFromInventory(bot)
                                 if (!consumedAfterStorage) {
-                                    debug('Failed to consume cookie from storage, trying direct click')
-                                    // As a last resort, try clicking slot 11 (cookie consume button in item detail window)
-                                    // Note: This assumes the cookie detail window is open and slot 11 is the consume button
+                                    error('Failed to consume cookie from storage, trying direct click as last resort')
+                                    // As a last resort, try clicking the consume button in the cookie detail window
+                                    // This assumes the cookie detail window is open with consume button at COOKIE_CONSUME_SLOT
                                     if (bot.currentWindow) {
-                                        await bot.betterClick(11)
-                                        debug("Clicked slot 11 to consume cookie")
+                                        await bot.betterClick(COOKIE_CONSUME_SLOT)
+                                        debug(`Clicked slot ${COOKIE_CONSUME_SLOT} to consume cookie`)
                                         await sleep(STORAGE_OPERATION_DELAY_MS)
+                                    } else {
+                                        error('Cannot consume cookie: no window open and cookie not found in inventory')
                                     }
                                 }
                             } catch (storageError) {
-                                debug(`Storage fallback failed: ${storageError}`)
-                                // Continue anyway - cookie might still be consumed
+                                error(`Storage fallback failed: ${storageError}`)
+                                // Continue anyway - cookie might still be consumed or will be available next time
                             } finally {
                                 // Ensure window is closed
                                 if (bot.currentWindow) {

@@ -8,7 +8,7 @@ import { recordOrder, canPlaceOrder, refreshOrderCounts } from './bazaarOrderMan
 import { enqueueCommand, CommandPriority, clearBazaarOrders } from './commandQueue'
 import { isBazaarDailyLimitReached, isBazaarOrderOnCooldown, getBazaarOrderCooldownRemaining } from './ingameMessageHandler'
 import { getCurrentPurse } from './BAF'
-import { findItemInSearchResults, getSlotName } from './bazaarHelpers'
+import { findItemInSearchResults, getSlotName, verifyAndClickSlot } from './bazaarHelpers'
 
 // Constants
 const RETRY_DELAY_MS = 1100
@@ -731,8 +731,17 @@ export function placeBazaarOrder(bot: MyBot, itemName: string, amount: number, p
                     const name = getSlotName(slot)
                     log(`[BazaarDebug] Found item "${name}" at slot ${itemSlot}`, 'info')
                     printMcChatToConsole(`§f[§4BAF§f]: §7[Found] §e${name}§7 at slot §b${itemSlot}`)
-                    await sleep(200)
-                    await clickWindow(bot, itemSlot).catch(e => log(`[BazaarDebug] clickWindow error (expected): ${e}`, 'debug'))
+                    
+                    // BUG FIX: Verify slot contains the item before clicking to prevent "Unknown" crashes
+                    const clickSuccess = await verifyAndClickSlot(bot, itemSlot, name, 1000)
+                    if (!clickSuccess) {
+                        log(`[BAF] Failed to verify and click slot ${itemSlot} for "${name}"`, 'error')
+                        printMcChatToConsole(`§f[§4BAF§f]: §c[Error] Failed to click item "${name}" - window may have changed`)
+                        bot._client.removeListener('open_window', windowListener)
+                        if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
+                        reject(new Error(`Failed to click item "${name}" at slot ${itemSlot}`))
+                        return
+                    }
                 }
                 // 3. Amount screen - ONLY for buy orders (sell offers skip this step)
                 else if (findSlotWithName(window, 'Custom Amount') !== -1 && isBuyOrder) {

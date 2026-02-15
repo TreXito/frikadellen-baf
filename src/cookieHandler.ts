@@ -267,9 +267,13 @@ async function consumeCookieFromInventory(bot: MyBot): Promise<boolean> {
         
         // Ensure no window is open to allow clean inventory access
         if (bot.currentWindow) {
-            debug('Closing open window to ensure clean inventory access')
-            bot.betterWindowClose()
-            await sleep(250)
+            try {
+                debug('Closing open window to ensure clean inventory access')
+                bot.betterWindowClose()
+                await sleep(250)
+            } catch (e) {
+                debug('Error closing window:', e)
+            }
         }
         
         // Get all items in player inventory
@@ -478,18 +482,26 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
                                 const consumedAfterStorage = await consumeCookieFromInventory(bot)
                                 if (!consumedAfterStorage) {
                                     debug('Failed to consume cookie from storage, trying direct click')
-                                    // As a last resort, try clicking slot 11 (cookie item position in storage window)
+                                    // As a last resort, try clicking slot 11 (cookie consume button in item detail window)
+                                    // Note: This assumes the cookie detail window is open and slot 11 is the consume button
                                     if (bot.currentWindow) {
                                         await bot.betterClick(11)
                                         debug("Clicked slot 11 to consume cookie")
                                         await sleep(STORAGE_OPERATION_DELAY_MS)
                                     }
                                 }
-                                bot.betterWindowClose()
                             } catch (storageError) {
                                 debug(`Storage fallback failed: ${storageError}`)
-                                bot.betterWindowClose()
                                 // Continue anyway - cookie might still be consumed
+                            } finally {
+                                // Ensure window is closed
+                                if (bot.currentWindow) {
+                                    try {
+                                        bot.betterWindowClose()
+                                    } catch (e) {
+                                        debug('Error closing window in finally:', e)
+                                    }
+                                }
                             }
                         }
                         

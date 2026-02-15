@@ -326,7 +326,7 @@ async function buyCookie(bot: MyBot, time: number | null = null): Promise<string
             
             const autoCookie = getConfigProperty('AUTO_COOKIE') * 3600 // Convert hours to seconds
             
-            // Standard logic: don't buy when time > threshold (have enough time)
+            // Standard logic: don't buy when time > threshold, buy when time <= threshold
             if (time && time > autoCookie) {
                 logmc(`§6[§bTPM§6]§3 Not buying a cookie because you have ${Math.round(time / 3600)}h`)
                 resolve(`Enough time`)

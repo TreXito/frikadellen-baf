@@ -30,6 +30,11 @@ export async function onWebsocketCreateAuction(bot: MyBot, data: SellData) {
 }
 
 async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
+    // Reset state variables at the start of each new auction listing attempt
+    // to prevent stale state from previous failed/interrupted listings
+    setPrice = false
+    durationSet = false
+    
     let handler = function (window: any) {
         sellHandler(data, bot, window, ws, () => {
             clearTimeout(timeout)
@@ -41,6 +46,9 @@ async function sellItem(data: SellData, bot: MyBot, ws: WebSocket) {
         log('Seems something went wrong while selling. Removing lock', 'warn')
         bot.removeListener('windowOpen', handler)
         bot.state = null
+        // Reset state variables on timeout to prevent stale state
+        setPrice = false
+        durationSet = false
     }, 10000)
 
     // CRITICAL: Clear all previous windowOpen listeners to prevent conflicts
@@ -71,9 +79,11 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
             const item = sellWindow.slots[i]
             if (item && item.nbt.value.display.value.Name.value.includes('Create Auction')) {
                 if (item && (item.nbt as any).value?.display?.value?.Lore?.value?.value?.toString().includes('You reached the maximum number')) {
-                    log('Maximum number of auctons reached -> cant sell')
+                    log('Maximum number of auctions reached -> cant sell')
                     removeEventListenerCallback()
                     bot.state = null
+                    setPrice = false
+                    durationSet = false
                     return
                 }
                 clickSlot = item.slot
@@ -104,6 +114,8 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 }
                 previousError = 'Slot empty'
                 bot.state = null
+                setPrice = false
+                durationSet = false
                 removeEventListenerCallback()
                 log('No item at index ' + itemSlot + ' found -> probably already sold', 'warn')
                 return
@@ -122,6 +134,8 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 }
                 previousError = 'Item doesnt match'
                 bot.state = null
+                setPrice = false
+                durationSet = false
                 removeEventListenerCallback()
                 log('Item at index ' + itemSlot + '" does not match item that is supposed to be sold: "' + data.id + '" -> dont sell', 'warn')
                 log(JSON.stringify(sellWindow.slots[itemSlot]))

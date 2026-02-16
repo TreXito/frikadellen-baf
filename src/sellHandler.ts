@@ -223,8 +223,53 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         setPrice = false
         durationSet = false
         bot.state = null
-        printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${data.itemName} §ffor ${numberWithThousandsSeparators(data.price)} coins`)
-        sendWebhookItemListed(data.itemName, numberWithThousandsSeparators(data.price), configuredDuration)
+        
+        // Extract actual item name and price from the auction view window
+        // instead of using potentially stale data parameter
+        let actualItemName = data.itemName
+        let actualPrice = data.price
+        
+        try {
+            // The created auction item is typically in slot 13
+            const auctionItem = sellWindow.slots[13]
+            if (auctionItem) {
+                const displayName = auctionItem.nbt?.value?.display?.value?.Name?.value
+                if (displayName) {
+                    // Parse JSON formatted name or use plain string
+                    try {
+                        const parsed = JSON.parse(displayName)
+                        const text = parsed.text || ''
+                        const extra = parsed.extra?.map((e: any) => typeof e === 'string' ? e : e.text || '').join('') || ''
+                        actualItemName = removeMinecraftColorCodes(text + extra).trim()
+                    } catch (e) {
+                        actualItemName = removeMinecraftColorCodes(displayName).trim()
+                    }
+                }
+                
+                // Extract price from lore
+                const lore = auctionItem.nbt?.value?.display?.value?.Lore?.value?.value
+                if (lore && Array.isArray(lore)) {
+                    const startingBidLine = lore.find((line: string) => 
+                        removeMinecraftColorCodes(line).includes('Starting bid:') ||
+                        removeMinecraftColorCodes(line).includes('Buy it now:')
+                    )
+                    if (startingBidLine) {
+                        const cleanLine = removeMinecraftColorCodes(startingBidLine)
+                        // Extract number from formats like "Starting bid: 123,456 coins" or "Buy it now: 123,456 coins"
+                        const match = cleanLine.match(/:\s*([\d,]+)\s*coins/)
+                        if (match) {
+                            actualPrice = Number(match[1].replace(/,/g, ''))
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            log('Error extracting actual auction details from BIN Auction View: ' + JSON.stringify(e), 'warn')
+            // Fall back to data parameter if extraction fails
+        }
+        
+        printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${actualItemName} §ffor ${numberWithThousandsSeparators(actualPrice)} coins`)
+        sendWebhookItemListed(actualItemName, numberWithThousandsSeparators(actualPrice), configuredDuration)
         bot.closeWindow(sellWindow)
     }
 }

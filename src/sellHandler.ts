@@ -79,7 +79,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
             const item = sellWindow.slots[i]
             if (item && item.nbt.value.display.value.Name.value.includes('Create Auction')) {
                 if (item && (item.nbt as any).value?.display?.value?.Lore?.value?.value?.toString().includes('You reached the maximum number')) {
-                    log('Maximum number of auctons reached -> cant sell')
+                    log('Maximum number of auctions reached -> cant sell')
                     removeEventListenerCallback()
                     bot.state = null
                     setPrice = false

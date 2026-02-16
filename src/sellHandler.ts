@@ -239,7 +239,7 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                     try {
                         const parsed = JSON.parse(displayName)
                         const text = parsed.text || ''
-                        const extra = parsed.extra?.map((e: any) => typeof e === 'string' ? e : e.text || '').join('') || ''
+                        const extra = parsed.extra?.map((e: string | { text?: string }) => typeof e === 'string' ? e : e.text || '').join('') || ''
                         actualItemName = removeMinecraftColorCodes(text + extra).trim()
                     } catch (e) {
                         actualItemName = removeMinecraftColorCodes(displayName).trim()
@@ -249,10 +249,10 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
                 // Extract price from lore
                 const lore = auctionItem.nbt?.value?.display?.value?.Lore?.value?.value
                 if (lore && Array.isArray(lore)) {
-                    const startingBidLine = lore.find((line: string) => 
-                        removeMinecraftColorCodes(line).includes('Starting bid:') ||
-                        removeMinecraftColorCodes(line).includes('Buy it now:')
-                    )
+                    const startingBidLine = lore.find((line: string) => {
+                        const cleanLine = removeMinecraftColorCodes(line)
+                        return cleanLine.includes('Starting bid:') || cleanLine.includes('Buy it now:')
+                    })
                     if (startingBidLine) {
                         const cleanLine = removeMinecraftColorCodes(startingBidLine)
                         // Extract number from formats like "Starting bid: 123,456 coins" or "Buy it now: 123,456 coins"

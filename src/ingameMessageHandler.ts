@@ -743,10 +743,20 @@ export async function claimSoldItem(bot: MyBot): Promise<boolean> {
             // Click the claimable slot
             const slotName = removeMinecraftColorCodes(getSlotName(bot.currentWindow.slots[foundClaimable]))
             log(`[Startup] Clicking claimable auction "${slotName}" at slot ${foundClaimable}`, 'debug')
-            await clickWindow(bot, foundClaimable).catch(() => {})
-            await sleep(400)
             
-            // BUG 4 FIX: After clicking, check if we accidentally opened an active auction
+            // BUG FIX: Wait for new window to open after clicking the auction item
+            const detailWindowPromise = waitForNewWindow(bot, 5000)
+            await clickWindow(bot, foundClaimable).catch(() => {})
+            const detailOpened = await detailWindowPromise
+            
+            if (!detailOpened || !bot.currentWindow) {
+                log(`[Startup] Detail window did not open for "${slotName}", skipping`, 'warn')
+                continue
+            }
+            
+            await sleep(300)
+            
+            // After clicking, check if we accidentally opened an active auction
             if (bot.currentWindow) {
                 const title = getWindowTitle(bot.currentWindow)
                 

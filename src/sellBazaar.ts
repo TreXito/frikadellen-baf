@@ -349,19 +349,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
             log(`[SellBZ] Sell window: ${title}, step: ${currentStep}`, 'debug')
 
             try {
-                // Check if we're on the item detail page (has "Create Sell Offer" button)
-                const hasSellOfferButton = findSlotWithName(window, 'Create Sell Offer') !== -1
-
-                if (hasSellOfferButton && currentStep !== 'clickSellOffer') {
-                    currentStep = 'clickSellOffer'
-                    const sellOfferSlot = findSlotWithName(window, 'Create Sell Offer')
-                    log(`[SellBZ] Clicking Create Sell Offer (slot ${sellOfferSlot})`, 'debug')
-                    await sleep(200)
-                    await clickWindow(bot, sellOfferSlot).catch(() => {})
-                    return
-                }
-
-                // Search results page
+                // Search results page - handle first to establish initial context
                 if (title.includes('Bazaar') && currentStep === 'initial') {
                     currentStep = 'searchResults'
                     
@@ -388,8 +376,9 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                     return
                 }
 
-                // Price selection page (no amount page for sell offers)
-                if (findSlotWithName(window, 'Custom Price') !== -1) {
+                // Price selection page - check this BEFORE checking for "Create Sell Offer" button
+                // because after clicking "Create Sell Offer", the next window has "Custom Price"
+                if (findSlotWithName(window, 'Custom Price') !== -1 && currentStep !== 'setPrice') {
                     currentStep = 'setPrice'
                     const customPriceSlot = findSlotWithName(window, 'Custom Price')
                     log(`[SellBZ] Setting price to ${item.pricePerUnit}`, 'debug')
@@ -413,7 +402,19 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
                     return
                 }
 
-                // Confirmation page
+                // Check if we're on the item detail page (has "Create Sell Offer" button)
+                const hasSellOfferButton = findSlotWithName(window, 'Create Sell Offer') !== -1
+
+                if (hasSellOfferButton && currentStep !== 'clickSellOffer') {
+                    currentStep = 'clickSellOffer'
+                    const sellOfferSlot = findSlotWithName(window, 'Create Sell Offer')
+                    log(`[SellBZ] Clicking Create Sell Offer (slot ${sellOfferSlot})`, 'debug')
+                    await sleep(200)
+                    await clickWindow(bot, sellOfferSlot).catch(() => {})
+                    return
+                }
+
+                // Confirmation page - after price is set, confirm the order
                 if (currentStep === 'setPrice') {
                     currentStep = 'confirm'
                     log('[SellBZ] Confirming sell offer at slot 13', 'debug')

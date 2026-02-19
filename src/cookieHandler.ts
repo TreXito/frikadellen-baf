@@ -201,6 +201,18 @@ function parseCookieDuration(durationText: string): number {
 }
 
 /**
+ * Prints success message after consuming cookie
+ */
+function printCookieSuccessMessage(currentCookieTime: number) {
+    const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
+    const currentHours = Math.round(currentCookieTime / 3600)
+    
+    printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
+    printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
+    log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
+}
+
+/**
  * Buys and consumes a booster cookie
  */
 async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
@@ -335,16 +347,12 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
                         }
                     }
                     
-                    const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
-                    const currentHours = Math.round(currentCookieTime / 3600)
-                    
-                    printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
-                    printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
-                    log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
+                    printCookieSuccessMessage(currentCookieTime)
                     return
                 } catch (err) {
                     log(`Error consuming cookie from inventory: ${err}`, 'error')
-                    // Fall through to storage method
+                    // Reset cookieFound so storage fallback will execute
+                    cookieFound = false
                 }
                 
                 break
@@ -437,14 +445,9 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
             if (bot.currentWindow) {
                 bot.closeWindow(bot.currentWindow)
             }
+            
+            printCookieSuccessMessage(currentCookieTime)
         }
-        
-        const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
-        const currentHours = Math.round(currentCookieTime / 3600)
-        
-        printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
-        printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
-        log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
         
     } catch (error) {
         log(`Error buying cookie: ${error}`, 'error')

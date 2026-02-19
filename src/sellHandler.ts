@@ -291,7 +291,15 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         
         // Set a timeout to clean up the listener if auction creation fails
         setTimeout(() => {
-            bot.removeListener('message', messageListener)
+            const isListenerStillActive = bot.listeners('message').includes(messageListener)
+            if (isListenerStillActive) {
+                log('Auction confirmation timeout - removing listener and resetting state', 'warn')
+                bot.removeListener('message', messageListener)
+                removeEventListenerCallback()
+                setPrice = false
+                durationSet = false
+                bot.state = null
+            }
         }, 15000)
         
         clickWindow(bot, 11).catch(err => log(`Error clicking final confirm slot: ${err}`, 'error'))

@@ -215,14 +215,29 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         clickWindow(bot, 16).catch(err => log(`Error clicking duration confirm slot: ${err}`, 'error'))
     }
     if (title == 'Confirm BIN Auction') {
+        // Track whether the message listener is still active
+        let listenerActive = true
+        
         // Set up message listener to detect when auction is actually created
         const messageListener = (message: any) => {
-            const text = message.getText ? message.getText(null) : message.toString()
+            // Safely extract message text
+            let text = ''
+            try {
+                if (message && typeof message.getText === 'function') {
+                    text = message.getText(null)
+                } else if (message && typeof message.toString === 'function') {
+                    text = message.toString()
+                }
+            } catch (e) {
+                log(`Error extracting message text: ${e}`, 'debug')
+                return
+            }
             
             // Wait for the "BIN Auction started for" message from the game
             if (text.includes('BIN Auction started for')) {
                 log('Auction creation confirmed by game message')
                 bot.removeListener('message', messageListener)
+                listenerActive = false
                 
                 // Extract actual item name and price from the auction view window
                 // instead of using potentially stale data parameter
@@ -291,10 +306,10 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         
         // Set a timeout to clean up the listener if auction creation fails
         setTimeout(() => {
-            const isListenerStillActive = bot.listeners('message').includes(messageListener)
-            if (isListenerStillActive) {
+            if (listenerActive) {
                 log('Auction confirmation timeout - removing listener and resetting state', 'warn')
                 bot.removeListener('message', messageListener)
+                listenerActive = false
                 removeEventListenerCallback()
                 setPrice = false
                 durationSet = false

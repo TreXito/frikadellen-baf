@@ -324,7 +324,7 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
                 try {
                     log('Consuming cookie from inventory...', 'info')
                     
-                    // Equip the cookie to the hotbar
+                    // Equip the cookie to the hotbar/main hand slot
                     await bot.equip(item, 'hand')
                     await sleep(500)
                     
@@ -353,9 +353,8 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
                     log(`Error consuming cookie from inventory: ${err}`, 'error')
                     // Reset cookieFound so storage fallback will execute
                     cookieFound = false
+                    // Don't break - continue to check storage as fallback
                 }
-                
-                break
             }
         }
         

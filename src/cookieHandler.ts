@@ -201,6 +201,18 @@ function parseCookieDuration(durationText: string): number {
 }
 
 /**
+ * Prints success message after consuming cookie
+ */
+function printCookieSuccessMessage(currentCookieTime: number) {
+    const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
+    const currentHours = Math.round(currentCookieTime / 3600)
+    
+    printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
+    printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
+    log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
+}
+
+/**
  * Buys and consumes a booster cookie
  */
 async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
@@ -288,30 +300,8 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         log('Confirming cookie purchase...', 'debug')
         clickWindow(bot, 10).catch(err => log(`Error confirming purchase: ${err}`, 'error'))
         
-        // Wait for purchase to complete
+        // Wait for purchase to complete and inventory to update
         await sleep(2000)
-        
-        // Check for full inventory message
-        let inventoryFull = false
-        const messageHandler = (message: any) => {
-            const text = message.getText(null)
-            if (text.includes("One or more items didn't fit in your inventory")) {
-                inventoryFull = true
-            }
-        }
-        
-        bot.on('message', messageHandler)
-        await sleep(1000)
-        bot.removeListener('message', messageHandler)
-        
-        if (inventoryFull) {
-            printMcChatToConsole(`§f[§4BAF§f]: §cYour inventory is full, cookie is in stash`)
-            log('Inventory full, cookie in stash', 'warn')
-            if (bot.currentWindow) {
-                bot.closeWindow(bot.currentWindow)
-            }
-            return
-        }
         
         // Close any open windows
         if (bot.currentWindow) {
@@ -320,88 +310,143 @@ async function buyCookie(bot: MyBot, currentCookieTime: number): Promise<void> {
         
         await sleep(1000)
         
-        // Open storage to find and consume the cookie
-        log('Opening storage to consume cookie...', 'info')
-        bot.chat('/storage')
+        // First, try to find the cookie in the player's inventory
+        log('Looking for cookie in inventory...', 'debug')
+        let cookieFound = false
         
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for storage'))
-            }, 10000)
-            
-            const handler = () => {
-                clearTimeout(timeout)
-                bot.removeListener('windowOpen', handler)
-                resolve()
-            }
-            
-            bot.once('windowOpen', handler)
-        })
-        
-        await sleep(500)
-        
-        // Find the cookie in the storage
-        // Booster cookies have the item name 'cookie' in Minecraft 1.8.9
-        if (!bot.currentWindow) {
-            log('Storage window not available', 'error')
-            return
-        }
-        
-        let cookieSlot = null
-        for (const slot of bot.currentWindow.slots) {
-            if (slot && slot.name === 'cookie') {
-                cookieSlot = slot.slot
-                log(`Found cookie in slot ${cookieSlot}`, 'debug')
-                break
-            }
-        }
-        
-        if (!cookieSlot) {
-            // Try looking at display names if the item name check failed
-            for (const slot of bot.currentWindow.slots) {
-                if (slot && slot.nbt?.value) {
-                    try {
-                        const nbtValue = slot.nbt.value as any
-                        if (nbtValue.display?.value?.Name?.value) {
-                            const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
-                            if (displayName.includes('booster cookie')) {
-                                cookieSlot = slot.slot
-                                log(`Found cookie by display name in slot ${cookieSlot}`, 'debug')
-                                break
-                            }
+        const inventoryItems = bot.inventory.items()
+        for (const item of inventoryItems) {
+            if (item.name === 'cookie') {
+                log(`Found cookie in inventory slot ${item.slot}`, 'debug')
+                cookieFound = true
+                
+                // Consume the cookie from inventory
+                try {
+                    log('Consuming cookie from inventory...', 'info')
+                    
+                    // Equip the cookie to the hotbar/main hand slot
+                    await bot.equip(item, 'hand')
+                    await sleep(500)
+                    
+                    // Right-click to open the cookie GUI
+                    bot.activateItem()
+                    await sleep(1000)
+                    
+                    // Wait for the cookie GUI to open
+                    if (bot.currentWindow) {
+                        log('Cookie GUI opened, looking for consume button...', 'debug')
+                        
+                        // The consume button is typically in slot 11
+                        await sleep(500)
+                        clickWindow(bot, 11).catch(err => log(`Error clicking consume button: ${err}`, 'error'))
+                        await sleep(1000)
+                        
+                        // Close the window
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
                         }
-                    } catch (e) {
-                        // Skip slots with invalid NBT
                     }
+                    
+                    printCookieSuccessMessage(currentCookieTime)
+                    return
+                } catch (err) {
+                    log(`Error consuming cookie from inventory: ${err}`, 'error')
+                    // Reset cookieFound so storage fallback will execute
+                    cookieFound = false
+                    // Don't break - continue to check storage as fallback
                 }
             }
         }
         
-        if (!cookieSlot) {
-            log('Could not find cookie in storage', 'warn')
+        // If cookie not found in inventory, check if it went to storage
+        if (!cookieFound) {
+            log('Cookie not in inventory, checking storage...', 'info')
+            
+            // Open storage to find and consume the cookie
+            bot.chat('/storage')
+            
+            await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Timeout waiting for storage'))
+                }, 10000)
+                
+                const handler = () => {
+                    clearTimeout(timeout)
+                    bot.removeListener('windowOpen', handler)
+                    resolve()
+                }
+                
+                bot.once('windowOpen', handler)
+            })
+            
+            await sleep(500)
+            
+            // Find the cookie in the storage
+            if (!bot.currentWindow) {
+                log('Storage window not available', 'error')
+                return
+            }
+            
+            let cookieSlot = null
+            for (const slot of bot.currentWindow.slots) {
+                if (slot && slot.name === 'cookie') {
+                    cookieSlot = slot.slot
+                    log(`Found cookie in storage slot ${cookieSlot}`, 'debug')
+                    break
+                }
+            }
+            
+            if (!cookieSlot) {
+                // Try looking at display names if the item name check failed
+                for (const slot of bot.currentWindow.slots) {
+                    if (slot && slot.nbt?.value) {
+                        try {
+                            const nbtValue = slot.nbt.value as any
+                            if (nbtValue.display?.value?.Name?.value) {
+                                const displayName = nbtValue.display.value.Name.value.toString().toLowerCase()
+                                if (displayName.includes('booster cookie')) {
+                                    cookieSlot = slot.slot
+                                    log(`Found cookie by display name in slot ${cookieSlot}`, 'debug')
+                                    break
+                                }
+                            }
+                        } catch (e) {
+                            // Skip slots with invalid NBT
+                        }
+                    }
+                }
+            }
+            
+            if (!cookieSlot) {
+                log('Could not find cookie in storage either', 'warn')
+                printMcChatToConsole(`§f[§4BAF§f]: §cCookie purchased but could not be found to consume`)
+                if (bot.currentWindow) {
+                    bot.closeWindow(bot.currentWindow)
+                }
+                return
+            }
+            
+            // Click on the cookie in storage to open its detail view
+            log(`Clicking cookie in storage slot ${cookieSlot}...`, 'debug')
+            clickWindow(bot, cookieSlot).catch(err => log(`Error clicking cookie in storage: ${err}`, 'error'))
+            
+            await sleep(1000)
+            
+            // The cookie detail window should now be open
+            // Click slot 11 to consume it directly from storage
+            if (bot.currentWindow) {
+                log('Consuming cookie from storage detail view...', 'debug')
+                clickWindow(bot, 11).catch(err => log(`Error clicking consume in storage: ${err}`, 'error'))
+                await sleep(1000)
+            }
+            
+            // Close storage
             if (bot.currentWindow) {
                 bot.closeWindow(bot.currentWindow)
             }
-            return
+            
+            printCookieSuccessMessage(currentCookieTime)
         }
-        
-        // Click on the cookie to activate it
-        log(`Clicking cookie in slot ${cookieSlot}...`, 'debug')
-        clickWindow(bot, cookieSlot).catch(err => log(`Error clicking cookie: ${err}`, 'error'))
-        
-        await sleep(1000)
-        
-        // Close storage
-        if (bot.currentWindow) {
-            bot.closeWindow(bot.currentWindow)
-        }
-        
-        const newCookieTimeHours = Math.round((currentCookieTime + 4 * 86400) / 3600)
-        const currentHours = Math.round(currentCookieTime / 3600)
-        
-        printMcChatToConsole(`§f[§4BAF§f]: §aAutomatically bought and consumed booster cookie!`)
-        printMcChatToConsole(`§f[§4BAF§f]: §3Cookie time: ${currentHours}h → ${newCookieTimeHours}h`)
-        log(`Successfully bought and consumed cookie. Time: ${currentHours}h → ${newCookieTimeHours}h`, 'info')
         
     } catch (error) {
         log(`Error buying cookie: ${error}`, 'error')

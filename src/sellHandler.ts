@@ -215,62 +215,92 @@ async function sellHandler(data: SellData, bot: MyBot, sellWindow, ws: WebSocket
         clickWindow(bot, 16).catch(err => log(`Error clicking duration confirm slot: ${err}`, 'error'))
     }
     if (title == 'Confirm BIN Auction') {
+        // Set up message listener to detect when auction is actually created
+        const messageListener = (message: any) => {
+            const text = message.getText ? message.getText(null) : message.toString()
+            
+            // Wait for the "BIN Auction started for" message from the game
+            if (text.includes('BIN Auction started for')) {
+                log('Auction creation confirmed by game message')
+                bot.removeListener('message', messageListener)
+                
+                // Extract actual item name and price from the auction view window
+                // instead of using potentially stale data parameter
+                let actualItemName = data.itemName
+                let actualPrice = data.price
+                
+                // Wait a bit for the BIN Auction View window to open
+                setTimeout(() => {
+                    try {
+                        if (bot.currentWindow) {
+                            const auctionItem = bot.currentWindow.slots[13]
+                            if (auctionItem) {
+                                const displayName = (auctionItem.nbt as any)?.value?.display?.value?.Name?.value
+                                if (displayName) {
+                                    // Parse JSON formatted name or use plain string
+                                    try {
+                                        const parsed = JSON.parse(displayName)
+                                        const text = parsed.text || ''
+                                        const extra = parsed.extra?.map((e: string | { text?: string }) => typeof e === 'string' ? e : e.text || '').join('') || ''
+                                        actualItemName = removeMinecraftColorCodes(text + extra).trim()
+                                    } catch (e) {
+                                        actualItemName = removeMinecraftColorCodes(displayName).trim()
+                                    }
+                                }
+                                
+                                // Extract price from lore
+                                const lore = (auctionItem.nbt as any)?.value?.display?.value?.Lore?.value?.value
+                                if (lore && Array.isArray(lore)) {
+                                    const startingBidLine = lore.find((line: string) => {
+                                        const cleanLine = removeMinecraftColorCodes(line)
+                                        return cleanLine.includes('Starting bid:') || cleanLine.includes('Buy it now:')
+                                    })
+                                    if (startingBidLine) {
+                                        const cleanLine = removeMinecraftColorCodes(startingBidLine)
+                                        // Extract number from formats like "Starting bid: 123,456 coins" or "Buy it now: 123,456 coins"
+                                        const match = cleanLine.match(/:\s*([\d,]+)\s*coins/)
+                                        if (match) {
+                                            actualPrice = Number(match[1].replace(/,/g, ''))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${actualItemName} §ffor ${numberWithThousandsSeparators(actualPrice)} coins`)
+                        sendWebhookItemListed(actualItemName, numberWithThousandsSeparators(actualPrice), configuredDuration)
+                        
+                        // Close the window
+                        if (bot.currentWindow) {
+                            bot.closeWindow(bot.currentWindow)
+                        }
+                    } catch (e) {
+                        log('Error extracting actual auction details from BIN Auction View: ' + JSON.stringify(e), 'warn')
+                    }
+                }, 500)
+                
+                // Clean up
+                removeEventListenerCallback()
+                setPrice = false
+                durationSet = false
+                bot.state = null
+            }
+        }
+        
+        bot.on('message', messageListener)
+        
+        // Set a timeout to clean up the listener if auction creation fails
+        setTimeout(() => {
+            bot.removeListener('message', messageListener)
+        }, 15000)
+        
         clickWindow(bot, 11).catch(err => log(`Error clicking final confirm slot: ${err}`, 'error'))
     }
     if (title == 'BIN Auction View') {
-        log('Successfully listed an item')
-        removeEventListenerCallback()
-        setPrice = false
-        durationSet = false
-        bot.state = null
-        
-        // Extract actual item name and price from the auction view window
-        // instead of using potentially stale data parameter
-        let actualItemName = data.itemName
-        let actualPrice = data.price
-        
-        try {
-            // The created auction item is typically in slot 13
-            const auctionItem = sellWindow.slots[13]
-            if (auctionItem) {
-                const displayName = auctionItem.nbt?.value?.display?.value?.Name?.value
-                if (displayName) {
-                    // Parse JSON formatted name or use plain string
-                    try {
-                        const parsed = JSON.parse(displayName)
-                        const text = parsed.text || ''
-                        const extra = parsed.extra?.map((e: string | { text?: string }) => typeof e === 'string' ? e : e.text || '').join('') || ''
-                        actualItemName = removeMinecraftColorCodes(text + extra).trim()
-                    } catch (e) {
-                        actualItemName = removeMinecraftColorCodes(displayName).trim()
-                    }
-                }
-                
-                // Extract price from lore
-                const lore = auctionItem.nbt?.value?.display?.value?.Lore?.value?.value
-                if (lore && Array.isArray(lore)) {
-                    const startingBidLine = lore.find((line: string) => {
-                        const cleanLine = removeMinecraftColorCodes(line)
-                        return cleanLine.includes('Starting bid:') || cleanLine.includes('Buy it now:')
-                    })
-                    if (startingBidLine) {
-                        const cleanLine = removeMinecraftColorCodes(startingBidLine)
-                        // Extract number from formats like "Starting bid: 123,456 coins" or "Buy it now: 123,456 coins"
-                        const match = cleanLine.match(/:\s*([\d,]+)\s*coins/)
-                        if (match) {
-                            actualPrice = Number(match[1].replace(/,/g, ''))
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            log('Error extracting actual auction details from BIN Auction View: ' + JSON.stringify(e), 'warn')
-            // Fall back to data parameter if extraction fails
-        }
-        
-        printMcChatToConsole(`§f[§4BAF§f]: §fItem listed: ${actualItemName} §ffor ${numberWithThousandsSeparators(actualPrice)} coins`)
-        sendWebhookItemListed(actualItemName, numberWithThousandsSeparators(actualPrice), configuredDuration)
-        bot.closeWindow(sellWindow)
+        // This window can open from viewing existing auctions or after successful creation
+        // We now handle the "Item listed" message via the game message listener above
+        // so we just close this window if it's opened outside the creation flow
+        log('BIN Auction View opened')
     }
 }
 

@@ -378,6 +378,7 @@ async function createSellOffer(bot: MyBot, item: BazaarItemToSell): Promise<void
 
                 // Price selection page - check this BEFORE checking for "Create Sell Offer" button
                 // because after clicking "Create Sell Offer", the next window has "Custom Price"
+                // Guard with currentStep !== 'setPrice' to prevent re-entry after price is already set
                 if (findSlotWithName(window, 'Custom Price') !== -1 && currentStep !== 'setPrice') {
                     currentStep = 'setPrice'
                     const customPriceSlot = findSlotWithName(window, 'Custom Price')

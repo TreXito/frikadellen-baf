@@ -1,3 +1,7 @@
+THIS IS OUTDATED AND BASED ON THE NOT-SUPPORTED MINECRAFT VERSION 1.8.9
+IF YOU WANT TO USE THIS PLEASE USE https://github.com/TreXito/frikadellen-baf-121
+best regards
+
 Join the official [Discord Server](https://discord.gg/42DvX6T9jh):
 
 # BAF
